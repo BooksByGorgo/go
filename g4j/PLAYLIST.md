@@ -135,3 +135,10 @@ Do not repeat any reference already listed here.
 - Omar Apollo --- "Evergreen" (used in bulk insert example; album "IVORY"; Exercise 2 sql.Null example)
 - Omar Apollo --- "Killing Me" (used in bulk insert example as NULL-album song; Exercise 2 sql.Null example)
 - Omar Apollo --- album "IVORY" (referenced as album value in Song struct inserts)
+
+## Chapter 18: Generics
+
+- Tate McRae --- "greedy" (used in Map function example, Stack example, MapFromSlice example, ArtistTitles iterator, Filter exercise, Dedupe exercise, Set exercise)
+- Tate McRae --- "you broke me first" (used in Map function example, ArtistTitles iterator, Set exercise)
+- Conan Gray --- "Heather" (used in Stack example, Map function example, ArtistTitles iterator, Filter exercise, Dedupe exercise, Set exercise)
+- Conan Gray --- "Astronomy" (used in Map function example, ArtistTitles iterator, Filter exercise, Dedupe exercise, Set exercise)
