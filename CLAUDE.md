@@ -1,6 +1,6 @@
 # project description
 
-a collection of programming texts --- focused on C++ for the moment --- suitable for introductory programming classes
+a collection of programming texts --- focused on GO --- suitable for introductory programming classes
 
 ## chapters
 
@@ -37,11 +37,6 @@ a collection of programming texts --- focused on C++ for the moment --- suitable
 - opening `{` of a function goes on the same line as the function head (K&R style), including constructors with initializer lists and `requires`-constrained templates
 - this applies to all code examples across books, answer keys, and lecture notes --- the only exceptions are intentional bug demos and scope-limiting blocks (e.g. RAII lock guards)
 - when a run of consecutive code lines each end in a trailing `//` comment, align the `//` markers to a common column so the comments line up visually
-
-## extra content
-
-- operators
-- c4c++ (C for C++ programmers)
 
 ## implementing github issues
 

@@ -1,0 +1,367 @@
+---
+layout: default
+title: "4. Control Flow"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 4
+---
+
+{% raw %}
+<h1 data-number="4" id="control-flow"><span class="header-section-number">4</span> Control Flow</h1>
+<p> Java programmers are immediately comfortable with <code>if</code>, <code>for</code>, and <code>switch</code> in Go — the syntax is close enough that you can write working code on day one. But Go has a few surprises: there is only one loop keyword, <code>switch</code> does not fall through by default, and <code>defer</code> is a concept with no Java equivalent. This chapter covers all of it.</p>
+<h2 data-number="4.1" id="if-else"><span class="header-section-number">4.1</span> if / else</h2>
+<p> <code>if</code> and <code>else</code> work the same as in Java. The main syntactic difference is that the condition does not require parentheses (though they are allowed).</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>score <span class="op">:=</span> <span class="dv">95</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> score <span class="op">&gt;=</span> <span class="dv">90</span> <span class="op">{</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;A&quot;</span><span class="op">)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">else</span> <span class="cf">if</span> score <span class="op">&gt;=</span> <span class="dv">80</span> <span class="op">{</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;B&quot;</span><span class="op">)</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;C&quot;</span><span class="op">)</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="co">// A</span></span></code></pre></div>
+<h3 data-number="4.1.1" id="the-init-statement"><span class="header-section-number">4.1.1</span> The Init Statement</h3>
+<p> Go’s <code>if</code> statement supports an optional <strong>init statement</strong> separated from the condition by a semicolon. Variables declared in the init statement are scoped to the entire <code>if</code>/<code>else if</code>/<code>else</code> chain — they disappear after the closing brace.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> n <span class="op">:=</span> <span class="bu">len</span><span class="op">(</span><span class="st">&quot;Flowers&quot;</span><span class="op">);</span> n <span class="op">&gt;</span> <span class="dv">6</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;long:&quot;</span><span class="op">,</span> n<span class="op">)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;short:&quot;</span><span class="op">,</span> n<span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="co">// long: 7</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="co">// n is not accessible here</span></span></code></pre></div>
+<p>The most common use is capturing the result of a function call and checking the error in one line:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">:=</span> doSomething<span class="op">();</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;error:&quot;</span><span class="op">,</span> err<span class="op">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>This pattern is ubiquitous in Go. You will see it constantly when you read idiomatic Go code. Chapter 10 covers error handling in full, but start recognising this shape now.</p>
+<h2 data-number="4.2" id="for-the-only-loop"><span class="header-section-number">4.2</span> for — the Only Loop</h2>
+<p> Go has exactly one loop keyword: <code>for</code>. There is no <code>while</code>, no <code>do...while</code>, and no <code>foreach</code> (that role is played by <code>for range</code>). Three forms cover every use case.</p>
+<h3 data-number="4.2.1" id="c-style-loop"><span class="header-section-number">4.2.1</span> C-Style Loop</h3>
+<p>The familiar three-clause form works exactly as in Java:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> <span class="dv">5</span><span class="op">;</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>i<span class="op">)</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co">// 0 1 2 3 4 (each on its own line)</span></span></code></pre></div>
+<h3 data-number="4.2.2" id="while-style-loop"><span class="header-section-number">4.2.2</span> While-Style Loop</h3>
+<p>Omit the init and post clauses and you get a while loop:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>n <span class="op">:=</span> <span class="dv">1</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> n <span class="op">&lt;</span> <span class="dv">100</span> <span class="op">{</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    n <span class="op">*=</span> <span class="dv">2</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>n<span class="op">)</span> <span class="co">// 128</span></span></code></pre></div>
+<h3 data-number="4.2.3" id="infinite-loop"><span class="header-section-number">4.2.3</span> Infinite Loop</h3>
+<p>Omit the condition entirely for an infinite loop. Use <code>break</code> to exit.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    line <span class="op">:=</span> readLine<span class="op">()</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> line <span class="op">==</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">break</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    process<span class="op">(</span>line<span class="op">)</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> The infinite <code>for</code> loop with an explicit <code>break</code> is the idiomatic Go replacement for <code>do...while</code>.</p>
+</div></div>
+<h2 data-number="4.3" id="range"><span class="header-section-number">4.3</span> range</h2>
+<p> <code>for range</code> provides the idiomatic iteration over collections, strings, channels, and (as of Go 1.22) integers.</p>
+<h3 data-number="4.3.1" id="slices-and-arrays"><span class="header-section-number">4.3.1</span> Slices and Arrays</h3>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>fruits <span class="op">:=</span> <span class="op">[]</span><span class="dt">string</span><span class="op">{</span><span class="st">&quot;manzana&quot;</span><span class="op">,</span> <span class="st">&quot;naranja&quot;</span><span class="op">,</span> <span class="st">&quot;uva&quot;</span><span class="op">}</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i<span class="op">,</span> v <span class="op">:=</span> <span class="kw">range</span> fruits <span class="op">{</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>i<span class="op">,</span> v<span class="op">)</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="co">// 0 manzana</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="co">// 1 naranja</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="co">// 2 uva</span></span></code></pre></div>
+<h3 data-number="4.3.2" id="maps"><span class="header-section-number">4.3.2</span> Maps</h3>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>m <span class="op">:=</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">int</span><span class="op">{</span><span class="st">&quot;one&quot;</span><span class="op">:</span> <span class="dv">1</span><span class="op">,</span> <span class="st">&quot;two&quot;</span><span class="op">:</span> <span class="dv">2</span><span class="op">,</span> <span class="st">&quot;three&quot;</span><span class="op">:</span> <span class="dv">3</span><span class="op">}</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> k<span class="op">,</span> v <span class="op">:=</span> <span class="kw">range</span> m <span class="op">{</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>k<span class="op">,</span> v<span class="op">)</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="co">// output order is random --- never rely on it</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Map iteration order in Go is deliberately randomised on every run. Java’s <code>HashMap</code> also makes no order guarantee, but in practice the order is stable within a run. Go actively randomises it to prevent accidental reliance on order.</p>
+</div></div>
+<h3 data-number="4.3.3" id="strings"><span class="header-section-number">4.3.3</span> Strings</h3>
+<p>As covered in Chapter 3, <code>for range</code> over a string decodes UTF-8 runes. The index is the <strong>byte</strong> position, and the value is a <strong>rune</strong>:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i<span class="op">,</span> r <span class="op">:=</span> <span class="kw">range</span> <span class="st">&quot;café&quot;</span> <span class="op">{</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%d: %c</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> i<span class="op">,</span> r<span class="op">)</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co">// 0: c</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co">// 1: a</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="co">// 2: f</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="co">// 3: é</span></span></code></pre></div>
+<h3 data-number="4.3.4" id="channels"><span class="header-section-number">4.3.4</span> Channels</h3>
+<p><code>for range</code> on a channel receives values until the channel is closed. Channels are covered in Chapter 11.</p>
+<h3 data-number="4.3.5" id="integers-go-1.22"><span class="header-section-number">4.3.5</span> Integers (Go 1.22+)</h3>
+<p> Since Go 1.22, you can range directly over an integer to get the sequence 0 to n-1:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="op">:=</span> <span class="kw">range</span> <span class="dv">5</span> <span class="op">{</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Print<span class="op">(</span>i<span class="op">,</span> <span class="st">&quot; &quot;</span><span class="op">)</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co">// 0 1 2 3 4</span></span></code></pre></div>
+<h3 data-number="4.3.6" id="iterator-functions-go-1.23"><span class="header-section-number">4.3.6</span> Iterator Functions (Go 1.23+)</h3>
+<p> Since Go 1.23, <code>for range</code> can iterate over functions that match the iterator function signature defined in the <code>iter</code> package (<code>iter.Seq[V]</code> or <code>iter.Seq2[K, V]</code>). This allows library authors to expose custom iterators. Details are in Chapter 18.</p>
+<h3 data-number="4.3.7" id="discarding-values-with-_"><span class="header-section-number">4.3.7</span> Discarding Values with <code>_</code></h3>
+<p> Use the blank identifier <code>_</code> to discard the index or the value when you do not need it:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> _<span class="op">,</span> v <span class="op">:=</span> <span class="kw">range</span> fruits <span class="op">{</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>v<span class="op">)</span> <span class="co">// index discarded</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="op">:=</span> <span class="kw">range</span> fruits <span class="op">{</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>i<span class="op">)</span> <span class="co">// value implicitly discarded (single-variable range)</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h2 data-number="4.4" id="switch"><span class="header-section-number">4.4</span> switch</h2>
+<p> Go’s <code>switch</code> looks familiar but has two important differences from Java:</p>
+<ol type="1">
+<li>Cases do <strong>not</strong> fall through by default.</li>
+<li>The <code>switch</code> expression is optional.</li>
+</ol>
+<h3 data-number="4.4.1" id="basic-switch"><span class="header-section-number">4.4.1</span> Basic switch</h3>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>day <span class="op">:=</span> <span class="st">&quot;lunes&quot;</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="cf">switch</span> day <span class="op">{</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="st">&quot;lunes&quot;</span><span class="op">,</span> <span class="st">&quot;martes&quot;</span><span class="op">,</span> <span class="st">&quot;miércoles&quot;</span><span class="op">,</span> <span class="st">&quot;jueves&quot;</span><span class="op">,</span> <span class="st">&quot;viernes&quot;</span><span class="op">:</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;weekday&quot;</span><span class="op">)</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="st">&quot;sábado&quot;</span><span class="op">,</span> <span class="st">&quot;domingo&quot;</span><span class="op">:</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;weekend&quot;</span><span class="op">)</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="cf">default</span><span class="op">:</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;unknown&quot;</span><span class="op">)</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a><span class="co">// weekday</span></span></code></pre></div>
+<p>Notice that multiple values can appear in one case, separated by commas. No <code>break</code> is needed — each case exits automatically.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> In Java, forgetting <code>break</code> causes execution to fall into the next case. In Go, the opposite is true: execution stops at the end of each case by default. This eliminates an entire class of Java bugs.</p>
+</div></div>
+<h3 data-number="4.4.2" id="fallthrough"><span class="header-section-number">4.4.2</span> fallthrough</h3>
+<p> When you genuinely need Java-style fall-through, use the <code>fallthrough</code> keyword explicitly. It transfers control to the <strong>first statement</strong> of the next case body without re-evaluating the case condition.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>n <span class="op">:=</span> <span class="dv">1</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="cf">switch</span> n <span class="op">{</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="dv">1</span><span class="op">:</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;one&quot;</span><span class="op">)</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">fallthrough</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="dv">2</span><span class="op">:</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;one or two&quot;</span><span class="op">)</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="dv">3</span><span class="op">:</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;three&quot;</span><span class="op">)</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="co">// one</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a><span class="co">// one or two</span></span></code></pre></div>
+<p><code>fallthrough</code> is unconditional — it always falls through regardless of whether the next case condition would match. It is rarely needed in practice.</p>
+<h3 data-number="4.4.3" id="expression-less-switch"><span class="header-section-number">4.4.3</span> Expression-Less switch</h3>
+<p> Omit the switch expression and each case becomes an independent boolean condition. This is a cleaner alternative to a long <code>if</code>/<code>else if</code> chain:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>temp <span class="op">:=</span> <span class="fl">38.5</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="cf">switch</span> <span class="op">{</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> temp <span class="op">&lt;</span> <span class="dv">0</span><span class="op">:</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;freezing&quot;</span><span class="op">)</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> temp <span class="op">&lt;</span> <span class="dv">20</span><span class="op">:</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;cold&quot;</span><span class="op">)</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> temp <span class="op">&lt;</span> <span class="dv">37</span><span class="op">:</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;warm&quot;</span><span class="op">)</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a><span class="cf">default</span><span class="op">:</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;fiebre!&quot;</span><span class="op">)</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a><span class="co">// fiebre!</span></span></code></pre></div>
+<h3 data-number="4.4.4" id="type-switch-preview"><span class="header-section-number">4.4.4</span> Type Switch (Preview)</h3>
+<p> A type switch selects a case based on the dynamic type of an interface value:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="cf">switch</span> v <span class="op">:=</span> i<span class="op">.(</span><span class="kw">type</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="dt">int</span><span class="op">:</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;int:&quot;</span><span class="op">,</span> v<span class="op">)</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="dt">string</span><span class="op">:</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;string:&quot;</span><span class="op">,</span> v<span class="op">)</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="cf">default</span><span class="op">:</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;other: %T</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> v<span class="op">)</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Type switches are covered fully in Chapter 9 alongside interfaces.</p>
+<h2 data-number="4.5" id="labeled-break-and-continue"><span class="header-section-number">4.5</span> Labeled break and continue</h2>
+<p>  Java supports labeled statements to break out of nested loops. Go supports the same with labeled <code>break</code> and <code>continue</code>.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>outer<span class="op">:</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> <span class="dv">3</span><span class="op">;</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> j <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> j <span class="op">&lt;</span> <span class="dv">3</span><span class="op">;</span> j<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> i <span class="op">==</span> <span class="dv">1</span> <span class="op">&amp;&amp;</span> j <span class="op">==</span> <span class="dv">1</span> <span class="op">{</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>            <span class="cf">break</span> outer <span class="co">// exits both loops</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>i<span class="op">,</span> j<span class="op">)</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a><span class="co">// 0 0</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a><span class="co">// 0 1</span></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a><span class="co">// 0 2</span></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a><span class="co">// 1 0</span></span></code></pre></div>
+<p><code>continue outer</code> would skip the rest of the inner loop body and continue with the next iteration of the outer loop.</p>
+<h3 data-number="4.5.1" id="goto"><span class="header-section-number">4.5.1</span> goto</h3>
+<p> Go has <code>goto</code>, which jumps to a labeled statement within the same function. It cannot jump over variable declarations. It is legal but almost never the right tool — <code>goto</code> is mentioned here so you know it exists, not as an invitation to use it.</p>
+<h2 data-number="4.6" id="defer"><span class="header-section-number">4.6</span> defer</h2>
+<p> <code>defer</code> is one of Go’s most distinctive features. A <code>defer</code> statement pushes a function call onto a per-function stack. All deferred calls run when the enclosing function returns, in <strong>last-in, first-out</strong> (LIFO) order.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> greet<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;goodbye&quot;</span><span class="op">)</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;see you later&quot;</span><span class="op">)</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;hello&quot;</span><span class="op">)</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="co">// greet() prints:</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a><span class="co">// hello</span></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a><span class="co">// see you later</span></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a><span class="co">// goodbye</span></span></code></pre></div>
+<h3 data-number="4.6.1" id="arguments-are-evaluated-immediately"><span class="header-section-number">4.6.1</span> Arguments Are Evaluated Immediately</h3>
+<p> The arguments to a deferred function call are evaluated <strong>at the <code>defer</code> statement</strong>, not when the deferred call actually runs.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> demo<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>    x <span class="op">:=</span> <span class="dv">10</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> fmt<span class="op">.</span>Println<span class="op">(</span>x<span class="op">)</span> <span class="co">// x is captured as 10 right now</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>    x <span class="op">=</span> <span class="dv">99</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="co">// prints: 10</span></span></code></pre></div>
+<p>This catches many Go beginners off guard. The value of <code>x</code> at defer time (10) is baked in; the change to <code>x = 99</code> does not affect it.</p>
+<h3 data-number="4.6.2" id="closures-capture-variables-by-reference"><span class="header-section-number">4.6.2</span> Closures Capture Variables by Reference</h3>
+<p> If the deferred function is a <strong>closure</strong> (an anonymous function with no arguments), it captures variables by reference and sees their values at the time it actually runs.</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> demo<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>    x <span class="op">:=</span> <span class="dv">10</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span> fmt<span class="op">.</span>Println<span class="op">(</span>x<span class="op">)</span> <span class="op">}()</span> <span class="co">// closure, not a direct call</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>    x <span class="op">=</span> <span class="dv">99</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="co">// prints: 99</span></span></code></pre></div>
+<p>This distinction is important: a deferred call with arguments evaluates the arguments immediately, but a deferred closure evaluates its captured variables lazily at return time.</p>
+<h3 data-number="4.6.3" id="common-uses"><span class="header-section-number">4.6.3</span> Common Uses</h3>
+<p> <strong>Closing resources</strong> is the most common use of <code>defer</code>:</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>f<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>Open<span class="op">(</span><span class="st">&quot;cancion.txt&quot;</span><span class="op">)</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> err</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> f<span class="op">.</span>Close<span class="op">()</span> <span class="co">// guaranteed to run even if the rest of the function panics</span></span></code></pre></div>
+<p>This pattern ensures cleanup happens no matter how the function exits — return, error return, or panic.</p>
+<p><strong>Releasing locks:</strong></p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>mu<span class="op">.</span>Lock<span class="op">()</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> mu<span class="op">.</span>Unlock<span class="op">()</span></span></code></pre></div>
+<p><strong>Printing structured exit messages</strong> (useful during debugging):</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> process<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;process: start&quot;</span><span class="op">)</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;process: done&quot;</span><span class="op">)</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... work ...</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 data-number="4.6.4" id="defer-runs-even-during-a-panic"><span class="header-section-number">4.6.4</span> defer Runs Even During a Panic</h3>
+<p> If a function panics, all of its deferred calls still run before the panic propagates up the call stack. This is why <code>defer f.Close()</code> is safe even when something unexpected happens.</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> riskyOp<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;cleanup always runs&quot;</span><span class="op">)</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    <span class="bu">panic</span><span class="op">(</span><span class="st">&quot;something went wrong&quot;</span><span class="op">)</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>    riskyOp<span class="op">()</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a><span class="co">// prints: cleanup always runs</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a><span class="co">// then panics</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Pair <code>defer</code> with <code>recover</code> (covered in Chapter 10) to catch a panic and return a normal error instead of crashing the program.</p>
+</div></div>
+<h2 data-number="4.7" id="init"><span class="header-section-number">4.7</span> init()</h2>
+<p> Every Go source file can declare one or more <code>init</code> functions:</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> init<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">// runs before main</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>init</code> functions are called automatically by the Go runtime after all package-level variables have been initialised, and before <code>main</code> runs. You cannot call <code>init</code> explicitly — the runtime owns it.</p>
+<h3 data-number="4.7.1" id="rules"><span class="header-section-number">4.7.1</span> Rules</h3>
+<ul>
+<li>A single file may contain multiple <code>init</code> functions; they run in source order.</li>
+<li>Multiple files in a package: <code>init</code> functions run in the order the compiler processes the files (alphabetical by filename).</li>
+<li>If package A imports package B, B’s <code>init</code> functions complete before A’s.</li>
+<li><code>init</code> cannot be called directly by user code.</li>
+</ul>
+<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co">// config.go</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> configLoaded <span class="dt">bool</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> init<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    loadConfig<span class="op">()</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    configLoaded <span class="op">=</span> <span class="ot">true</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 data-number="4.7.2" id="when-to-use-init"><span class="header-section-number">4.7.2</span> When to Use init()</h3>
+<p>Use <code>init</code> for:</p>
+<ul>
+<li>One-time setup that cannot be expressed as a simple variable initialiser.</li>
+<li>Registering database drivers, codec implementations, or similar plugin-style registrations.</li>
+<li>Validating configuration at startup before anything else runs.</li>
+</ul>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Overusing <code>init</code> makes the startup sequence hard to follow and test. Prefer explicit initialisation in <code>main</code> or in constructor functions when possible.</p>
+</div></div>
+<h2 data-number="4.8" id="key-points"><span class="header-section-number">4.8</span> Key Points</h2>
+<ul>
+<li><code>if</code> supports an init statement: <code>if err := f(); err != nil</code> — scopes the variable to the block.</li>
+<li><code>for</code> is the only loop keyword in Go; it covers C-style, while-style, and infinite loops.</li>
+<li><code>for range</code> iterates slices (index+value), maps (key+value), strings (byte-index+rune), channels, integers (Go 1.22), and iterator functions (Go 1.23).</li>
+<li>Map iteration order is deliberately randomised.</li>
+<li><code>switch</code> does not fall through by default; use <code>fallthrough</code> explicitly when needed.</li>
+<li>An expression-less <code>switch</code> acts as a cleaner if/else chain.</li>
+<li>Labeled <code>break</code> and <code>continue</code> break out of nested loops.</li>
+<li><code>defer</code> pushes a call onto a LIFO stack; all deferred calls run when the function returns.</li>
+<li>Defer arguments are evaluated immediately; closures in defer capture variables by reference.</li>
+<li><code>defer</code> runs even when the function panics.</li>
+<li><code>init()</code> runs before <code>main</code>, after package-level variable initialisation; it cannot be called explicitly.</li>
+</ul>
+<h2 data-number="4.9" id="exercises"><span class="header-section-number">4.9</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> Go’s <code>switch</code> does not fall through by default, while Java’s does. Imagine you are reviewing a Go codebase written by a Java programmer. What kind of bug would you look for in their <code>switch</code> statements? Describe a concrete example where the Java habit causes a silent logic error in Go.</p></li>
+<li><p><strong>What does this print?</strong></p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> <span class="dv">3</span><span class="op">;</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">defer</span> fmt<span class="op">.</span>Println<span class="op">(</span>i<span class="op">)</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> Trace the output of the following expression-less switch, one line at a time:</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> classify<span class="op">(</span>n <span class="dt">int</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">switch</span> <span class="op">{</span></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> n <span class="op">&lt;</span> <span class="dv">0</span><span class="op">:</span></span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;negative&quot;</span><span class="op">)</span></span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> n <span class="op">==</span> <span class="dv">0</span><span class="op">:</span></span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;zero&quot;</span><span class="op">)</span></span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> n<span class="op">%</span><span class="dv">2</span> <span class="op">==</span> <span class="dv">0</span><span class="op">:</span></span>
+<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;positive even&quot;</span><span class="op">)</span></span>
+<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">default</span><span class="op">:</span></span>
+<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;positive odd&quot;</span><span class="op">)</span></span>
+<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a>    classify<span class="op">(-</span><span class="dv">3</span><span class="op">)</span></span>
+<span id="cb27-20"><a href="#cb27-20" aria-hidden="true" tabindex="-1"></a>    classify<span class="op">(</span><span class="dv">0</span><span class="op">)</span></span>
+<span id="cb27-21"><a href="#cb27-21" aria-hidden="true" tabindex="-1"></a>    classify<span class="op">(</span><span class="dv">4</span><span class="op">)</span></span>
+<span id="cb27-22"><a href="#cb27-22" aria-hidden="true" tabindex="-1"></a>    classify<span class="op">(</span><span class="dv">7</span><span class="op">)</span></span>
+<span id="cb27-23"><a href="#cb27-23" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Where is the bug?</strong> The following code tries to build three multiplier functions that multiply their input by 10, 20, and 30 respectively. What does it actually print when each function is called with <code>5</code>, and why?</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> makeMultipliers<span class="op">()</span> <span class="op">[]</span><span class="kw">func</span><span class="op">(</span><span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>    fns <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="kw">func</span><span class="op">(</span><span class="dt">int</span><span class="op">)</span> <span class="dt">int</span><span class="op">,</span> <span class="dv">3</span><span class="op">)</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>    factor <span class="op">:=</span> <span class="dv">1</span></span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> <span class="dv">3</span><span class="op">;</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>        factor <span class="op">=</span> <span class="op">(</span>i <span class="op">+</span> <span class="dv">1</span><span class="op">)</span> <span class="op">*</span> <span class="dv">10</span></span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>        fns<span class="op">[</span>i<span class="op">]</span> <span class="op">=</span> <span class="kw">func</span><span class="op">(</span>x <span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span> <span class="cf">return</span> x <span class="op">*</span> factor <span class="op">}</span></span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fns</span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a>    fns <span class="op">:=</span> makeMultipliers<span class="op">()</span></span>
+<span id="cb28-17"><a href="#cb28-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> f <span class="op">:=</span> <span class="kw">range</span> fns <span class="op">{</span></span>
+<span id="cb28-18"><a href="#cb28-18" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>f<span class="op">(</span><span class="dv">5</span><span class="op">))</span></span>
+<span id="cb28-19"><a href="#cb28-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb28-20"><a href="#cb28-20" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Write a function <code>safeDiv(a, b int) (result int, err error)</code> that divides <code>a</code> by <code>b</code>. If <code>b</code> is zero, the division will panic. Use <code>defer</code> and <code>recover</code> to catch the panic and return it as an error instead of crashing the program. Demonstrate calling <code>safeDiv(10, 2)</code> and <code>safeDiv(10, 0)</code> and printing the results.</p></li>
+</ol>
+
+{% endraw %}

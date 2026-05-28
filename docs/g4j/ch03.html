@@ -1,0 +1,252 @@
+---
+layout: default
+title: "3. Strings, Bytes, and Runes"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 3
+---
+
+{% raw %}
+<h1 data-number="3" id="strings-bytes-and-runes"><span class="header-section-number">3</span> Strings, Bytes, and Runes</h1>
+<p> Go strings look familiar — you create them with double quotes, concatenate with <code>+</code>, and pass them to <code>fmt.Println</code>. But the model underneath is different enough from Java’s that it causes real bugs, especially with non-ASCII text. This chapter covers what Go strings actually are, why <code>len(s)</code> might surprise you, and how to work with text correctly.</p>
+<h2 data-number="3.1" id="what-a-string-really-is"><span class="header-section-number">3.1</span> What a String Really Is</h2>
+<p> In Java, a <code>String</code> is a sequence of <code>char</code> values, where each <code>char</code> is a UTF-16 code unit. In Go, a string is an <strong>immutable sequence of bytes</strong>. That is the entire definition. Go makes no promises about encoding; by convention almost all Go source code and string data is UTF-8, but the type itself is just bytes.</p>
+<p>Under the hood, a string value is a small struct: a pointer to read-only memory and a length. It is essentially a read-only <code>[]byte</code> without the capacity field.</p>
+<p><code>len(s)</code> returns the number of <strong>bytes</strong> in the string, not the number of characters.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> <span class="st">&quot;café&quot;</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="bu">len</span><span class="op">(</span>s<span class="op">))</span> <span class="co">// 5, not 4 --- é is two bytes (0xC3 0xA9)</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> If you are used to Java where <code>"café".length()</code> returns 4, note that Go’s <code>len("café")</code> returns 5 because <code>é</code> is encoded as two bytes in UTF-8. While that might make Java seem enlightened, <code>"🍕🔥".length()</code> in Java returns 4!</p>
+</div></div>
+<h2 data-number="3.2" id="byte-and-rune"><span class="header-section-number">3.2</span> byte and rune</h2>
+<p>  Go has no <code>char</code> type. Instead it has two types for working with individual pieces of text:</p>
+<ul>
+<li><code>byte</code> is an alias for <code>uint8</code>. It holds a single ASCII character or one byte of a multibyte sequence.</li>
+<li><code>rune</code> is an alias for <code>int32</code>. It holds a full Unicode code point.</li>
+</ul>
+<p>Java’s <code>char</code> is a UTF-16 <strong>code unit</strong>, which means characters outside the Basic Multilingual Plane (anything above U+FFFF) require two Java <code>char</code> values. Go’s <code>rune</code> is a full code point, so one <code>rune</code> always represents one character, no matter how far up the Unicode table it lives.</p>
+<p>Rune literals use single quotes, just like character literals in Java:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> b <span class="dt">byte</span> <span class="op">=</span> <span class="ch">&#39;A&#39;</span>    <span class="co">// 65</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> r <span class="dt">rune</span> <span class="op">=</span> <span class="ch">&#39;⌘&#39;</span>    <span class="co">// 8984 (U+2318 PLACE OF INTEREST SIGN)</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> r2 <span class="dt">rune</span> <span class="op">=</span> <span class="ch">&#39;é&#39;</span>   <span class="co">// 233 (U+00E9)</span></span></code></pre></div>
+<p> A rune literal is an untyped constant of kind <code>rune</code> (underlying type <code>int32</code>). Without an explicit type annotation it behaves as an untyped integer constant.</p>
+<h2 data-number="3.3" id="indexing-and-iteration"><span class="header-section-number">3.3</span> Indexing and Iteration</h2>
+<p></p>
+<h3 data-number="3.3.1" id="indexing-with-si"><span class="header-section-number">3.3.1</span> Indexing with <code>s[i]</code></h3>
+<p>Indexing a string with <code>s[i]</code> gives you a <strong>byte</strong>, not a character.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> <span class="st">&quot;café&quot;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">[</span><span class="dv">3</span><span class="op">])</span> <span class="co">// 195 (0xC3 --- the first byte of é)</span></span></code></pre></div>
+<p>Java programmers often expect <code>s[3]</code> to yield <code>'é'</code>. In Go it yields <code>195</code>, the numeric value of the first byte of the two-byte UTF-8 encoding of <code>é</code>. Formatting it with <code>%c</code> would print <code>Ã</code>, which is the Latin character whose code point is 195 — not what you wanted.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>s[i]</code> gives you a <code>byte</code>. If the string contains any non-ASCII characters, walking it with a plain index loop and printing or storing individual indexed values will corrupt multibyte characters.</p>
+</div></div>
+<h3 data-number="3.3.2" id="iterating-bytes-with-a-plain-for-loop"><span class="header-section-number">3.3.2</span> Iterating Bytes with a Plain <code>for</code> Loop</h3>
+<p>A plain index loop iterates bytes:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> <span class="st">&quot;café&quot;</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> <span class="bu">len</span><span class="op">(</span>s<span class="op">);</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;s[%d] = %d</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> i<span class="op">,</span> s<span class="op">[</span>i<span class="op">])</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co">// s[0] = 99   (c)</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="co">// s[1] = 97   (a)</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co">// s[2] = 102  (f)</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="co">// s[3] = 195  (first byte of é)</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co">// s[4] = 169  (second byte of é, 0xA9)</span></span></code></pre></div>
+<h3 data-number="3.3.3" id="iterating-runes-with-for-range"><span class="header-section-number">3.3.3</span> Iterating Runes with <code>for range</code></h3>
+<p> <code>for range</code> over a string decodes UTF-8 automatically. The loop variable receives a <code>rune</code> (the Unicode code point), and the index is the <strong>byte position</strong> of the start of that rune.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> <span class="st">&quot;café!&quot;</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i<span class="op">,</span> r <span class="op">:=</span> <span class="kw">range</span> s <span class="op">{</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;s[%d] = %c (%d)</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> i<span class="op">,</span> r<span class="op">,</span> r<span class="op">)</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co">// s[0] = c (99)</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co">// s[1] = a (97)</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="co">// s[2] = f (102)</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="co">// s[3] = é (233)</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="co">// s[5] = ! (33)</span></span></code></pre></div>
+<p>Notice that the index jumps from 3 directly to 5 for the <code>!</code> — index 4 never appears because <code>é</code> occupies bytes 3 and 4, and byte 4 is not the start of a rune.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Use <code>for range</code> when you care about characters (runes). Use a plain <code>for i</code> loop when you need raw byte access.</p>
+</div></div>
+<h2 data-number="3.4" id="string-literals"><span class="header-section-number">3.4</span> String Literals</h2>
+<p>  Go has two forms of string literal.</p>
+<p><strong>Interpreted string literals</strong> use double quotes and process backslash escapes — <code>\n</code>, <code>\t</code>, <code>\uXXXX</code>, <code>\UXXXXXXXX</code>, etc. This is the same as Java.</p>
+<p><strong>Raw string literals</strong> use backticks and suppress all escape processing. Everything between the backticks is literal, including newlines and backslashes.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">// interpreted --- \n is a newline</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>msg <span class="op">:=</span> <span class="st">&quot;Flowers</span><span class="ch">\n</span><span class="st">for you</span><span class="ch">\n</span><span class="st">&quot;</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co">// raw --- \n is two characters: backslash and n</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>re <span class="op">:=</span> <span class="st">`\d+\.\d+`</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="co">// raw --- multi-line JSON template</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>tmpl <span class="op">:=</span> <span class="st">`{</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="st">  &quot;artist&quot;: &quot;Doja Cat&quot;,</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="st">  &quot;album&quot;:  &quot;Scarlet&quot;</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="st">}`</span></span></code></pre></div>
+<p>Raw string literals are especially useful for regular expressions (where backslashes are abundant) and for embedding multi-line text without escaping.</p>
+<h2 data-number="3.5" id="converting-between-strings-bytes-and-runes"><span class="header-section-number">3.5</span> Converting Between Strings, Bytes, and Runes</h2>
+<p> You can convert freely among <code>string</code>, <code>[]byte</code>, and <code>[]rune</code>:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> <span class="st">&quot;hola&quot;</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>b <span class="op">:=</span> <span class="op">[]</span><span class="dt">byte</span><span class="op">(</span>s<span class="op">)</span>  <span class="co">// copy to a mutable byte slice</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>s2 <span class="op">:=</span> <span class="dt">string</span><span class="op">(</span>b<span class="op">)</span> <span class="co">// copy back to a string</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>r <span class="op">:=</span> <span class="op">[]</span><span class="dt">rune</span><span class="op">(</span>s<span class="op">)</span>  <span class="co">// copy to a rune slice</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>s3 <span class="op">:=</span> <span class="dt">string</span><span class="op">(</span>r<span class="op">)</span> <span class="co">// copy back to a string</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>s2<span class="op">)</span> <span class="co">// hola</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>s3<span class="op">)</span> <span class="co">// hola</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> These conversions <strong>copy</strong> the data. A string and a <code>[]byte</code> pointing at the same bytes in Java is possible via <code>ByteBuffer</code> tricks, but in Go the compiler enforces the copy to maintain string immutability.</p>
+</div></div>
+<p>Converting a single integer to <code>string</code> gives you the UTF-8 encoding of that code point, not the decimal representation:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="dt">string</span><span class="op">(</span><span class="dt">rune</span><span class="op">(</span><span class="dv">65</span><span class="op">)))</span>  <span class="co">// A</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="dt">string</span><span class="op">(</span><span class="dt">rune</span><span class="op">(</span><span class="dv">233</span><span class="op">)))</span> <span class="co">// é</span></span></code></pre></div>
+<p>To convert a number to its decimal string representation, use <code>strconv.Itoa</code> (covered below).</p>
+<h2 data-number="3.6" id="the-strings-package"><span class="header-section-number">3.6</span> The <code>strings</code> Package</h2>
+<p> The <code>strings</code> package provides the functions you reach for every day. Import it with <code>import "strings"</code>.</p>
+<h3 data-number="3.6.1" id="searching-and-testing"><span class="header-section-number">3.6.1</span> Searching and Testing</h3>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Contains<span class="op">(</span>s<span class="op">,</span> substr <span class="dt">string</span><span class="op">)</span> <span class="dt">bool</span>   <span class="co">// true if substr appears anywhere in s</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> HasPrefix<span class="op">(</span>s<span class="op">,</span> prefix <span class="dt">string</span><span class="op">)</span> <span class="dt">bool</span>  <span class="co">// true if s starts with prefix</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> HasSuffix<span class="op">(</span>s<span class="op">,</span> suffix <span class="dt">string</span><span class="op">)</span> <span class="dt">bool</span>  <span class="co">// true if s ends with suffix</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Count<span class="op">(</span>s<span class="op">,</span> substr <span class="dt">string</span><span class="op">)</span> <span class="dt">int</span>       <span class="co">// number of non-overlapping occurrences of substr</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Index<span class="op">(</span>s<span class="op">,</span> substr <span class="dt">string</span><span class="op">)</span> <span class="dt">int</span>       <span class="co">// byte index of first occurrence, or -1</span></span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> <span class="st">&quot;I can buy myself flowers&quot;</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>strings<span class="op">.</span>Contains<span class="op">(</span>s<span class="op">,</span> <span class="st">&quot;flowers&quot;</span><span class="op">))</span> <span class="co">// true</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>strings<span class="op">.</span>HasPrefix<span class="op">(</span>s<span class="op">,</span> <span class="st">&quot;I can&quot;</span><span class="op">))</span>  <span class="co">// true</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>strings<span class="op">.</span>HasSuffix<span class="op">(</span>s<span class="op">,</span> <span class="st">&quot;flowers&quot;</span><span class="op">))</span> <span class="co">// true</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>strings<span class="op">.</span>Count<span class="op">(</span>s<span class="op">,</span> <span class="st">&quot;l&quot;</span><span class="op">))</span>           <span class="co">// 2</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>strings<span class="op">.</span>Index<span class="op">(</span>s<span class="op">,</span> <span class="st">&quot;myself&quot;</span><span class="op">))</span>      <span class="co">// 10</span></span></code></pre></div>
+<h3 data-number="3.6.2" id="splitting-and-joining"><span class="header-section-number">3.6.2</span> Splitting and Joining</h3>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Split<span class="op">(</span>s<span class="op">,</span> sep <span class="dt">string</span><span class="op">)</span> <span class="op">[]</span><span class="dt">string</span>         <span class="co">// slice of substrings separated by sep</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Join<span class="op">(</span>elems <span class="op">[]</span><span class="dt">string</span><span class="op">,</span> sep <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span> <span class="co">// concatenate elems with sep between each</span></span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>parts <span class="op">:=</span> strings<span class="op">.</span>Split<span class="op">(</span><span class="st">&quot;un,dos,tres&quot;</span><span class="op">,</span> <span class="st">&quot;,&quot;</span><span class="op">)</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>parts<span class="op">)</span>                       <span class="co">// [un dos tres]</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>strings<span class="op">.</span>Join<span class="op">(</span>parts<span class="op">,</span> <span class="st">&quot; - &quot;</span><span class="op">))</span> <span class="co">// un - dos - tres</span></span></code></pre></div>
+<h3 data-number="3.6.3" id="trimming-and-case"><span class="header-section-number">3.6.3</span> Trimming and Case</h3>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TrimSpace<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span>               <span class="co">// strip leading and trailing whitespace</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Trim<span class="op">(</span>s<span class="op">,</span> cutset <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span>            <span class="co">// strip any chars in cutset from both ends</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> ToUpper<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span>                 <span class="co">// return s in upper case</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> ToLower<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span>                 <span class="co">// return s in lower case</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> ReplaceAll<span class="op">(</span>s<span class="op">,</span> old<span class="op">,</span> <span class="bu">new</span> <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span>    <span class="co">// replace every occurrence of old with new</span></span></code></pre></div>
+<p><code>TrimSpace</code> strips leading and trailing whitespace. <code>Trim</code> strips any characters in the cutset from both ends:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>strings<span class="op">.</span>TrimSpace<span class="op">(</span><span class="st">&quot;  flores  &quot;</span><span class="op">))</span>          <span class="co">// flores</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>strings<span class="op">.</span>Trim<span class="op">(</span><span class="st">&quot;***Espresso***&quot;</span><span class="op">,</span> <span class="st">&quot;*&quot;</span><span class="op">))</span>       <span class="co">// Espresso</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>strings<span class="op">.</span>Trim<span class="op">(</span><span class="st">&quot;...Bad Habit...&quot;</span><span class="op">,</span> <span class="st">&quot;/.&quot;</span><span class="op">))</span>     <span class="co">// Bad Habit</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>strings<span class="op">.</span>ToUpper<span class="op">(</span><span class="st">&quot;flowers&quot;</span><span class="op">))</span>                <span class="co">// FLOWERS</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>strings<span class="op">.</span>ReplaceAll<span class="op">(</span><span class="st">&quot;la la la&quot;</span><span class="op">,</span> <span class="st">&quot;la&quot;</span><span class="op">,</span> <span class="st">&quot;na&quot;</span><span class="op">))</span> <span class="co">// na na na</span></span></code></pre></div>
+<h3 data-number="3.6.4" id="building-strings-strings.builder"><span class="header-section-number">3.6.4</span> Building Strings: <code>strings.Builder</code></h3>
+<p> <code>strings.Builder</code> is the idiomatic way to build up a string incrementally. It is Go’s answer to Java’s <code>StringBuilder</code>. Unlike concatenating with <code>+</code> in a loop (which allocates a new string on every iteration), <code>Builder</code> maintains a growing buffer and materialises the final string only when you call <code>String()</code>.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> b strings<span class="op">.</span>Builder</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>b<span class="op">.</span>WriteString<span class="op">(</span><span class="st">&quot;Espresso --- &quot;</span><span class="op">)</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>b<span class="op">.</span>WriteString<span class="op">(</span><span class="st">&quot;Sabrina Carpenter&quot;</span><span class="op">)</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>b<span class="op">.</span>WriteByte<span class="op">(</span><span class="ch">&#39;\n&#39;</span><span class="op">)</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>b<span class="op">.</span>WriteRune<span class="op">(</span><span class="ch">&#39;🎵&#39;</span><span class="op">)</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>b<span class="op">.</span>String<span class="op">())</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="co">// Espresso --- Sabrina Carpenter</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="co">// 🎵</span></span></code></pre></div>
+<p>The relevant methods are:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>Builder<span class="op">)</span> WriteString<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">int</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="co">// append a string</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>Builder<span class="op">)</span> WriteByte<span class="op">(</span>c <span class="dt">byte</span><span class="op">)</span> <span class="dt">error</span>             <span class="co">// append a single byte</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>Builder<span class="op">)</span> WriteRune<span class="op">(</span>r <span class="dt">rune</span><span class="op">)</span> <span class="op">(</span><span class="dt">int</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span>      <span class="co">// append a Unicode code point</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>Builder<span class="op">)</span> String<span class="op">()</span> <span class="dt">string</span>                     <span class="co">// return the accumulated string</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>Builder<span class="op">)</span> Reset<span class="op">()</span>                             <span class="co">// clear the buffer for reuse</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b <span class="op">*</span>Builder<span class="op">)</span> Len<span class="op">()</span> <span class="dt">int</span>                           <span class="co">// current length in bytes</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Always use <code>strings.Builder</code> when you are building a string in a loop. Repeated <code>s += piece</code> is O(n²) in the total length because each <code>+</code> copies the entire accumulated string. <code>Builder</code> amortises this to O(n).</p>
+</div></div>
+<h2 data-number="3.7" id="the-strconv-package"><span class="header-section-number">3.7</span> The <code>strconv</code> Package</h2>
+<p> <code>strconv</code> handles conversions between strings and numeric types.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Itoa<span class="op">(</span>i <span class="dt">int</span><span class="op">)</span> <span class="dt">string</span>                                        <span class="co">// int → decimal string</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Atoi<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">int</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span>                               <span class="co">// decimal string → int</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> FormatFloat<span class="op">(</span>f <span class="dt">float64</span><span class="op">,</span> fmt <span class="dt">byte</span><span class="op">,</span> prec<span class="op">,</span> bitSize <span class="dt">int</span><span class="op">)</span> <span class="dt">string</span> <span class="co">// float → string</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> ParseFloat<span class="op">(</span>s <span class="dt">string</span><span class="op">,</span> bitSize <span class="dt">int</span><span class="op">)</span> <span class="op">(</span><span class="dt">float64</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span>         <span class="co">// string → float</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> FormatBool<span class="op">(</span>b <span class="dt">bool</span><span class="op">)</span> <span class="dt">string</span>                                  <span class="co">// bool → &quot;true&quot;/&quot;false&quot;</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> ParseBool<span class="op">(</span>str <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">bool</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span>                        <span class="co">// &quot;true&quot;/&quot;false&quot; → bool</span></span></code></pre></div>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> strconv<span class="op">.</span>Itoa<span class="op">(</span><span class="dv">42</span><span class="op">)</span>    <span class="co">// &quot;42&quot;</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> err <span class="op">:=</span> strconv<span class="op">.</span>Atoi<span class="op">(</span><span class="st">&quot;99&quot;</span><span class="op">)</span> <span class="co">// 99, nil</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>bad<span class="op">,</span> err <span class="op">:=</span> strconv<span class="op">.</span>Atoi<span class="op">(</span><span class="st">&quot;nope&quot;</span><span class="op">)</span> <span class="co">// 0, *strconv.NumError</span></span></code></pre></div>
+<p><code>strconv.Atoi</code> returns two values: the converted integer and an <code>error</code>. If the string is not a valid integer, <code>err</code> is non-nil. You should always check the error. Error handling is covered fully in Chapter 10; for now, the pattern is:</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> err <span class="op">:=</span> strconv<span class="op">.</span>Atoi<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">// handle the error</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>fmt.Sprintf("%d", n)</code> converts an integer to a string and works, but it is significantly slower than <code>strconv.Itoa</code> because <code>fmt</code> uses reflection. Prefer <code>strconv</code> when performance matters.</p>
+</div></div>
+<h2 data-number="3.8" id="the-unicodeutf8-package"><span class="header-section-number">3.8</span> The <code>unicode/utf8</code> Package</h2>
+<p> When you need to work at the rune level without converting the whole string to <code>[]rune</code>, the <code>unicode/utf8</code> package gives you the tools.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> RuneCountInString<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">int</span>                  <span class="co">// number of runes in s (not bytes)</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> DecodeRuneInString<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="op">(</span>r <span class="dt">rune</span><span class="op">,</span> size <span class="dt">int</span><span class="op">)</span>  <span class="co">// first rune and its byte width</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> ValidString<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">bool</span>                       <span class="co">// true if s is valid UTF-8</span></span></code></pre></div>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> <span class="st">&quot;café&quot;</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="bu">len</span><span class="op">(</span>s<span class="op">))</span>                        <span class="co">// 5 (bytes)</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>utf8<span class="op">.</span>RuneCountInString<span class="op">(</span>s<span class="op">))</span>     <span class="co">// 4 (runes)</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>r<span class="op">,</span> size <span class="op">:=</span> utf8<span class="op">.</span>DecodeRuneInString<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;first rune: %c, size: %d</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> r<span class="op">,</span> size<span class="op">)</span> <span class="co">// first rune: c, size: 1</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>utf8<span class="op">.</span>ValidString<span class="op">(</span>s<span class="op">))</span>           <span class="co">// true</span></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>utf8<span class="op">.</span>ValidString<span class="op">(</span><span class="st">&quot;</span><span class="ch">\xff\xfe</span><span class="st">&quot;</span><span class="op">))</span>  <span class="co">// false</span></span></code></pre></div>
+<p><code>DecodeRuneInString</code> is useful when you want to peel off one rune at a time from the front of a string without a full <code>for range</code> loop.</p>
+<h2 data-number="3.9" id="the-bytes-package"><span class="header-section-number">3.9</span> The <code>bytes</code> Package</h2>
+<p> The <code>bytes</code> package mirrors the <code>strings</code> package but operates on <code>[]byte</code> instead of <code>string</code>. Every function in <code>strings</code> that takes a <code>string</code> has a counterpart in <code>bytes</code> that takes <code>[]byte</code>. For example, <code>bytes.Contains</code>, <code>bytes.Split</code>, <code>bytes.Join</code>, <code>bytes.TrimSpace</code>.</p>
+<p>When you are working with data that is already in a <code>[]byte</code> (reading from a file or network, for instance), using <code>bytes</code> functions avoids the copy that <code>string(b)</code> would require.</p>
+<p><code>bytes.Buffer</code> is the older alternative to <code>strings.Builder</code> and supports both reading and writing — it implements <code>io.Reader</code> and <code>io.Writer</code>, making it useful for testing code that writes to an <code>io.Writer</code>.</p>
+<h2 data-number="3.10" id="key-points"><span class="header-section-number">3.10</span> Key Points</h2>
+<ul>
+<li>Go strings are immutable byte sequences; <code>len(s)</code> counts bytes, not characters.</li>
+<li><code>byte</code> is <code>uint8</code>; <code>rune</code> is <code>int32</code> (a full Unicode code point).</li>
+<li><code>s[i]</code> yields a <code>byte</code>; use <code>for range</code> to iterate runes.</li>
+<li>Java <code>char</code> is a UTF-16 code unit; Go <code>rune</code> is a full code point — they are different concepts.</li>
+<li>Raw string literals (backticks) pass through all characters literally, including backslashes and newlines.</li>
+<li>Converting between <code>string</code>, <code>[]byte</code>, and <code>[]rune</code> always copies data.</li>
+<li><code>strings.Builder</code> is the idiomatic way to build strings in a loop; avoid <code>+=</code> in loops.</li>
+<li><code>strconv.Atoi</code> returns an <code>error</code>; always check it.</li>
+<li><code>utf8.RuneCountInString</code> gives the true character count; <code>len</code> gives the byte count.</li>
+<li>The <code>bytes</code> package mirrors <code>strings</code> for <code>[]byte</code> data.</li>
+</ul>
+<h2 data-number="3.11" id="exercises"><span class="header-section-number">3.11</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> Go strings are described as “immutable sequences of bytes.” Java strings are also immutable. Given that both languages have immutable strings, why does Go’s <code>for range</code> behave differently from Java’s enhanced <code>for</code> loop over a <code>String</code>? What would have to be true about the loop for both languages to give the same result?</p></li>
+<li><p><strong>What does this print?</strong></p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>    s <span class="op">:=</span> <span class="st">&quot;Beyoncé&quot;</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">[</span><span class="dv">6</span><span class="op">])</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> How many bytes does <code>len("Beyoncé")</code> return? How many runes does <code>utf8.RuneCountInString("Beyoncé")</code> return? (Hint: <code>B</code>, <code>e</code>, <code>y</code>, <code>o</code>, <code>n</code>, <code>c</code> are each one byte; <code>é</code> is two bytes.)</p></li>
+<li><p><strong>Where is the bug?</strong> The following function tries to reverse each byte’s case by operating on raw bytes:</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> swapCase<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    b <span class="op">:=</span> <span class="op">[]</span><span class="dt">byte</span><span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="op">:=</span> <span class="kw">range</span> b <span class="op">{</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">switch</span> <span class="op">{</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">case</span> b<span class="op">[</span>i<span class="op">]</span> <span class="op">&gt;=</span> <span class="ch">&#39;A&#39;</span> <span class="op">&amp;&amp;</span> b<span class="op">[</span>i<span class="op">]</span> <span class="op">&lt;=</span> <span class="ch">&#39;Z&#39;</span><span class="op">:</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>            b<span class="op">[</span>i<span class="op">]</span> <span class="op">+=</span> <span class="dv">32</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">case</span> b<span class="op">[</span>i<span class="op">]</span> <span class="op">&gt;=</span> <span class="ch">&#39;a&#39;</span> <span class="op">&amp;&amp;</span> b<span class="op">[</span>i<span class="op">]</span> <span class="op">&lt;=</span> <span class="ch">&#39;z&#39;</span><span class="op">:</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>            b<span class="op">[</span>i<span class="op">]</span> <span class="op">-=</span> <span class="dv">32</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dt">string</span><span class="op">(</span>b<span class="op">)</span></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>swapCase<span class="op">(</span><span class="st">&quot;Héroe&quot;</span><span class="op">))</span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>é</code> is encoded as bytes 0xC3 (195) and 0xA9 (169). <code>H</code> is 72 and <code>e</code> is 101. Trace through the loop byte by byte. What does the function actually print, and what is fundamentally wrong with this approach for non-ASCII strings?</p></li>
+<li><p><strong>Write a program:</strong> Write a function <code>reverseString(s string) string</code> that returns the string with its runes in reverse order. For example, <code>reverseString("café")</code> should return <code>"éfac"</code>. Test it with at least one string that contains a multibyte character to confirm it handles Unicode correctly. (Hint: convert to <code>[]rune</code> first.)</p></li>
+</ol>
+
+{% endraw %}
