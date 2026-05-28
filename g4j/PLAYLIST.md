@@ -78,6 +78,13 @@ Do not repeat any reference already listed here.
 - Benson Boone --- "Beautiful Things" (used in sort.Interface ByTitle example)
 - Gracie Abrams --- "That's So True" (used in sort.Interface ByTitle example)
 
+## Chapter 15: Essential Standard Library
+
+- Ariana Grande --- "positions" (used in Track struct %v/%+v/%#v example: title "positions", BPM 114; and exercise 4 titles list)
+- Ariana Grande --- "thank u, next" (used in io.Pipe goroutine example: string written to pipe; and exercise 4 titles list)
+- Dua Lipa --- "Physical" (used in slog.Info example: title "Physical", BPM 130; and exercise 2 scanner input; exercise 4 titles list; exercise 5 sample run)
+- Dua Lipa --- "Don't Start Now" (used in bufio.NewWriter Flush example: string written to buffer; exercise 2 scanner input; exercise 4 titles list; exercise 5 sample run)
+
 ## Chapter 13: Context and Concurrency Patterns
 
 - Laufey --- "From The Start" (used in fetchLyrics timeout example and fanOutFetch exercise)
@@ -142,3 +149,17 @@ Do not repeat any reference already listed here.
 - Tate McRae --- "you broke me first" (used in Map function example, ArtistTitles iterator, Set exercise)
 - Conan Gray --- "Heather" (used in Stack example, Map function example, ArtistTitles iterator, Filter exercise, Dedupe exercise, Set exercise)
 - Conan Gray --- "Astronomy" (used in Map function example, ArtistTitles iterator, Filter exercise, Dedupe exercise, Set exercise)
+
+## Chapter 19: Testing
+
+- Lizzo --- "About Damn Time" (used in test function name `TestAboutDamnTime`, table case name, and exercise 4 `assertNormalized` call)
+- Lizzo --- "Good as Hell" (used in `TestGoodAsHell` table-driven test, `FuzzGoodAsHell` fuzz test, and exercise 1 discussion)
+- Cleo Sol --- "Golden" (used in `TestGolden` exercise 2 what-does-this-print question)
+- Cleo Sol --- "Woman" (used in `BenchmarkWoman` exercise 3 calculation question)
+
+## Chapter 20: Reflection
+
+- Morgan Wallen --- "Last Night" (used in TypeOf/ValueOf intro example as string value; and in exercise 3 SetString starting value)
+- Morgan Wallen --- "Thought You Should Know" (used in Elem() / struct example: Song.Title field value)
+- Jack Harlow --- "First Class" (solo; used in struct field iteration printFields example: Track.Title; exercise 3 SetString result; and StructToMap exercise answer: Track.Title)
+- Jack Harlow --- album "Jackman" (used in exercise 2 Album struct: Album.Title = "Jackman")
