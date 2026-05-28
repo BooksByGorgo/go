@@ -363,5 +363,3 @@ The table below maps each Go tool to its closest Java equivalent.
 | `gopls` | LSP language server | Eclipse JDT LS, IntelliJ built-in engine |
 | `dlv` (Delve) | Debugger with goroutine support | `jdb`, IntelliJ / Eclipse debugger |
 | `go build -gcflags=-m` | Escape analysis output | JVM `-XX:+PrintEscapeAnalysis` (JIT only) |
-
-\printindex
