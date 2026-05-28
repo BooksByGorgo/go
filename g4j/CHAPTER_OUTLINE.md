@@ -263,39 +263,7 @@ Audience: Java programmers learning Go for industry use
 - Integration tests --- build tags to separate unit and integration tests
 - `go test ./...`, `-count=1` (disable caching), `-timeout`
 
-### Chapter 20: Tooling
-*The Go toolchain is opinionated. Lean into it.*
-
-- `gofmt` / `goimports` --- formatting is not negotiable; configure your editor to run on save
-- `go vet` --- catches common mistakes the compiler misses
-- `golangci-lint` --- the standard linter aggregator; configure in `.golangci.yml`
-- `go doc` / `godoc` --- documenting and reading package docs
-- `gopls` --- the official language server; powers IDE support
-- Delve (`dlv`) --- the standard Go debugger; `dlv debug`, `dlv test`, goroutine inspection
-- `go tool compile -gcflags=-m` --- see escape analysis decisions
-
-### Chapter 21: Profiling and Performance
-*Go ships a world-class profiler. Use it before optimizing anything.*
-
-- `pprof` --- CPU profile, memory profile, goroutine profile
-- `net/http/pprof` --- import for side-effect to expose `/debug/pprof` on a live server
-- Block profile (`runtime.SetBlockProfileRate`) and mutex profile (`runtime.SetMutexProfileFraction`)
-- `go tool pprof -http` --- flame graphs in the browser
-- `go tool trace` --- goroutine and scheduler tracing
-- Profile-guided optimization (PGO, Go 1.20): `default.pgo`; `go build -pgo=auto`; 2--14% speedup
-- `GODEBUG` --- runtime knobs: `gctrace=1`, `schedtrace`
-
-### Chapter 22: GC and Runtime Tuning
-*Go's GC is concurrent and low-latency. A few knobs control the tradeoff.*
-
-- Escape analysis --- stack vs heap; `go build -gcflags=-m`; why it matters for allocations
-- `GOGC` --- default 100; raise to trade memory for less frequent GC
-- `GOMEMLIMIT` (Go 1.19) --- soft memory ceiling; essential for container deployments
-- `runtime/debug.SetGCPercent`, `SetMemoryLimit` --- programmatic equivalents
-- `GOMAXPROCS` --- revisited; tuning for CPU-bound workloads
-- `sync.Pool` revisited --- reducing allocation pressure
-
-### Chapter 23: Reflection
+### Chapter 20: Reflection
 *Reflection is powerful and slow. Use it only when the type is truly unknown at compile time.*
 
 - The three laws of reflection --- value, type, and settability
@@ -305,16 +273,6 @@ Audience: Java programmers learning Go for industry use
 - Struct field iteration; `reflect.StructField.Tag`; custom tag parsing
 - When reflection is warranted --- serialization libraries, dependency injection frameworks
 - Performance cost of reflection; prefer generics or interfaces where possible
-
-### Chapter 24: Unsafe and cgo
-*`unsafe` and `cgo` escape Go's safety guarantees. Handle with care.*
-
-- `unsafe.Pointer` --- type-safe pointer conversions; only for FFI and performance-critical ops
-- `unsafe.Sizeof`, `unsafe.Alignof`, `unsafe.Offsetof`
-- `cgo` --- calling C from Go; `import "C"` preamble
-- `C.CString` / `C.GoString` and the mandatory `defer C.free(unsafe.Pointer(cs))`
-- Cross-compilation limitations with cgo enabled
-- "cgo is not Go" --- maintenance and tooling costs; prefer a pure-Go alternative when one exists
 
 ---
 
@@ -333,4 +291,48 @@ Audience: Java programmers learning Go for industry use
 - "Don't just check errors, handle them gracefully"
 - Full list with discussion of each in the context of Java habits to unlearn
 
-### Appendix B: Index
+### Appendix B: Tooling
+*The Go toolchain is opinionated. Lean into it.*
+
+- `gofmt` / `goimports` --- formatting is not negotiable; configure your editor to run on save
+- `go vet` --- catches common mistakes the compiler misses
+- `golangci-lint` --- the standard linter aggregator; configure in `.golangci.yml`
+- `go doc` / `godoc` --- documenting and reading package docs
+- `gopls` --- the official language server; powers IDE support
+- Delve (`dlv`) --- the standard Go debugger; `dlv debug`, `dlv test`, goroutine inspection
+- `go tool compile -gcflags=-m` --- see escape analysis decisions
+
+### Appendix C: Profiling and Performance
+*Go ships a world-class profiler. Use it before optimizing anything.*
+
+- `pprof` --- CPU profile, memory profile, goroutine profile
+- `net/http/pprof` --- import for side-effect to expose `/debug/pprof` on a live server
+- Block profile (`runtime.SetBlockProfileRate`) and mutex profile (`runtime.SetMutexProfileFraction`)
+- `go tool pprof -http` --- flame graphs in the browser
+- `go tool trace` --- goroutine and scheduler tracing
+- Profile-guided optimization (PGO, Go 1.20): `default.pgo`; `go build -pgo=auto`; 2--14% speedup
+- `GODEBUG` --- runtime knobs: `gctrace=1`, `schedtrace`
+
+### Appendix D: GC and Runtime Tuning
+*Go's GC is concurrent and low-latency. A few knobs control the tradeoff.*
+
+- Escape analysis --- stack vs heap; `go build -gcflags=-m`; why it matters for allocations
+- `GOGC` --- default 100; raise to trade memory for less frequent GC
+- `GOMEMLIMIT` (Go 1.19) --- soft memory ceiling; essential for container deployments
+- `runtime/debug.SetGCPercent`, `SetMemoryLimit` --- programmatic equivalents
+- `GOMAXPROCS` --- revisited; tuning for CPU-bound workloads
+- `sync.Pool` revisited --- reducing allocation pressure
+
+### Appendix E: Unsafe and cgo
+*`unsafe` and `cgo` escape Go's safety guarantees. Handle with care.*
+
+- `unsafe.Pointer` --- type-safe pointer conversions; only for FFI and performance-critical ops
+- `unsafe.Sizeof`, `unsafe.Alignof`, `unsafe.Offsetof`
+- `cgo` --- calling C from Go; `import "C"` preamble
+- `C.CString` / `C.GoString` and the mandatory `defer C.free(unsafe.Pointer(cs))`
+- Cross-compilation limitations with cgo enabled
+- "cgo is not Go" --- maintenance and tooling costs; prefer a pure-Go alternative when one exists
+
+---
+
+## Index

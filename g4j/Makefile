@@ -7,7 +7,8 @@ PDFS := g4j.pdf g4j-answers.pdf
 
 CHAPTERS := frontmatter.yaml author-intro.md \
 	ch00.md ch01.md ch02.md ch03.md ch04.md \
-	ch05.md ch06.md ch07.md ch08.md ch09.md
+	ch05.md ch06.md ch07.md ch08.md ch09.md \
+	ch10.md ch13.md
 
 CH_SRCS := $(filter ch%.md,$(CHAPTERS))
 CH_PDFS := $(CH_SRCS:.md=.pdf)
