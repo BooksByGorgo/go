@@ -1,0 +1,413 @@
+---
+layout: default
+title: "9. Interfaces"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 9
+---
+
+{% raw %}
+<h1 data-number="9" id="interfaces"><span class="header-section-number">9</span> Interfaces</h1>
+<p> You have been writing Go code for several chapters now, and you have already brushed against interfaces — <code>fmt.Stringer</code>, <code>io.Reader</code>, <code>error</code>. This chapter is where they become first-class citizens. Go interfaces are the primary tool for abstraction, and they work very differently from Java’s. Understanding them unlocks idiomatic Go: clean, testable, composable code that does not require a class hierarchy.</p>
+<h2 data-number="9.1" id="implicit-interface-satisfaction"><span class="header-section-number">9.1</span> Implicit Interface Satisfaction</h2>
+<p> In Java, a class declares that it implements an interface:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Song <span class="kw">implements</span> Stringer <span class="op">{</span> <span class="kw">...</span> <span class="op">}</span></span></code></pre></div>
+<p>If you forget <code>implements</code>, the class is not a <code>Stringer</code>, even if it has every required method. The compiler checks the declaration, not the methods.</p>
+<p>Go flips this completely. There is no <code>implements</code> keyword. Any type that has the required methods <strong>automatically</strong> satisfies the interface. No declaration needed.</p>
+<p>Here is the <code>fmt.Stringer</code> interface from the standard library:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Stringer <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    String<span class="op">()</span> <span class="dt">string</span>  <span class="co">// returns a human-readable representation of the value</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Any type with a <code>String() string</code> method is automatically a <code>fmt.Stringer</code>.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    BPM    <span class="dt">int</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t Track<span class="op">)</span> String<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;%s by %s (%d BPM)&quot;</span><span class="op">,</span> t<span class="op">.</span>Title<span class="op">,</span> t<span class="op">.</span>Artist<span class="op">,</span> t<span class="op">.</span>BPM<span class="op">)</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>Track</code> is now a <code>fmt.Stringer</code>. No annotation, no registration. <code>fmt.Println</code> calls <code>String()</code> automatically when it sees a <code>Stringer</code>:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>t <span class="op">:=</span> Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Die With A Smile&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Lady Gaga &amp; Bruno Mars&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">144</span><span class="op">}</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">)</span> <span class="co">// Die With A Smile by Lady Gaga &amp; Bruno Mars (144 BPM)</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> This is called <strong>structural typing</strong> or <strong>duck typing</strong> with compile-time checking. If it has the right methods, it satisfies the interface — the compiler verifies this at the point of use, not at the point of definition. Java’s approach is <strong>nominal typing</strong>: the name of the interface in the declaration is what matters, not the shape of the type.</p>
+</div></div>
+<h3 data-number="9.1.1" id="checking-satisfaction-explicitly"><span class="header-section-number">9.1.1</span> Checking Satisfaction Explicitly</h3>
+<p>You will sometimes want to assert at compile time that a type satisfies an interface, without actually using the interface in a function call. The idiom is:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> _ fmt<span class="op">.</span>Stringer <span class="op">=</span> Track<span class="op">{}</span>  <span class="co">// compile error if Track does not satisfy fmt.Stringer</span></span></code></pre></div>
+<p>The blank identifier discards the value; the assignment only exists to force a compile-time check. This is useful at the top of a file as documentation and a safety net.</p>
+<h2 data-number="9.2" id="interface-composition"><span class="header-section-number">9.2</span> Interface Composition</h2>
+<p> Go interfaces can embed other interfaces, combining their method sets. The standard library uses this pervasively.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">// io.Reader requires one method</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Reader <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    Read<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span>  <span class="co">// reads up to len(p) bytes into p</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="co">// io.Writer requires one method</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Writer <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    Write<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span>  <span class="co">// writes len(p) bytes from p</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="co">// io.ReadWriter is both</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> ReadWriter <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    Reader  <span class="co">// embeds io.Reader</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    Writer  <span class="co">// embeds io.Writer</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>A type that implements both <code>Read</code> and <code>Write</code> automatically satisfies <code>io.ReadWriter</code>.</p>
+<p>You can define your own composed interfaces the same way:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> ReadWriteCloser <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>Reader   <span class="co">// Read(p []byte) (n int, err error)</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>Writer   <span class="co">// Write(p []byte) (n int, err error)</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>Closer   <span class="co">// Close() error</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>In Java, you would write <code>interface ReadWriteCloser extends Reader, Writer, Closeable</code>. Go’s embedding syntax is a bit cleaner — you list the interfaces you want to include, and the compiler assembles the combined method set.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Prefer small, single-method interfaces over large ones. The <code>io</code> package is the gold standard: <code>Reader</code>, <code>Writer</code>, <code>Closer</code>, <code>Seeker</code> are each one method. Larger interfaces emerge from composing small ones.</p>
+</div></div>
+<h2 data-number="9.3" id="any-the-top-type"><span class="header-section-number">9.3</span> <code>any</code> — The Top Type</h2>
+<p> </p>
+<p>Sometimes you want a variable that can hold any type. In Java, you do this with <code>Object</code> — <code>Object v</code> means any type of object can be assigned to <code>v</code>. You can do the same in Go with <code>var v interface{}</code>, but that is a rather verbose way to express that <code>v</code> can be assigned anything. So, Go 1.18 introduced <code>any</code> as an alias for <code>interface{}</code>. They are identical; <code>any</code> is just friendlier to read.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> x <span class="dt">any</span> <span class="op">=</span> <span class="dv">42</span>       <span class="co">// x holds an int</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> <span class="st">&quot;sabor a mí&quot;</span>    <span class="co">// now x holds a string</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> <span class="op">[]</span><span class="dt">int</span><span class="op">{</span><span class="dv">1</span><span class="op">,</span> <span class="dv">2</span><span class="op">,</span> <span class="dv">3</span><span class="op">}</span>  <span class="co">// now x holds a slice</span></span></code></pre></div>
+<p><code>any</code> is Go’s counterpart to Java’s <code>Object</code> — every type satisfies the empty interface because there are no methods to implement.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> <code>any</code> is not a magic box that avoids copies. Assigning a value to an <code>any</code> variable wraps it in an interface value, which stores the concrete type alongside a pointer to (or copy of) the data. Small values like <code>int</code> and <code>bool</code> are stored directly in the interface value on most platforms.</p>
+</div></div>
+<p>Older Go code uses <code>interface{}</code> everywhere. When you read code that predates Go 1.18, <code>interface{}</code> and <code>any</code> mean exactly the same thing. New code should use <code>any</code>.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Use <code>any</code> sparingly. Code that traffics in <code>any</code> values gives up compile-time type safety and often requires type assertions (see below) to get the value back out. Generics (Chapter 18) are usually the better choice when you want a function that works with multiple types.</p>
+</div></div>
+<h2 data-number="9.4" id="type-assertions"><span class="header-section-number">9.4</span> Type Assertions</h2>
+<p> An <strong>interface value</strong> holds two things: the concrete type and the concrete value. A type assertion extracts the concrete value.</p>
+<h3 data-number="9.4.1" id="the-panicking-form"><span class="header-section-number">9.4.1</span> The Panicking Form</h3>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> i <span class="dt">any</span> <span class="op">=</span> <span class="st">&quot;bzrp music session&quot;</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> i<span class="op">.(</span><span class="dt">string</span><span class="op">)</span>      <span class="co">// assert that i holds a string; assign it to s</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">)</span>       <span class="co">// bzrp music session</span></span></code></pre></div>
+<p>If the assertion is wrong, the program panics immediately:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>n <span class="op">:=</span> i<span class="op">.(</span><span class="dt">int</span><span class="op">)</span>  <span class="co">// panic: interface conversion: interface {} is string, not int</span></span></code></pre></div>
+<p>Use this form when you are certain of the type — for example, immediately after a type switch case.</p>
+<h3 data-number="9.4.2" id="the-safe-form"><span class="header-section-number">9.4.2</span> The Safe Form</h3>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>s<span class="op">,</span> ok <span class="op">:=</span> i<span class="op">.(</span><span class="dt">string</span><span class="op">)</span>  <span class="co">// ok is true if i holds a string</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> ok <span class="op">{</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;got string:&quot;</span><span class="op">,</span> s<span class="op">)</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;not a string&quot;</span><span class="op">)</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The safe form never panics. If the type does not match, <code>ok</code> is <code>false</code> and <code>s</code> is the zero value of the asserted type.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Always use the two-value form (<code>v, ok := i.(T)</code>) when you are not certain of the type. The single-value form panics on a wrong guess, which is a runtime crash, not a compile error.</p>
+</div></div>
+<h2 data-number="9.5" id="type-switches"><span class="header-section-number">9.5</span> Type Switches</h2>
+<p> A <strong>type switch</strong> is a <code>switch</code> statement that dispatches on the dynamic type of an interface value. Chapter 4 showed a preview; here is the full picture.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> describe<span class="op">(</span>i <span class="dt">any</span><span class="op">)</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">switch</span> v <span class="op">:=</span> i<span class="op">.(</span><span class="kw">type</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="dt">int</span><span class="op">:</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;int: %d&quot;</span><span class="op">,</span> v<span class="op">)</span>      <span class="co">// v is int here</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="dt">string</span><span class="op">:</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;string: %q&quot;</span><span class="op">,</span> v<span class="op">)</span>   <span class="co">// v is string here</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="dt">bool</span><span class="op">:</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;bool: %t&quot;</span><span class="op">,</span> v<span class="op">)</span>     <span class="co">// v is bool here</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="op">[]</span><span class="dt">int</span><span class="op">:</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;[]int of length %d&quot;</span><span class="op">,</span> <span class="bu">len</span><span class="op">(</span>v<span class="op">))</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="ot">nil</span><span class="op">:</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">&quot;nil&quot;</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">default</span><span class="op">:</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;unknown type: %T&quot;</span><span class="op">,</span> v<span class="op">)</span></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The expression <code>i.(type)</code> is only valid inside a type switch — you cannot write it anywhere else. In each case, <code>v</code> is automatically converted to the matched concrete type. In the <code>default</code> case, <code>v</code> retains the type of <code>i</code> (i.e., <code>any</code>).</p>
+<p>You can match multiple types in one case:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="cf">switch</span> v <span class="op">:=</span> i<span class="op">.(</span><span class="kw">type</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="dt">int</span><span class="op">,</span> <span class="dt">int64</span><span class="op">:</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;some integer:&quot;</span><span class="op">,</span> v<span class="op">)</span>  <span class="co">// v is any here because the types differ</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="dt">string</span><span class="op">:</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;string:&quot;</span><span class="op">,</span> v<span class="op">)</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>When a case lists more than one type, <code>v</code> takes the type of the switch expression (here <code>any</code>) because the compiler cannot assign a single concrete type to <code>v</code>.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Type switches are the idiomatic Go replacement for Java’s <code>instanceof</code> chains. In Java you write:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="op">(</span>obj <span class="kw">instanceof</span> <span class="bu">String</span> s<span class="op">)</span> <span class="op">{</span> <span class="kw">...</span> <span class="op">}</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span> <span class="cf">if</span> <span class="op">(</span>obj <span class="kw">instanceof</span> <span class="bu">Integer</span> n<span class="op">)</span> <span class="op">{</span> <span class="kw">...</span> <span class="op">}</span></span></code></pre></div>
+<p>In Go you write a type switch. It is cleaner and exhaustive — the <code>default</code> case catches everything else.</p>
+</div></div>
+<h2 data-number="9.6" id="key-standard-library-interfaces"><span class="header-section-number">9.6</span> Key Standard Library Interfaces</h2>
+<p> Go’s standard library defines a small set of interfaces that appear everywhere. Knowing them lets you understand most Go code at a glance.</p>
+<h3 data-number="9.6.1" id="io.reader"><span class="header-section-number">9.6.1</span> <code>io.Reader</code></h3>
+<p></p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Reader <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    Read<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span>  <span class="co">// reads up to len(p) bytes into p; returns bytes read and any error</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>Read</code> fills the slice <code>p</code> with up to <code>len(p)</code> bytes. It returns the number of bytes actually read and any error. When the underlying data is exhausted, it returns <code>0, io.EOF</code>.</p>
+<p>Here is a concrete type that implements <code>io.Reader</code>:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co">// CountReader wraps an io.Reader and counts bytes as they are read.</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> CountReader <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    r     io<span class="op">.</span>Reader</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    count <span class="dt">int</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>cr <span class="op">*</span>CountReader<span class="op">)</span> Read<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span><span class="dt">int</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    n<span class="op">,</span> err <span class="op">:=</span> cr<span class="op">.</span>r<span class="op">.</span>Read<span class="op">(</span>p<span class="op">)</span>  <span class="co">// delegate to the underlying reader</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>    cr<span class="op">.</span>count <span class="op">+=</span> n           <span class="co">// tally the bytes</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> n<span class="op">,</span> err</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Any function that accepts an <code>io.Reader</code> will accept <code>*CountReader</code> without modification.</p>
+<h3 data-number="9.6.2" id="io.writer"><span class="header-section-number">9.6.2</span> <code>io.Writer</code></h3>
+<p></p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Writer <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    Write<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span>  <span class="co">// writes len(p) bytes from p; returns bytes written and any error</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>Write</code> must write exactly <code>len(p)</code> bytes or return an error. <code>os.Stdout</code>, <code>*os.File</code>, <code>*bytes.Buffer</code>, and <code>*strings.Builder</code> all satisfy <code>io.Writer</code>.</p>
+<p>A minimal implementation:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co">// UpperWriter wraps an io.Writer and converts all bytes to upper case.</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> UpperWriter <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    w io<span class="op">.</span>Writer</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>uw <span class="op">*</span>UpperWriter<span class="op">)</span> Write<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span><span class="dt">int</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>    upper <span class="op">:=</span> bytes<span class="op">.</span>ToUpper<span class="op">(</span>p<span class="op">)</span>  <span class="co">// convert to upper case</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> uw<span class="op">.</span>w<span class="op">.</span>Write<span class="op">(</span>upper<span class="op">)</span>   <span class="co">// delegate to the underlying writer</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 data-number="9.6.3" id="fmt.stringer"><span class="header-section-number">9.6.3</span> <code>fmt.Stringer</code></h3>
+<p></p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Stringer <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>    String<span class="op">()</span> <span class="dt">string</span>  <span class="co">// returns a human-readable string representation</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>fmt.Println</code>, <code>fmt.Sprintf</code> with <code>%v</code> or <code>%s</code>, and most other <code>fmt</code> functions check whether a value satisfies <code>Stringer</code> and call <code>String()</code> if so. You saw this at the start of the chapter with <code>Track</code>.</p>
+<h3 data-number="9.6.4" id="error"><span class="header-section-number">9.6.4</span> <code>error</code></h3>
+<p></p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">error</span> <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>    Error<span class="op">()</span> <span class="dt">string</span>  <span class="co">// returns the error message</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>error</code> is a predeclared interface, not a type in any package — it is part of the language itself. Any type with an <code>Error() string</code> method is an <code>error</code>. Error handling is covered in full in Chapter 10; for now, just note the shape.</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> ValidationError <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>    Field   <span class="dt">string</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    Message <span class="dt">string</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>ValidationError<span class="op">)</span> Error<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;validation failed on %s: %s&quot;</span><span class="op">,</span> e<span class="op">.</span>Field<span class="op">,</span> e<span class="op">.</span>Message<span class="op">)</span></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>*ValidationError</code> is now an <code>error</code> and can be returned anywhere an <code>error</code> is expected.</p>
+<h3 data-number="9.6.5" id="sort.interface"><span class="header-section-number">9.6.5</span> <code>sort.Interface</code></h3>
+<p></p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Interface <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    Len<span class="op">()</span> <span class="dt">int</span>              <span class="co">// returns the number of elements in the collection</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    Less<span class="op">(</span>i<span class="op">,</span> j <span class="dt">int</span><span class="op">)</span> <span class="dt">bool</span>    <span class="co">// reports whether element i should sort before element j</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    Swap<span class="op">(</span>i<span class="op">,</span> j <span class="dt">int</span><span class="op">)</span>         <span class="co">// swaps the elements at positions i and j</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Any type that implements all three methods can be sorted by <code>sort.Sort</code>. The standard library does not know or care what you are sorting — it only calls these three methods.</p>
+<p>Here is a concrete type that sorts a slice of songs by title:</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Song <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="co">// ByTitle wraps a []Song and sorts it alphabetically by title.</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> ByTitle <span class="op">[]</span>Song</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b ByTitle<span class="op">)</span> Len<span class="op">()</span> <span class="dt">int</span>           <span class="op">{</span> <span class="cf">return</span> <span class="bu">len</span><span class="op">(</span>b<span class="op">)</span> <span class="op">}</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b ByTitle<span class="op">)</span> Less<span class="op">(</span>i<span class="op">,</span> j <span class="dt">int</span><span class="op">)</span> <span class="dt">bool</span> <span class="op">{</span> <span class="cf">return</span> b<span class="op">[</span>i<span class="op">].</span>Title <span class="op">&lt;</span> b<span class="op">[</span>j<span class="op">].</span>Title <span class="op">}</span></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b ByTitle<span class="op">)</span> Swap<span class="op">(</span>i<span class="op">,</span> j <span class="dt">int</span><span class="op">)</span>      <span class="op">{</span> b<span class="op">[</span>i<span class="op">],</span> b<span class="op">[</span>j<span class="op">]</span> <span class="op">=</span> b<span class="op">[</span>j<span class="op">],</span> b<span class="op">[</span>i<span class="op">]</span> <span class="op">}</span></span></code></pre></div>
+<p>Use it with <code>sort.Sort</code>:</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>songs <span class="op">:=</span> <span class="op">[]</span>Song<span class="op">{</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Good Luck, Babe!&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Chappell Roan&quot;</span><span class="op">},</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Beautiful Things&quot;</span><span class="op">,</span>  Artist<span class="op">:</span> <span class="st">&quot;Benson Boone&quot;</span><span class="op">},</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;That&#39;s So True&quot;</span><span class="op">,</span>    Artist<span class="op">:</span> <span class="st">&quot;Gracie Abrams&quot;</span><span class="op">},</span></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>sort<span class="op">.</span>Sort<span class="op">(</span>ByTitle<span class="op">(</span>songs<span class="op">))</span></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> _<span class="op">,</span> s <span class="op">:=</span> <span class="kw">range</span> songs <span class="op">{</span></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%s --- %s</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> s<span class="op">.</span>Title<span class="op">,</span> s<span class="op">.</span>Artist<span class="op">)</span></span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a><span class="co">// Beautiful Things --- Benson Boone</span></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a><span class="co">// Good Luck, Babe! --- Chappell Roan</span></span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a><span class="co">// That&#39;s So True --- Gracie Abrams</span></span></code></pre></div>
+<p><code>ByTitle(songs)</code> is a type conversion that reinterprets the <code>[]Song</code> slice as a <code>ByTitle</code> — no copying occurs.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> <code>sort.Interface</code> is best suited to types that need to be sortable as a <strong>first-class capability</strong> — for example, a domain type that your package exposes and that users will sort repeatedly or pass to generic sort utilities. For a one-off sort inside a single function, Go 1.21’s <code>slices.SortFunc</code> is simpler:</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>slices<span class="op">.</span>SortFunc<span class="op">(</span>songs<span class="op">,</span> <span class="kw">func</span><span class="op">(</span>a<span class="op">,</span> b Song<span class="op">)</span> <span class="dt">int</span> <span class="op">{</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> cmp<span class="op">.</span>Compare<span class="op">(</span>a<span class="op">.</span>Title<span class="op">,</span> b<span class="op">.</span>Title<span class="op">)</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span></code></pre></div>
+<p>You saw <code>slices.SortFunc</code> in Chapter 8; use <code>sort.Interface</code> when the sortable behavior belongs to the type itself.</p>
+</div></div>
+<h2 data-number="9.7" id="accept-interfaces-return-structs"><span class="header-section-number">9.7</span> Accept Interfaces, Return Structs</h2>
+<p> One of Go’s most important design idioms is: <strong>accept interfaces, return concrete types</strong>.</p>
+<p>When a function’s parameter is an interface, the caller can pass any type that satisfies it — including a mock in a test. When a function returns a concrete type, callers get access to all the methods of that type, not just the interface subset.</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Good: accepts io.Writer so any writer will do --- os.Stdout, a file, a buffer</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> WriteJSON<span class="op">(</span>w io<span class="op">.</span>Writer<span class="op">,</span> v <span class="dt">any</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    enc <span class="op">:=</span> json<span class="op">.</span>NewEncoder<span class="op">(</span>w<span class="op">)</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> enc<span class="op">.</span>Encode<span class="op">(</span>v<span class="op">)</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a><span class="co">// Less flexible: only accepts *os.File</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> WriteJSONToFile<span class="op">(</span>f <span class="op">*</span>os<span class="op">.</span>File<span class="op">,</span> v <span class="dt">any</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>    enc <span class="op">:=</span> json<span class="op">.</span>NewEncoder<span class="op">(</span>f<span class="op">)</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> enc<span class="op">.</span>Encode<span class="op">(</span>v<span class="op">)</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Returning interfaces makes things harder:</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Avoid: callers cannot use *bytes.Buffer methods --- only io.Writer methods</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewBuffer<span class="op">()</span> io<span class="op">.</span>Writer <span class="op">{</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>bytes<span class="op">.</span>Buffer<span class="op">{}</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Better: callers get the full *bytes.Buffer API</span></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewBuffer<span class="op">()</span> <span class="op">*</span>bytes<span class="op">.</span>Buffer <span class="op">{</span></span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>bytes<span class="op">.</span>Buffer<span class="op">{}</span></span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Accept the narrowest interface that meets your needs. Return the most specific concrete type you can. This maximizes caller flexibility and testability without hiding useful API.</p>
+</div></div>
+<p>The rule has one well-known exception: the <code>error</code> interface. Functions return <code>error</code> (an interface) rather than a concrete error type so that callers are not coupled to the specific error implementation. Chapter 10 explains why.</p>
+<h2 data-number="9.8" id="the-interface-nil-trap"><span class="header-section-number">9.8</span> The Interface Nil Trap</h2>
+<p>  This is one of Go’s most notorious gotchas. Read this section carefully.</p>
+<p>An interface value has two components: a <strong>type</strong> and a <strong>value</strong>. An interface is <code>nil</code> only when <strong>both</strong> the type and the value are <code>nil</code>. A typed nil — a nil pointer stored in an interface — is <strong>not</strong> nil.</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> MyError <span class="kw">struct</span><span class="op">{</span> msg <span class="dt">string</span> <span class="op">}</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>MyError<span class="op">)</span> Error<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span> <span class="cf">return</span> e<span class="op">.</span>msg <span class="op">}</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> mayFail<span class="op">(</span>fail <span class="dt">bool</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> e <span class="op">*</span>MyError  <span class="co">// e is a typed nil: type=*MyError, value=nil</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> fail <span class="op">{</span></span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>        e <span class="op">=</span> <span class="op">&amp;</span>MyError<span class="op">{</span>msg<span class="op">:</span> <span class="st">&quot;something went wrong&quot;</span><span class="op">}</span></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> e        <span class="co">// </span><span class="al">BUG</span><span class="co">: always returns a non-nil interface!</span></span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>    err <span class="op">:=</span> mayFail<span class="op">(</span><span class="ot">false</span><span class="op">)</span></span>
+<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;got error:&quot;</span><span class="op">,</span> err<span class="op">)</span>  <span class="co">// this line executes even when fail=false!</span></span>
+<span id="cb28-17"><a href="#cb28-17" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb28-18"><a href="#cb28-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>When <code>fail</code> is <code>false</code>, <code>e</code> is <code>nil</code> (a nil <code>*MyError</code>), but <code>return e</code> wraps it in an <code>error</code> interface value with type <code>*MyError</code> and value <code>nil</code>. That interface value is <strong>not</strong> nil because the type field is populated. <code>err != nil</code> is <code>true</code>.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Never return a typed nil pointer in an interface. If you want to return “no error,” return the untyped <code>nil</code> literal directly:</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> mayFail<span class="op">(</span>fail <span class="dt">bool</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> fail <span class="op">{</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="op">&amp;</span>MyError<span class="op">{</span>msg<span class="op">:</span> <span class="st">&quot;something went wrong&quot;</span><span class="op">}</span></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ot">nil</span>  <span class="co">// untyped nil: type=nil, value=nil --- this is a nil error</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The fix is to return <code>nil</code> (untyped) rather than a variable of the concrete error type.</p>
+</div></div>
+<p>You can inspect the components of an interface value using reflection, but in practice the fix is always the same: return <code>nil</code> directly, not a typed nil pointer.</p>
+<h2 data-number="9.9" id="http.handlerfunc-functions-as-interfaces"><span class="header-section-number">9.9</span> <code>http.HandlerFunc</code> — Functions as Interfaces</h2>
+<p>  Go lets you define methods on any named type, including function types. The standard library uses this to let a plain function satisfy the <code>http.Handler</code> interface.</p>
+<p>The <code>http.Handler</code> interface requires one method:</p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Handler <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>    ServeHTTP<span class="op">(</span>ResponseWriter<span class="op">,</span> <span class="op">*</span>Request<span class="op">)</span>  <span class="co">// handles an HTTP request</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>http.HandlerFunc</code> is a function type with a <code>ServeHTTP</code> method:</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> HandlerFunc <span class="kw">func</span><span class="op">(</span>ResponseWriter<span class="op">,</span> <span class="op">*</span>Request<span class="op">)</span>  <span class="co">// a function that handles an HTTP request</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>f HandlerFunc<span class="op">)</span> ServeHTTP<span class="op">(</span>w ResponseWriter<span class="op">,</span> r <span class="op">*</span>Request<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>    f<span class="op">(</span>w<span class="op">,</span> r<span class="op">)</span>  <span class="co">// call the function itself</span></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Because <code>HandlerFunc</code> has <code>ServeHTTP</code>, it satisfies <code>http.Handler</code>. This lets you write a plain function and use it anywhere an <code>http.Handler</code> is required:</p>
+<div class="sourceCode" id="cb32"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> helloHandler<span class="op">(</span>w http<span class="op">.</span>ResponseWriter<span class="op">,</span> r <span class="op">*</span>http<span class="op">.</span>Request<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Fprintf<span class="op">(</span>w<span class="op">,</span> <span class="st">&quot;Bienvenidos!</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">)</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>    http<span class="op">.</span>Handle<span class="op">(</span><span class="st">&quot;/hello&quot;</span><span class="op">,</span> http<span class="op">.</span>HandlerFunc<span class="op">(</span>helloHandler<span class="op">))</span></span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>    http<span class="op">.</span>ListenAndServe<span class="op">(</span><span class="st">&quot;:8080&quot;</span><span class="op">,</span> <span class="ot">nil</span><span class="op">)</span></span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>http.HandlerFunc(helloHandler)</code> is a type conversion, not a function call — it converts the function to the <code>HandlerFunc</code> type. Because <code>HandlerFunc</code> implements <code>http.Handler</code>, the converted value satisfies the <code>http.Handler</code> interface.</p>
+<p>The more common shorthand uses <code>http.HandleFunc</code>, which wraps this conversion internally:</p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>http<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;/hello&quot;</span><span class="op">,</span> helloHandler<span class="op">)</span>  <span class="co">// convenience wrapper for http.HandlerFunc</span></span></code></pre></div>
+<p>This pattern is the <strong>adapter</strong> or <strong>strategy</strong> pattern from Java, implemented without any class boilerplate. HTTP is covered fully in Chapter 16; this example just demonstrates the pattern.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Defining methods on a function type is a powerful Go idiom. Whenever you see a type defined as <code>type Foo func(...)</code> in a package with a method attached, it is almost certainly being used as an adapter to make plain functions satisfy an interface.</p>
+</div></div>
+<h2 data-number="9.10" id="key-points"><span class="header-section-number">9.10</span> Key Points</h2>
+<ul>
+<li>Go uses <strong>structural typing</strong>: a type satisfies an interface by having the right methods, with no <code>implements</code> declaration required.</li>
+<li>Interface composition embeds interfaces inside interfaces; <code>io.ReadWriter</code> is <code>io.Reader</code> + <code>io.Writer</code>.</li>
+<li><code>any</code> (alias for <code>interface{}</code>) is the top type; use it sparingly and prefer generics when possible.</li>
+<li>Type assertions come in two forms: <code>v := i.(T)</code> panics on failure; <code>v, ok := i.(T)</code> is safe.</li>
+<li>Type switches dispatch on dynamic type: <code>switch v := i.(type) { case int: ... }</code>.</li>
+<li>The five interfaces to know first: <code>io.Reader</code>, <code>io.Writer</code>, <code>fmt.Stringer</code>, <code>error</code>, and <code>sort.Interface</code>.</li>
+<li><code>sort.Interface</code> (<code>Len</code>, <code>Less</code>, <code>Swap</code>) lets any type be sorted by <code>sort.Sort</code>; prefer <code>slices.SortFunc</code> for one-off sorts.</li>
+<li>Accept interfaces, return concrete types — this maximizes flexibility and testability.</li>
+<li>A typed nil pointer stored in an interface is <strong>not</strong> nil; always return the untyped <code>nil</code> to signal “no error.”</li>
+<li><code>http.HandlerFunc</code> shows how function types can implement interfaces, enabling the adapter pattern with no boilerplate.</li>
+</ul>
+<h2 data-number="9.11" id="exercises"><span class="header-section-number">9.11</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> Go’s structural typing means any package can retroactively make its types satisfy an interface defined in any other package. In Java, if you want your <code>Song</code> class to satisfy a new interface <code>Playable</code> defined in a library you do not control, you must modify <code>Song</code>’s source. Explain how Go’s approach changes the relationship between library authors and library users. What does this mean for extending types from packages you cannot modify?</p></li>
+<li><p><strong>What does this print?</strong></p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Celsius <span class="dt">float64</span></span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Fahrenheit <span class="dt">float64</span></span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>c Celsius<span class="op">)</span> String<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;%.1f°C&quot;</span><span class="op">,</span> <span class="dt">float64</span><span class="op">(</span>c<span class="op">))</span></span>
+<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> printTemp<span class="op">(</span>v fmt<span class="op">.</span>Stringer<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>v<span class="op">.</span>String<span class="op">())</span></span>
+<span id="cb34-14"><a href="#cb34-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb34-15"><a href="#cb34-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-16"><a href="#cb34-16" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb34-17"><a href="#cb34-17" aria-hidden="true" tabindex="-1"></a>    c <span class="op">:=</span> Celsius<span class="op">(</span><span class="fl">37.5</span><span class="op">)</span></span>
+<span id="cb34-18"><a href="#cb34-18" aria-hidden="true" tabindex="-1"></a>    f <span class="op">:=</span> Fahrenheit<span class="op">(</span><span class="fl">99.5</span><span class="op">)</span></span>
+<span id="cb34-19"><a href="#cb34-19" aria-hidden="true" tabindex="-1"></a>    printTemp<span class="op">(</span>c<span class="op">)</span></span>
+<span id="cb34-20"><a href="#cb34-20" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>f<span class="op">)</span></span>
+<span id="cb34-21"><a href="#cb34-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> An interface value in Go stores two fields: a pointer to type information and a pointer to (or copy of) the data. Given a variable declared as <code>var r io.Reader = &amp;bytes.Buffer{}</code>, how many distinct type/value components does <code>r</code> hold? If <code>r</code> is then assigned <code>nil</code>, describe the type and value components of the resulting interface value.</p></li>
+<li><p><strong>Where is the bug?</strong></p>
+<div class="sourceCode" id="cb35"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> DBError <span class="kw">struct</span><span class="op">{</span> code <span class="dt">int</span> <span class="op">}</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>DBError<span class="op">)</span> Error<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span> <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;db error %d&quot;</span><span class="op">,</span> e<span class="op">.</span>code<span class="op">)</span> <span class="op">}</span></span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> connect<span class="op">(</span>bad <span class="dt">bool</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> err <span class="op">*</span>DBError</span>
+<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> bad <span class="op">{</span></span>
+<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a>        err <span class="op">=</span> <span class="op">&amp;</span>DBError<span class="op">{</span>code<span class="op">:</span> <span class="dv">500</span><span class="op">}</span></span>
+<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb35-14"><a href="#cb35-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> err</span>
+<span id="cb35-15"><a href="#cb35-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb35-16"><a href="#cb35-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-17"><a href="#cb35-17" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb35-18"><a href="#cb35-18" aria-hidden="true" tabindex="-1"></a>    e <span class="op">:=</span> connect<span class="op">(</span><span class="ot">false</span><span class="op">)</span></span>
+<span id="cb35-19"><a href="#cb35-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> e <span class="op">==</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb35-20"><a href="#cb35-20" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;connected OK&quot;</span><span class="op">)</span></span>
+<span id="cb35-21"><a href="#cb35-21" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb35-22"><a href="#cb35-22" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;failed:&quot;</span><span class="op">,</span> e<span class="op">)</span></span>
+<span id="cb35-23"><a href="#cb35-23" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb35-24"><a href="#cb35-24" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Define an interface <code>Shape</code> with two methods: <code>Area() float64</code> and <code>Perimeter() float64</code>. Implement <code>Shape</code> for two concrete types: <code>Rectangle</code> (with fields <code>Width</code> and <code>Height float64</code>) and <code>Circle</code> (with field <code>Radius float64</code>; use <code>math.Pi</code>). Write a function <code>printShapeInfo(s Shape)</code> that prints the area and perimeter. In <code>main</code>, create one <code>Rectangle</code> and one <code>Circle</code> and call <code>printShapeInfo</code> on each.</p></li>
+</ol>
+
+{% endraw %}

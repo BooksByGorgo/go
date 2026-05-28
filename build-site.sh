@@ -118,7 +118,7 @@ build_book() {
             emit_chapter_entry "$dest_subdir" "author-intro" "$author_title" "no"
         fi
 
-        for md in "$src_dir"/ch*.md; do
+        for md in "$src_dir"/ch[0-9][0-9].md; do
             local base num chapnum title html_dest pdf_src pdf_dst include_pdf number_opts
             base=$(basename "$md")
             num=${base%.md}

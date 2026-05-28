@@ -1,0 +1,301 @@
+---
+layout: default
+title: "5. Functions"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 5
+---
+
+{% raw %}
+<h1 data-number="5" id="functions"><span class="header-section-number">5</span> Functions</h1>
+<p> Go functions look familiar on the surface — <code>func</code>, a name, parameters, a body — but underneath they have capabilities that Java methods do not: multiple return values, first-class status as values, and closures that capture variables from the surrounding scope. This chapter covers all of those features, plus variadic functions, the special <code>init</code> function, and the pattern of passing functions as parameters to build flexible, composable code.</p>
+<h2 data-number="5.1" id="function-syntax"><span class="header-section-number">5.1</span> Function Syntax</h2>
+<p>  A function declaration uses <code>func</code>, a name, a parameter list, an optional return type, and a body:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> greet<span class="op">(</span>name <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="st">&quot;Hola, &quot;</span> <span class="op">+</span> name <span class="op">+</span> <span class="st">&quot;!&quot;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>When consecutive parameters share the same type, Go lets you write the type once at the end of the group:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> add<span class="op">(</span>a<span class="op">,</span> b <span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span> <span class="cf">return</span> a <span class="op">+</span> b <span class="op">}</span>        <span class="co">// a and b are both int</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> rect<span class="op">(</span>x<span class="op">,</span> y<span class="op">,</span> w<span class="op">,</span> h <span class="dt">float64</span><span class="op">)</span> <span class="dt">float64</span> <span class="op">{</span> <span class="op">...</span> <span class="op">}</span>  <span class="co">// all four are float64</span></span></code></pre></div>
+<p>This shorthand works for any number of consecutive same-typed parameters and is idiomatic in Go.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> In Java, every parameter must carry its own type annotation: <code>int a, int b</code>. Go’s shared-type shorthand is read right-to-left: <code>a, b int</code> means “a and b, both int.”</p>
+</div></div>
+<h2 data-number="5.2" id="multiple-return-values"><span class="header-section-number">5.2</span> Multiple Return Values</h2>
+<p> In Java, a method returns exactly one value. When you need to signal failure you throw an exception. Go takes a different approach: a function can return multiple values, and the convention is to return the result alongside an <code>error</code> value.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> divide<span class="op">(</span>a<span class="op">,</span> b <span class="dt">float64</span><span class="op">)</span> <span class="op">(</span><span class="dt">float64</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span> <span class="co">// returns result and an error</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> b <span class="op">==</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="dv">0</span><span class="op">,</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;cannot divide by zero&quot;</span><span class="op">)</span> <span class="co">// zero value + error</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> a <span class="op">/</span> b<span class="op">,</span> <span class="ot">nil</span>                                  <span class="co">// result + nil means success</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The caller receives both values and must handle them:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>result<span class="op">,</span> err <span class="op">:=</span> divide<span class="op">(</span><span class="dv">10</span><span class="op">,</span> <span class="dv">3</span><span class="op">)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;error:&quot;</span><span class="op">,</span> err<span class="op">)</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%.4f</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> result<span class="op">)</span> <span class="co">// 3.3333</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Go’s multiple-return idiom replaces Java’s checked exceptions for expected failure conditions. You cannot silently ignore the error by assigning the call to fewer variables than it returns — the compiler rejects the mismatched count. You can discard it explicitly with <code>_</code>, or ignore it completely by not assigning the result at all, but both are deliberate choices.</p>
+</div></div>
+<p> Use <code>_</code> when you genuinely do not need one of the returned values:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>result<span class="op">,</span> _ <span class="op">:=</span> divide<span class="op">(</span><span class="dv">10</span><span class="op">,</span> <span class="dv">2</span><span class="op">)</span> <span class="co">// discard the error (only do this when you are certain)</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Discarding errors with <code>_</code> is a common source of bugs. Only discard an error when you have reasoned carefully about what that error means and decided the failure mode is truly harmless.</p>
+</div></div>
+<h3 data-number="5.2.1" id="strconv-revisited"><span class="header-section-number">5.2.1</span> strconv Revisited</h3>
+<p>You saw <code>strconv.Atoi</code> in Chapter 3; now the two-value return makes more sense:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> err <span class="op">:=</span> strconv<span class="op">.</span>Atoi<span class="op">(</span><span class="st">&quot;42&quot;</span><span class="op">)</span>  <span class="co">// 42, nil</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> err  <span class="op">=</span> strconv<span class="op">.</span>Atoi<span class="op">(</span><span class="st">&quot;🔥&quot;</span><span class="op">)</span>  <span class="co">// 0,  *strconv.NumError</span></span></code></pre></div>
+<p>The function returns the converted value and an <code>error</code>. If parsing fails, the first return value is the zero value for the type (<code>0</code> for <code>int</code>), and <code>err</code> is non-nil.</p>
+<h2 data-number="5.3" id="named-return-values"><span class="header-section-number">5.3</span> Named Return Values</h2>
+<p> Go lets you name the return values in the function signature. Named returns serve two purposes: they document what each value means, and they give <code>defer</code> a way to modify the return value before it leaves the function.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> minMax<span class="op">(</span>nums <span class="op">[]</span><span class="dt">int</span><span class="op">)</span> <span class="op">(</span>min<span class="op">,</span> max <span class="dt">int</span><span class="op">)</span> <span class="op">{</span> <span class="co">// named returns document intent</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    min<span class="op">,</span> max <span class="op">=</span> nums<span class="op">[</span><span class="dv">0</span><span class="op">],</span> nums<span class="op">[</span><span class="dv">0</span><span class="op">]</span>          <span class="co">// they are zero-initialised variables</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> n <span class="op">:=</span> <span class="kw">range</span> nums <span class="op">{</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> n <span class="op">&lt;</span> min <span class="op">{</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>            min <span class="op">=</span> n</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> n <span class="op">&gt;</span> max <span class="op">{</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>            max <span class="op">=</span> n</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="co">// naked return --- returns current values of min and max</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p> The <code>return</code> at the end with no arguments is a <strong>naked return</strong>. It returns whatever values the named return variables currently hold.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Naked returns are acceptable in short functions where the whole body is visible at a glance. In longer functions they hurt readability because a reader cannot tell at the <code>return</code> site what is being returned without scrolling up to find the named variables. Prefer explicit <code>return min, max</code> in any function longer than a few lines.</p>
+</div></div>
+<h3 data-number="5.3.1" id="defer-modifying-named-returns"><span class="header-section-number">5.3.1</span> defer Modifying Named Returns</h3>
+<p> Because named returns are real variables, a deferred closure can read or modify them:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">// safeOpen reads path and returns its contents; close errors are propagated via named return.</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> safeOpen<span class="op">(</span>path <span class="dt">string</span><span class="op">)</span> <span class="op">(</span>data <span class="dt">string</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    f<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>Open<span class="op">(</span>path<span class="op">)</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="co">// err is already set</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> cerr <span class="op">:=</span> f<span class="op">.</span>Close<span class="op">();</span> cerr <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>            err <span class="op">=</span> cerr <span class="co">// overwrite any existing err with the close error</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">}()</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... read file into data ...</span></span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The deferred closure can assign to <code>err</code> because <code>err</code> is a named return variable in the enclosing function. This pattern is useful for ensuring that a close error is not silently swallowed.</p>
+<h2 data-number="5.4" id="variadic-functions"><span class="header-section-number">5.4</span> Variadic Functions</h2>
+<p> A variadic function accepts a variable number of arguments of a given type. The last parameter uses the <code>...T</code> syntax:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> sum<span class="op">(</span>nums <span class="op">...</span><span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span> <span class="co">// nums is []int inside the function</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    total <span class="op">:=</span> <span class="dv">0</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> n <span class="op">:=</span> <span class="kw">range</span> nums <span class="op">{</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>        total <span class="op">+=</span> n</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> total</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>You can call it with any number of arguments, including zero:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>sum<span class="op">())</span>           <span class="co">// 0</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>sum<span class="op">(</span><span class="dv">1</span><span class="op">,</span> <span class="dv">2</span><span class="op">,</span> <span class="dv">3</span><span class="op">))</span>    <span class="co">// 6</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>sum<span class="op">(</span><span class="dv">10</span><span class="op">,</span> <span class="dv">20</span><span class="op">,</span> <span class="dv">30</span><span class="op">))</span> <span class="co">// 60</span></span></code></pre></div>
+<p> If you already have a slice and want to pass it to a variadic function, append <code>...</code> to the slice in the call:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>scores <span class="op">:=</span> <span class="op">[]</span><span class="dt">int</span><span class="op">{</span><span class="dv">88</span><span class="op">,</span> <span class="dv">92</span><span class="op">,</span> <span class="dv">77</span><span class="op">,</span> <span class="dv">95</span><span class="op">}</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>sum<span class="op">(</span>scores<span class="op">...))</span> <span class="co">// 352</span></span></code></pre></div>
+<p>Without <code>...</code> the compiler would complain that you are passing a <code>[]int</code> where <code>int</code> arguments are expected.</p>
+<p> <code>fmt.Println</code> is itself variadic:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Println<span class="op">(</span>a <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span> <span class="co">// prints each argument separated by spaces</span></span></code></pre></div>
+<p>That is why you can pass it any number of values of any type.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Inside the variadic function, <code>nums</code> is a plain <code>[]int</code>. There is no magic — it is just a slice. If the caller passes <code>scores...</code>, the function receives the same underlying array; no copy is made. If the caller passes individual arguments, Go builds a new slice for the call.</p>
+</div></div>
+<h2 data-number="5.5" id="first-class-functions"><span class="header-section-number">5.5</span> First-Class Functions</h2>
+<p> In Go, functions are first-class values. You can assign a function to a variable, store functions in a map, pass them as arguments, and return them from other functions — none of which is idiomatic Java (though Java has lambdas and <code>java.util.function</code> since Java 8).</p>
+<h3 data-number="5.5.1" id="function-types-and-variables"><span class="header-section-number">5.5.1</span> Function Types and Variables</h3>
+<p> A function type describes the parameter and return types of a function:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> transformer <span class="kw">func</span><span class="op">(</span><span class="dt">string</span><span class="op">)</span> <span class="dt">string</span> <span class="co">// a function that takes and returns a string</span></span></code></pre></div>
+<p>You can assign any function with a matching signature to a variable of that type:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> shout<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span> <span class="op">{</span> <span class="cf">return</span> strings<span class="op">.</span>ToUpper<span class="op">(</span>s<span class="op">)</span> <span class="op">}</span>              <span class="co">// ordinary named function</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>whisper <span class="op">:=</span> <span class="kw">func</span><span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span> <span class="op">{</span> <span class="cf">return</span> strings<span class="op">.</span>ToLower<span class="op">(</span>s<span class="op">)</span> <span class="op">}</span>         <span class="co">// anonymous function literal</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> t transformer <span class="op">=</span> shout</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">(</span><span class="st">&quot;birds of a feather&quot;</span><span class="op">))</span> <span class="co">// BIRDS OF A FEATHER</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>t <span class="op">=</span> whisper</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">(</span><span class="st">&quot;BIRDS OF A FEATHER&quot;</span><span class="op">))</span> <span class="co">// birds of a feather</span></span></code></pre></div>
+<h3 data-number="5.5.2" id="dispatch-tables"><span class="header-section-number">5.5.2</span> Dispatch Tables</h3>
+<p> Storing functions in a map creates a compact dispatch table — a clean alternative to a long <code>switch</code> statement.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>ops <span class="op">:=</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="kw">func</span><span class="op">(</span><span class="dt">int</span><span class="op">,</span> <span class="dt">int</span><span class="op">)</span> <span class="dt">int</span><span class="op">{</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;add&quot;</span><span class="op">:</span> <span class="kw">func</span><span class="op">(</span>a<span class="op">,</span> b <span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span> <span class="cf">return</span> a <span class="op">+</span> b <span class="op">},</span> <span class="co">// addition handler</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;sub&quot;</span><span class="op">:</span> <span class="kw">func</span><span class="op">(</span>a<span class="op">,</span> b <span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span> <span class="cf">return</span> a <span class="op">-</span> b <span class="op">},</span> <span class="co">// subtraction handler</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;mul&quot;</span><span class="op">:</span> <span class="kw">func</span><span class="op">(</span>a<span class="op">,</span> b <span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span> <span class="cf">return</span> a <span class="op">*</span> b <span class="op">},</span> <span class="co">// multiplication handler</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>op <span class="op">:=</span> <span class="st">&quot;add&quot;</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> fn<span class="op">,</span> ok <span class="op">:=</span> ops<span class="op">[</span>op<span class="op">];</span> ok <span class="op">{</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>fn<span class="op">(</span><span class="dv">3</span><span class="op">,</span> <span class="dv">4</span><span class="op">))</span> <span class="co">// 7</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>This pattern is common in command routing, codec registries, and plugin systems.</p>
+<h2 data-number="5.6" id="closures"><span class="header-section-number">5.6</span> Closures</h2>
+<p> A <strong>closure</strong> is a function value that captures variables from the scope in which it was defined. The function “closes over” those variables — it can read and modify them even after the enclosing scope has returned.</p>
+<h3 data-number="5.6.1" id="a-counter-example"><span class="header-section-number">5.6.1</span> A Counter Example</h3>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> makeCounter<span class="op">()</span> <span class="kw">func</span><span class="op">()</span> <span class="dt">int</span> <span class="op">{</span>  <span class="co">// returns a function</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    count <span class="op">:=</span> <span class="dv">0</span>                   <span class="co">// count lives as long as the returned function does</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">func</span><span class="op">()</span> <span class="dt">int</span> <span class="op">{</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>        count<span class="op">++</span>    <span class="co">// captures count by reference</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> count</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>next <span class="op">:=</span> makeCounter<span class="op">()</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>next<span class="op">())</span> <span class="co">// 1</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>next<span class="op">())</span> <span class="co">// 2</span></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>next<span class="op">())</span> <span class="co">// 3</span></span></code></pre></div>
+<p>Each call to <code>makeCounter</code> creates a new, independent <code>count</code> variable. Two counters created by separate calls do not share state.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Closures are the idiomatic Go way to create stateful function values without defining a whole struct with methods. You will see this pattern for generators, iterators, and middleware.</p>
+</div></div>
+<h3 data-number="5.6.2" id="loop-variable-capture"><span class="header-section-number">5.6.2</span> Loop Variable Capture</h3>
+<p> A classic Go pitfall — now fixed — was accidentally sharing a loop variable across all closures created in a loop.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Go 1.21 and earlier: all three closures capture the same i</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>fns <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="kw">func</span><span class="op">(),</span> <span class="dv">3</span><span class="op">)</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> <span class="dv">3</span><span class="op">;</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    fns<span class="op">[</span>i<span class="op">]</span> <span class="op">=</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span> fmt<span class="op">.</span>Println<span class="op">(</span>i<span class="op">)</span> <span class="op">}</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="co">// calling fns[0](), fns[1](), fns[2]() would print 3, 3, 3 in Go 1.21</span></span></code></pre></div>
+<p>In <strong>Go 1.22</strong> the loop variable semantics changed. Both <code>for range</code> and C-style <code>for</code> loops now create a new variable per iteration, so each closure captures its own copy:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Go 1.22+: each closure captures its own i</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> <span class="dv">3</span><span class="op">;</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    fns<span class="op">[</span>i<span class="op">]</span> <span class="op">=</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span> fmt<span class="op">.</span>Println<span class="op">(</span>i<span class="op">)</span> <span class="op">}</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>fns<span class="op">[</span><span class="dv">0</span><span class="op">]()</span> <span class="co">// 0</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>fns<span class="op">[</span><span class="dv">1</span><span class="op">]()</span> <span class="co">// 1</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>fns<span class="op">[</span><span class="dv">2</span><span class="op">]()</span> <span class="co">// 2</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> If you are reading older Go code or working on a module with <code>go 1.21</code> or earlier in its <code>go.mod</code>, the old per-loop-variable semantics apply. Set <code>go 1.22</code> or later in <code>go.mod</code> to get per-iteration variables. The fix is a language change, not a library change — you must update the <code>go</code> directive.</p>
+</div></div>
+<h2 data-number="5.7" id="init"><span class="header-section-number">5.7</span> init()</h2>
+<p> <code>init</code> was introduced in Chapter 4, where its syntax, dependency-ordering rules, and startup sequencing are covered in full. In the context of this chapter: <code>init</code> has the signature <code>func()</code> and is a regular function value managed entirely by the runtime; it cannot be passed, stored, or called explicitly.</p>
+<h2 data-number="5.8" id="function-types-as-parameters"><span class="header-section-number">5.8</span> Function Types as Parameters</h2>
+<p>  Passing a function as a parameter is the Go equivalent of a Java functional interface. The pattern shows up constantly for callbacks, option functions, and middleware.</p>
+<h3 data-number="5.8.1" id="callbacks"><span class="header-section-number">5.8.1</span> Callbacks</h3>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> applyToAll<span class="op">(</span>nums <span class="op">[]</span><span class="dt">int</span><span class="op">,</span> fn <span class="kw">func</span><span class="op">(</span><span class="dt">int</span><span class="op">)</span> <span class="dt">int</span><span class="op">)</span> <span class="op">[]</span><span class="dt">int</span> <span class="op">{</span> <span class="co">// fn is called for each element</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>    result <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">int</span><span class="op">,</span> <span class="bu">len</span><span class="op">(</span>nums<span class="op">))</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i<span class="op">,</span> n <span class="op">:=</span> <span class="kw">range</span> nums <span class="op">{</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>        result<span class="op">[</span>i<span class="op">]</span> <span class="op">=</span> fn<span class="op">(</span>n<span class="op">)</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>doubled <span class="op">:=</span> applyToAll<span class="op">([]</span><span class="dt">int</span><span class="op">{</span><span class="dv">1</span><span class="op">,</span> <span class="dv">2</span><span class="op">,</span> <span class="dv">3</span><span class="op">,</span> <span class="dv">4</span><span class="op">},</span> <span class="kw">func</span><span class="op">(</span>n <span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span> <span class="cf">return</span> n <span class="op">*</span> <span class="dv">2</span> <span class="op">})</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>doubled<span class="op">)</span> <span class="co">// [2 4 6 8]</span></span></code></pre></div>
+<h3 data-number="5.8.2" id="middleware-pattern"><span class="header-section-number">5.8.2</span> Middleware Pattern</h3>
+<p> The middleware pattern wraps a function with pre- and post-logic without changing the wrapped function’s signature.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> withLogging<span class="op">(</span>name <span class="dt">string</span><span class="op">,</span> fn <span class="kw">func</span><span class="op">())</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span> <span class="co">// returns a wrapped version of fn</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;[log] %s: starting</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> name<span class="op">)</span> <span class="co">// pre-logic</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>        fn<span class="op">()</span>                                      <span class="co">// call the original function</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;[log] %s: done</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> name<span class="op">)</span>     <span class="co">// post-logic</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>greet <span class="op">:=</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;hola, mundo!&quot;</span><span class="op">)</span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>loggedGreet <span class="op">:=</span> withLogging<span class="op">(</span><span class="st">&quot;greet&quot;</span><span class="op">,</span> greet<span class="op">)</span></span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>loggedGreet<span class="op">()</span></span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a><span class="co">// [log] greet: starting</span></span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a><span class="co">// hola, mundo!</span></span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a><span class="co">// [log] greet: done</span></span></code></pre></div>
+<p>The wrapper returns a new <code>func()</code> that has the same signature as the original. The caller does not need to know that logging is happening. This is an instance of the <em>strategy pattern</em> — a behavior is injected as a function argument rather than hardcoded. This is the same idea behind Java’s <code>java.lang.reflect.Proxy</code> and AOP frameworks, but expressed with plain function values instead of bytecode weaving.</p>
+<p>You can chain wrappers: <code>withLogging("greet", withTiming("greet", greet))</code> would produce a function that logs and times the greeting. Building a <code>withTiming</code> wrapper follows the same shape as <code>withLogging</code>; the <code>time</code> package that makes it useful is covered in Chapter 15.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> The middleware pattern is the foundation of HTTP handler wrappers in Go’s standard library. <code>net/http</code> handlers are functions, and middleware is just a function that takes a handler and returns a new handler — you will see this in Chapter 16.</p>
+</div></div>
+<h2 data-number="5.9" id="key-points"><span class="header-section-number">5.9</span> Key Points</h2>
+<ul>
+<li>Consecutive parameters of the same type can share a single type annotation: <code>a, b int</code> means both <code>a</code> and <code>b</code> are <code>int</code>.</li>
+<li>Go functions can return multiple values; the convention is to return <code>(result, error)</code> rather than throwing exceptions.</li>
+<li>Named return values act as pre-declared variables; a naked <code>return</code> returns their current values.</li>
+<li>Named returns allow <code>defer</code> closures to inspect or modify the return values — useful for wrapping close errors.</li>
+<li>Variadic functions use <code>...T</code> for the last parameter; inside the function it is a <code>[]T</code>.</li>
+<li>Pass an existing slice to a variadic function with <code>slice...</code>.</li>
+<li>Functions are first-class values: assign them to variables, store them in maps, pass them as arguments.</li>
+<li>A closure captures variables from its enclosing scope by reference.</li>
+<li>Since Go 1.22, loop variables are per-iteration, eliminating the classic closure capture bug.</li>
+<li><code>init()</code> runs before <code>main</code>, after package-level variables are initialised; multiple <code>init</code> functions per file are allowed; they cannot be called explicitly.</li>
+<li>The Java analogue of <code>init</code> is a static initializer block.</li>
+<li>Passing functions as parameters enables callbacks and the middleware pattern.</li>
+</ul>
+<h2 data-number="5.10" id="exercises"><span class="header-section-number">5.10</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> Go returns errors as values rather than throwing exceptions. A Java <code>checked exception</code> forces the caller to handle it — the compiler will not let you ignore it. Go’s multi-return error is also explicit, but you can discard it with <code>_</code> or simply not assign the second return value. Does Go’s approach give you the same safety guarantee as Java’s checked exceptions? What is gained and what is lost by each approach?</p></li>
+<li><p><strong>What does this print?</strong></p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> makeAdder<span class="op">(</span>n <span class="dt">int</span><span class="op">)</span> <span class="kw">func</span><span class="op">(</span><span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">func</span><span class="op">(</span>x <span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> x <span class="op">+</span> n</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>    add5 <span class="op">:=</span> makeAdder<span class="op">(</span><span class="dv">5</span><span class="op">)</span></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>    add10 <span class="op">:=</span> makeAdder<span class="op">(</span><span class="dv">10</span><span class="op">)</span></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>add5<span class="op">(</span><span class="dv">3</span><span class="op">))</span></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>add10<span class="op">(</span><span class="dv">3</span><span class="op">))</span></span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>add5<span class="op">(</span>add10<span class="op">(</span><span class="dv">1</span><span class="op">)))</span></span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> Given the function below, what values are printed by the three <code>fmt.Println</code> calls? Trace the value of <code>total</code> at each step.</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> running<span class="op">(</span>start <span class="dt">int</span><span class="op">)</span> <span class="kw">func</span><span class="op">(</span><span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>    total <span class="op">:=</span> start</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">func</span><span class="op">(</span>n <span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>        total <span class="op">+=</span> n</span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> total</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>    acc <span class="op">:=</span> running<span class="op">(</span><span class="dv">100</span><span class="op">)</span></span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>acc<span class="op">(</span><span class="dv">10</span><span class="op">))</span></span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>acc<span class="op">(</span><span class="dv">20</span><span class="op">))</span></span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>acc<span class="op">(-</span><span class="dv">5</span><span class="op">))</span></span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Where is the bug?</strong> The following code tries to build a slice of greeting functions, one for each name in a list, using a Go 1.21 module (i.e. the <code>go</code> directive in <code>go.mod</code> is <code>go 1.21</code>).</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>    names <span class="op">:=</span> <span class="op">[]</span><span class="dt">string</span><span class="op">{</span><span class="st">&quot;benson&quot;</span><span class="op">,</span> <span class="st">&quot;amara&quot;</span><span class="op">,</span> <span class="st">&quot;priya&quot;</span><span class="op">}</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>    greets <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="kw">func</span><span class="op">(),</span> <span class="bu">len</span><span class="op">(</span>names<span class="op">))</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i<span class="op">,</span> name <span class="op">:=</span> <span class="kw">range</span> names <span class="op">{</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>        greets<span class="op">[</span>i<span class="op">]</span> <span class="op">=</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;hola,&quot;</span><span class="op">,</span> name<span class="op">)</span> <span class="op">}</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> g <span class="op">:=</span> <span class="kw">range</span> greets <span class="op">{</span></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>        g<span class="op">()</span></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Write a function <code>pipeline(fns ...func(int) int) func(int) int</code> that takes any number of <code>func(int) int</code> functions and returns a new function that applies them in order. For example, given a double function and an add-ten function, <code>pipeline(double, addTen)(3)</code> should return <code>16</code>. Write the function, define at least two simple transforms, and demonstrate the pipeline with a few calls.</p></li>
+</ol>
+
+{% endraw %}
