@@ -1,0 +1,10 @@
+# Generated book PDFs --- built by each book's Makefile from the .md sources.
+g4j/*.pdf
+
+# LaTeX auxiliary files from pandoc + latexmk builds.
+g4j/*.idx
+g4j/*.ilg
+g4j/*.ind
+
+# Vim swap files
+*.swp
