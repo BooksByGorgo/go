@@ -1,279 +1,280 @@
-# Chapter 13: Context and Concurrency Patterns --- Answers
+# Chapter 14: Packages and Modules --- Answers
 
-**Exercise 1** (Think about it): In Java, cancelling an in-flight operation typically means calling `Future.cancel(true)` or interrupting a thread via `Thread.interrupt()`.
-Describe how Go's `context.Context` model differs from Java's thread-interrupt approach.
-What are the advantages of passing a context explicitly rather than relying on a thread-level interrupt mechanism?
-Consider what happens when a Java thread is blocked in a third-party library that does not handle `InterruptedException`, compared to how a Go function using a context-aware library would behave.
+**Exercise 1** (Think about it): Maven and Gradle resolve transitive dependencies automatically and let two artifacts declare conflicting version requirements for the same library.
+They use a strategy (nearest-wins in Maven, highest-requested in Gradle) to pick a single version at build time.
+Go's module system takes a different approach called Minimum Version Selection (MVS): it always picks the minimum version that satisfies all requirements.
+Compare these two philosophies.
+What problems does MVS avoid?
+What does it make harder?
+When might the Go approach cause a surprise after running `go get pkg@latest`?
 
-Java's thread-interrupt model is **implicit and cooperative at the thread level**.
-When you call `Thread.interrupt()`, a flag is set on the thread, and blocking calls like `Object.wait()`, `Thread.sleep()`, and `java.io.InputStream.read()` on some implementations throw `InterruptedException` when they notice it.
-But not every blocking operation checks the flag: a thread blocked in a native call, a third-party lock, or a legacy `InputStream` implementation may never see the interrupt at all.
-The interrupt propagates up the call stack only as long as every layer catches and re-throws (or re-sets) the flag, which is notoriously easy to accidentally swallow:
+Go's Minimum Version Selection works by computing the maximum of the minimum required versions across all modules in the dependency graph.
+If module A requires `library v1.2.0` and module B requires `library v1.3.0`, Go selects `v1.3.0` --- the minimum version that satisfies both.
+No module ever gets a version newer than the one its author tested against, unless someone explicitly requests an upgrade.
 
-```java
-try {
-    Thread.sleep(1000);
-} catch (InterruptedException e) {
-    // oops, swallowed it; the interrupt flag is now cleared
-}
-```
+**Problems MVS avoids:**
 
-Go's `context.Context` is **explicit and uniform**.
-Every function that can be cancelled must accept a `context.Context` parameter.
-Cancellation is communicated by closing `ctx.Done()`, which is observable without any thread-local state.
-Any function that calls another context-aware function simply passes the same context through; the propagation is visible in every function signature.
+- **Silent upgrades.**
+  In Maven's nearest-wins model, adding a new dependency can silently pull in a newer (or older) version of a transitive library, breaking unrelated code.
+  MVS never introduces a version you did not ask for.
+- **Build irreproducibility.**
+  Because MVS is deterministic and recorded in `go.sum`, two developers checking out the same commit always get bit-for-bit identical dependencies.
+  Maven can produce different builds depending on which dependencies happen to be in the local repository cache.
 
-The advantages over thread interrupts are:
+**What MVS makes harder:**
 
-1. **Explicit propagation.** You can see in the function signature that a function is cancellable.
-   In Java, there is no signature-level signal that a method checks `Thread.interrupted()`.
-2. **Deadlines and timeouts as first-class values.** `context.WithTimeout` and `context.WithDeadline` associate a deadline with the context object itself, not with a thread.
-   Multiple goroutines can share the same context and respect the same deadline without any shared mutable state.
-3. **No accidental swallowing.** Because `ctx.Done()` is a channel, you either select on it or you do not --- there is no exception to catch and accidentally discard.
-4. **Composability.** Derived contexts (`WithCancel`, `WithTimeout`) form a tree.
-   Cancelling a parent automatically cancels all children.
-   Java's thread-interrupt model is flat: each thread has exactly one interrupt flag.
-5. **Request-scoped values.** `context.WithValue` lets you attach metadata (trace IDs, auth tokens) to a context and retrieve it anywhere in the call tree without global state.
+- **Staying current.**
+  MVS actively resists upgrading.
+  If your dependency graph has pinned a library at `v1.2.0`, you will stay there until someone runs `go get library@v1.4.0`.
+  In a large organisation this can mean security patches go unnoticed.
+- **Downgrading.**
+  If you want to use an older version than the graph currently requires, you have to remove or downgrade every module that requires the newer version.
 
-If a Java thread is blocked in a third-party library that does not handle `InterruptedException` --- for example, a legacy JDBC driver --- calling `Thread.interrupt()` may have no effect.
-The thread stays blocked, and the only recourse is to close the underlying socket from another thread or wait for the operation to time out at the OS level.
-A Go function calling a database driver built on top of `database/sql` passes a context to `db.QueryContext`; the driver layer itself monitors `ctx.Done()` and closes the connection if the context is cancelled.
-The library author opts in once; all callers benefit automatically.
+**Surprise from `go get pkg@latest`:**
+After you run `go get pkg@latest`, the upgraded module may itself require newer versions of transitive dependencies.
+MVS will bump those transitives to the versions the new module requires --- which might be substantially newer than before.
+Your `go.mod` can change in unexpected ways beyond the single module you asked to upgrade.
+Running `go mod tidy` afterward and reviewing the diff in `go.mod` and `go.sum` is a good habit.
 
 ---
 
 **Exercise 2** (What does this print?):
 
+Given the following three files in a module `github.com/zachbryan/demo`:
+
+File `lyrics/lyrics.go`:
+```go
+package lyrics
+
+import "fmt"
+
+func Print() {
+    fmt.Println("something in the orange")
+}
+```
+
+File `lyrics/internal/detail/detail.go`:
+```go
+package detail
+
+import "fmt"
+
+func Show() {
+    fmt.Println("internal detail")
+}
+```
+
+File `main.go`:
 ```go
 package main
 
 import (
-    "context"
-    "fmt"
-    "time"
+    "github.com/zachbryan/demo/lyrics"
+    "github.com/zachbryan/demo/lyrics/internal/detail"
 )
 
-func work(ctx context.Context, label string) {
-    select {
-    case <-time.After(500 * time.Millisecond):
-        fmt.Println(label, "done")
-    case <-ctx.Done():
-        fmt.Println(label, "cancelled:", ctx.Err())
-    }
-}
-
 func main() {
-    ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
-    defer cancel()
-
-    go work(ctx, "Bewitched")
-    go work(ctx, "Too Sweet")
-    time.Sleep(400 * time.Millisecond)
-    fmt.Println("main done")
+    lyrics.Print()
+    detail.Show()
 }
 ```
 
-Output (order of the first two lines may vary):
+What happens when you run `go build`?
+If the build succeeds, what does the program print?
+If not, explain why.
+
+**The build fails.**
+
+`main.go` is at the module root, which means its parent directory for the purposes of the `internal` rule is `github.com/zachbryan/demo`.
+The `internal` package's full path is `github.com/zachbryan/demo/lyrics/internal/detail`.
+For `main.go` to import it, `main.go` must live inside `github.com/zachbryan/demo/lyrics` or one of its subdirectories.
+`main.go` lives at the module root, which is `github.com/zachbryan/demo` --- it is not rooted under `github.com/zachbryan/demo/lyrics`, so the compiler rejects the import.
+
+The compiler error will say something like:
 ```
-Bewitched cancelled: context deadline exceeded
-Too Sweet cancelled: context deadline exceeded
-main done
+use of internal package github.com/zachbryan/demo/lyrics/internal/detail not allowed
 ```
 
-The context has a 200 ms timeout.
-Both `work` goroutines are launched immediately and block in their `select` statement waiting for either `time.After(500ms)` or `ctx.Done()`.
-After 200 ms the timeout fires, `ctx.Done()` is closed, and both goroutines unblock on the `ctx.Done()` case.
-Each prints its label with `"cancelled: context deadline exceeded"`.
-The goroutines finish well before `main`'s `time.Sleep(400ms)` elapses, so `"main done"` appears last.
+The import of `github.com/zachbryan/demo/lyrics` (the public package) is fine.
+Only the `internal/detail` import is rejected.
 
-The two cancelled lines may appear in either order because goroutine scheduling is not deterministic.
-`main done` always appears last because `time.Sleep(400ms)` is longer than the 200 ms timeout and the goroutines' response time.
+To fix this, either move `detail` out of `lyrics/internal/` into a location that `main.go` is allowed to reach (such as `internal/detail` directly under the module root), or move `main.go` into a directory under `lyrics/`.
 
 ---
 
-**Exercise 3** (Calculation): You run a worker pool with `workers = 3` and feed it a slice of 7 tasks.
-Each task takes exactly 100 ms.
-Assuming no overhead and perfect parallelism, how many milliseconds does the pool take to complete all 7 tasks?
+**Exercise 3** (Calculation): A module's `go.mod` contains the following:
 
-**Answer: 300 ms.**
+```
+module github.com/noahkahan/app
 
-With 3 workers processing tasks that each take 100 ms:
+go 1.26
 
-| Round | Tasks processed   | Wall-clock time elapsed |
-|-------|-------------------|------------------------|
-| 1     | tasks 1, 2, 3     | 0 -- 100 ms            |
-| 2     | tasks 4, 5, 6     | 100 -- 200 ms          |
-| 3     | task 7 (+ 2 idle) | 200 -- 300 ms          |
+require (
+    github.com/noahkahan/audio v1.4.0
+    github.com/noahkahan/catalog v0.9.2
+    golang.org/x/text v0.14.0 // indirect
+)
+```
 
-Round 1 dispatches tasks 1--3 in parallel.
-All three finish at T=100 ms.
-Round 2 dispatches tasks 4--6 in parallel; all finish at T=200 ms.
-Round 3 dispatches task 7 alone (only one task remains); it finishes at T=300 ms.
+`github.com/noahkahan/audio v1.4.0` itself requires `golang.org/x/text v0.12.0`.
+`github.com/noahkahan/catalog v0.9.2` requires `golang.org/x/text v0.14.0`.
 
-Total elapsed time = ceil(7 / 3) × 100 ms = 3 × 100 ms = **300 ms**.
+Under Go's Minimum Version Selection, which version of `golang.org/x/text` will the final build use?
+Explain why.
+Now suppose you add a new dependency that requires `golang.org/x/text v0.16.0`.
+What version will MVS select then?
 
-General formula: `ceil(N / workers) × task_duration`.
+**First scenario: `v0.14.0`.**
+
+MVS collects the minimum required version from every module in the graph:
+- `github.com/noahkahan/app` itself requires `v0.14.0` (explicit `// indirect` entry).
+- `github.com/noahkahan/audio` requires `v0.12.0`.
+- `github.com/noahkahan/catalog` requires `v0.14.0`.
+
+MVS takes the maximum of these minimums: `max(v0.14.0, v0.12.0, v0.14.0)` = **`v0.14.0`**.
+The `// indirect` entry in the main module's `go.mod` already encodes this selection; `go mod tidy` placed it there when one of the direct dependencies required `v0.14.0` and the other only `v0.12.0`.
+
+**Second scenario: `v0.16.0`.**
+
+Adding a new dependency that requires `golang.org/x/text v0.16.0` raises the minimum for that module in the graph.
+MVS selects `max(v0.14.0, v0.12.0, v0.14.0, v0.16.0)` = **`v0.16.0`**.
+After `go mod tidy`, the `// indirect` entry in `go.mod` is updated to `golang.org/x/text v0.16.0`.
+No other dependency's version changes.
 
 ---
 
-**Exercise 4** (Where is the bug?):
+**Exercise 4** (Where is the bug?): The following module has this layout and code:
 
+```
+northernattitude/
+├── go.mod           (module github.com/noahkahan/northernattitude)
+├── main.go
+└── internal/
+    └── config/
+        └── config.go
+```
+
+`player/main.go`:
 ```go
 package main
 
 import (
-    "context"
     "fmt"
-    "time"
+    "github.com/noahkahan/northernattitude/internal/config"
 )
 
-func fetchData(url string) <-chan string {
-    ch := make(chan string)
-    go func() {
-        time.Sleep(2 * time.Second)
-        ch <- "result for " + url
-    }()
-    return ch
-}
-
 func main() {
-    ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-    defer cancel()
-
-    ch := fetchData("https://example.com/songs")
-    select {
-    case result := <-ch:
-        fmt.Println(result)
-    case <-ctx.Done():
-        fmt.Println("timed out")
-    }
+    fmt.Println(config.DefaultRegion)
 }
 ```
 
-**The bug: goroutine leak in `fetchData`.**
+What happens when you run `go build ./...` inside the `player/` module?
+Identify the bug and describe how to fix it without moving the `config` package out of `internal/`.
 
-`fetchData` launches a goroutine that sleeps for 2 seconds and then sends on `ch`.
-When the context times out after 500 ms, `main` exits the `select` via `ctx.Done()` and prints `"timed out"`.
-At this point `ch` is no longer being read by anyone.
-The goroutine inside `fetchData` is still sleeping; when it wakes up at T=2 s and tries to send `ch <- "result for ..."`, it blocks forever because nobody will ever receive from `ch`.
-The goroutine is leaked --- it will never exit.
+**The build fails.**
 
-**The fix:** pass the context into `fetchData` so the goroutine can bail out early.
+The `internal/` package belongs to the module `github.com/noahkahan/northernattitude`.
+The compiler's rule is that only code whose import path has `github.com/noahkahan/northernattitude` as a prefix may import packages under that module's `internal/`.
+The `player` module has path `github.com/noahkahan/player`, which does not share that prefix.
+The build error will be:
+
+```
+use of internal package github.com/noahkahan/northernattitude/internal/config not allowed
+```
+
+**The fix --- without moving `config` out of `internal/`:**
+
+The `config` package contains information that `northernattitude` treats as a private implementation detail.
+If `player` genuinely needs access to it, the right solution is for `northernattitude` to expose the data through a **public API**.
+Create an exported package, for example `github.com/noahkahan/northernattitude/region`, that wraps or re-exports the value from `internal/config`:
 
 ```go
-func fetchData(ctx context.Context, url string) <-chan string {
-    ch := make(chan string, 1) // buffered so the goroutine can send even if nobody reads
-    go func() {
-        select {
-        case <-time.After(2 * time.Second):
-            ch <- "result for " + url // send result if we finish in time
-        case <-ctx.Done():
-            // context was cancelled; exit cleanly without sending
-        }
-    }()
-    return ch
-}
+// northernattitude/region/region.go
+package region
 
-func main() {
-    ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-    defer cancel()
+import "github.com/noahkahan/northernattitude/internal/config"
 
-    ch := fetchData(ctx, "https://example.com/songs")
-    select {
-    case result := <-ch:
-        fmt.Println(result)
-    case <-ctx.Done():
-        fmt.Println("timed out")
-    }
-}
+// DefaultRegion is the default geographic region.
+var DefaultRegion = config.DefaultRegion
 ```
 
-Using a buffered channel of capacity 1 also guards against a secondary leak: if the result arrives after `main`'s `select` exits the `ctx.Done()` branch (a narrow race), the goroutine can still send on `ch` without blocking, and then exit.
+`player` then imports `github.com/noahkahan/northernattitude/region` instead of the internal package.
+The internal package remains private; its values are accessible only through the deliberately designed public surface.
+
+Alternatively, if `player` and `northernattitude` are developed together and the restriction is inconvenient, use a Go workspace (`go work init ./northernattitude ./player`) and promote `config` to a shared module or to a non-`internal` path.
 
 ---
 
 **Exercise 5** (Write a program):
 
+A complete implementation:
+
+File `stickseason/go.mod`:
+```
+module github.com/noahkahan/stickseason
+
+go 1.26
+```
+
+File `stickseason/tracks/tracks.go`:
+```go
+package tracks
+
+// Track holds the title and artist of a song.
+type Track struct {
+    Title  string // song title
+    Artist string // performing artist
+}
+
+// Catalog is the list of tracks in this module.
+var Catalog = []Track{
+    {Title: "Stick Season",     Artist: "Noah Kahan"},
+    {Title: "Northern Attitude", Artist: "Noah Kahan"},
+}
+```
+
+File `stickseason/internal/format/format.go`:
+```go
+package format
+
+import (
+    "fmt"
+    "github.com/noahkahan/stickseason/tracks"
+)
+
+// Label returns a human-readable label for a track.
+func Label(t tracks.Track) string {
+    return fmt.Sprintf("%s by %s", t.Title, t.Artist)
+}
+```
+
+File `stickseason/main.go`:
 ```go
 package main
 
 import (
-    "context"
     "fmt"
-    "math/rand"
-    "time"
-
-    "golang.org/x/sync/errgroup"
+    "github.com/noahkahan/stickseason/internal/format"
+    "github.com/noahkahan/stickseason/tracks"
 )
 
-// fanOutFetch fetches all song titles concurrently using errgroup.
-// Each fetch is simulated with a random sleep between 50 and 150 ms.
-// The function returns the titles in the same order as songs, or an error
-// if the context is cancelled before all fetches complete.
-func fanOutFetch(ctx context.Context, songs []string) ([]string, error) {
-    results := make([]string, len(songs))
-    g, ctx := errgroup.WithContext(ctx)
-
-    for i, song := range songs {
-        i, song := i, song // capture for Go < 1.22
-        g.Go(func() error {
-            delay := time.Duration(50+rand.Intn(100)) * time.Millisecond
-            select {
-            case <-time.After(delay):
-                results[i] = "fetched: " + song
-                return nil
-            case <-ctx.Done():
-                return ctx.Err()
-            }
-        })
-    }
-
-    if err := g.Wait(); err != nil {
-        return nil, err
-    }
-    return results, nil
-}
-
 func main() {
-    songs := []string{
-        "From The Start",
-        "Bewitched",
-        "Too Sweet",
-        "Work Song",
-    }
-
-    ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
-    defer cancel()
-
-    results, err := fanOutFetch(ctx, songs)
-    if err != nil {
-        fmt.Println("error:", err)
-        return
-    }
-    for _, r := range results {
-        fmt.Println(r)
+    for _, t := range tracks.Catalog {
+        fmt.Println(format.Label(t))
     }
 }
 ```
 
-**Explanation:**
-
-`errgroup.WithContext` derives a new context from the one passed in.
-If any goroutine returns a non-nil error, `errgroup` cancels that derived context, causing all other goroutines that are still sleeping to unblock on `ctx.Done()` and return `ctx.Err()`.
-`g.Wait()` returns the first error.
-
-Because the outer `context.WithTimeout` fires after 300 ms, any fetch whose random delay exceeds the remaining budget will be cancelled.
-Fetches with delays in the 50--150 ms range should all complete well within 300 ms under normal conditions; set the timeout lower (e.g., 100 ms) to reliably trigger a cancellation in testing.
-
-Sample output when all fetches succeed:
+Output:
 ```
-fetched: From The Start
-fetched: Bewitched
-fetched: Too Sweet
-fetched: Work Song
+Stick Season by Noah Kahan
+Northern Attitude by Noah Kahan
 ```
 
-Sample output when the timeout fires:
-```
-error: context deadline exceeded
-```
+**Key observations:**
+
+- `main.go` can import `internal/format` because it is inside the same module (`github.com/noahkahan/stickseason`).
+  An external module attempting the same import would receive a compile error.
+- `format.Label` is exported (capital `L`) so `main.go` can call it; it is still unreachable from outside the module because the package itself is under `internal/`.
+- The `tracks` package is public --- any module that depends on `github.com/noahkahan/stickseason` could import it.
+  Only `internal/format` is module-private.

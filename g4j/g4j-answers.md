@@ -1036,11 +1036,15 @@ Because both functions receive a pointer to `score`, every write through `*n` up
 
 ---
 
-# Chapter 7: Slices --- Answers
 
-**Exercise 1** (Think about it): In Java, an `ArrayList<Integer>` holds references to `Integer` objects on the heap.
-A Go `[]int` holds the integers directly in the backing array.
-What are the performance implications of this difference?
+---
+
+# Chapter 7: Maps and Slices --- Answers
+
+**Exercise 1** (Think about it): In Java, `HashMap<K,V>` requires keys to implement `hashCode()` and `equals()`, and `ArrayList<E>` stores references to boxed objects on the heap.
+Go's `map[K]V` requires `K` to be comparable at the language level, and a `[]E` slice stores values directly in the backing array.
+What are the trade-offs of Go's approach for each collection type?
+Give one example of a Java key type you cannot use directly as a Go map key, and explain one scenario where storing values directly in a slice (rather than as heap references) matters for performance.
 When would you feel the difference most?
 
 A Java `ArrayList<Integer>` stores a pointer (reference) to each boxed `Integer` object, and each `Integer` object lives somewhere on the heap.
@@ -1064,206 +1068,6 @@ For slices of interfaces or pointers, Go has the same indirection that Java does
 
 ---
 
-**Exercise 2** (What does this print?):
-
-```go
-package main
-
-import "fmt"
-
-func main() {
-    a := []int{10, 20, 30, 40, 50}
-    b := a[1:4]
-    b[0] = 99
-    b = append(b, 77)
-    fmt.Println(a)
-    fmt.Println(b)
-}
-```
-
-Output:
-```
-[10 99 30 40 77]
-[99 30 40 77]
-```
-
-Step by step:
-
-1. `a` is created with backing array `[10, 20, 30, 40, 50]`, len=5, cap=5.
-
-2. `b := a[1:4]` creates a slice header pointing at `a[1]`, len=3, cap=4 (from index 1 to the end of `a`'s backing array).
-   `b` sees `[20, 30, 40]`.
-
-3. `b[0] = 99` writes `99` to the backing array at `a`'s index 1.
-   Now the backing array is `[10, 99, 30, 40, 50]`.
-   `a` sees `[10, 99, 30, 40, 50]` and `b` sees `[99, 30, 40]`.
-
-4. `b = append(b, 77)`: `b` has len=3, cap=4, so there is room for one more element without reallocation.
-   `append` writes `77` to the backing array at `a`'s index 4 (the element after `b`'s current last element), and returns a new slice header with len=4.
-   The backing array is now `[10, 99, 30, 40, 77]`.
-   `a` still has len=5 and sees `[10, 99, 30, 40, 77]`.
-   `b` now has len=4 and sees `[99, 30, 40, 77]`.
-
-Both the `b[0] = 99` write and the `append(b, 77)` write go through to the shared backing array and are visible through `a`.
-This is the classic slice aliasing trap.
-
----
-
-**Exercise 3** (Calculation):
-
-```go
-s := make([]int, 3, 8)
-s = append(s, 1, 2)
-```
-
-After the first line: `len(s) = 3`, `cap(s) = 8`.
-The backing array has eight slots; the first three are zero.
-
-After the second line: `append` needs to add two elements to a slice with len=3 and cap=8.
-Since 3 + 2 = 5, which is less than 8, there is enough room in the existing backing array.
-No new backing array is allocated.
-`append` writes `1` and `2` at indices 3 and 4, and returns a new header with len=5.
-
-Final values: `len(s) = 5`, `cap(s) = 8`.
-No new backing array is allocated because the capacity was sufficient.
-
----
-
-**Exercise 4** (Where is the bug?):
-
-```go
-package main
-
-import "fmt"
-
-func removeFirst(s []int) []int {
-    return s[1:]
-}
-
-func main() {
-    data := []int{1, 2, 3, 4, 5}
-    trimmed := removeFirst(data)
-    trimmed[0] = 99
-    fmt.Println(data)
-    fmt.Println(trimmed)
-}
-```
-
-Output:
-```
-[1 99 3 4 5]
-[99 3 4 5]
-```
-
-The bug is that `s[1:]` returns a sub-slice that **shares the backing array** with `data`.
-`trimmed` points at `data[1]`, so `trimmed[0]` is the same memory location as `data[1]`.
-Assigning `trimmed[0] = 99` visibly changes `data[1]`.
-
-The programmer likely intended `trimmed` to be an independent copy of the data with the first element removed.
-The fix is to use `copy`:
-
-```go
-func removeFirst(s []int) []int {
-    if len(s) == 0 {
-        return nil
-    }
-    result := make([]int, len(s)-1)
-    copy(result, s[1:])
-    return result
-}
-```
-
-With this fix, `trimmed[0] = 99` does not affect `data` at all, and `fmt.Println(data)` prints `[1 2 3 4 5]`.
-
-Alternatively, if you want the three-index form to at least prevent accidental `append` overwrites (while still sharing memory for reads), you could write `s[1:len(s):len(s)]`.
-But if true independence is required, `copy` is the right tool.
-
----
-
-**Exercise 5** (Write a program):
-
-```go
-package main
-
-import "fmt"
-
-func unique(s []string) []string {
-    seen := make(map[string]bool)
-    result := make([]string, 0, len(s))
-    for _, v := range s {
-        if !seen[v] {
-            seen[v] = true
-            result = append(result, v)
-        }
-    }
-    return result
-}
-
-func main() {
-    input := []string{"pop", "indie", "pop", "R&B", "indie"}
-    out := unique(input)
-    fmt.Println(out) // [pop indie R&B]
-
-    // Confirm independence: modifying out does not touch input.
-    out[0] = "classical"
-    fmt.Println(input[0]) // pop --- unchanged
-    fmt.Println(out[0])   // classical
-}
-```
-
-Output:
-```
-[pop indie R&B]
-pop
-classical
-```
-
-The `seen` map tracks which strings have already been added.
-The first time a value appears, it is added to `result` and recorded in `seen`; subsequent occurrences are skipped.
-
-`result` is built with `append` onto a freshly allocated slice (`make([]string, 0, len(s))`), so it has its own backing array and is fully independent of `input`.
-Modifying an element of `result` does not affect `input`.
-
-Pre-allocating with `cap=len(s)` is an optimization: in the worst case (all elements are distinct) `result` will grow to exactly `len(s)` elements, so pre-allocating avoids repeated reallocation.
-
----
-
-# Chapter 8: Maps and Structs --- Answers
-
-**Exercise 1** (Think about it):
-In Java, you can use any object as a `HashMap` key as long as you override `hashCode()` and `equals()`.
-In Go, map key types must be **comparable** --- they must support `==` at the language level.
-What are the advantages and disadvantages of Go's approach compared to Java's?
-Give one example of a Java key type that you cannot use directly as a Go map key, and explain how you would work around it.
-
-**Go's approach --- advantages:**
-
-- The constraint is enforced by the compiler at the type level with no runtime overhead.
-  There is no risk of accidentally using a type as a key when its `==` semantics are broken or inconsistent.
-- There is no equivalent of the Java footgun where you override `equals` but forget `hashCode`, or vice versa, causing `HashMap` to misbehave silently.
-- The programmer does not need to implement any interface or write any boilerplate; any type that supports `==` just works.
-
-**Go's approach --- disadvantages:**
-
-- You cannot use slices, maps, or functions as keys, even if you have a meaningful notion of equality for them.
-  In Java, if you implement `hashCode()` and `equals()` on a wrapper, you can use any object as a key.
-- There is no way to customise the equality semantics for a key type.
-  In Java, you can make two objects with different memory addresses compare as equal by overriding `equals()`.
-  In Go, `==` on a struct compares field-by-field; you cannot override that.
-
-**Example:** A `[]byte` slice is a common Java key (as a `byte[]` wrapped in a class with a custom `hashCode`).
-In Go, `[]byte` is not comparable and cannot be a map key directly.
-The idiomatic workaround is to convert the slice to `string` first: a `string` is comparable, and a `string([]byte{...})` conversion is a well-defined operation.
-
-```go
-key := string([]byte{0x01, 0x02, 0x03})
-m := map[string]int{}
-m[key] = 42
-```
-
-This works because Go allows `string(b)` for any `[]byte` `b`, and the resulting string compares by byte content, which is the equality you typically want.
-
----
 
 **Exercise 2** (What does this print?):
 
@@ -1271,207 +1075,160 @@ This works because Go allows `string(b)` for any `[]byte` `b`, and the resulting
 package main
 
 import "fmt"
-
-func main() {
-    type Artist struct {
-        Name string
-    }
-    type Song struct {
-        Artist
-        Title string
-    }
-
-    s := Song{
-        Artist: Artist{Name: "Peso Pluma"},
-        Title:  "La Bebé",
-    }
-
-    s.Name = "Natanael Cano"
-    fmt.Println(s.Title, "by", s.Name)
-    fmt.Println(s.Artist.Name)
-}
-```
-
-Output:
-```
-La Bebé by Natanael Cano
-Natanael Cano
-```
-
-`s.Name = "Natanael Cano"` modifies the `Name` field of the embedded `Artist` value through the promoted field path.
-`s.Name` and `s.Artist.Name` refer to the same field; they are two ways to express the same memory location.
-After the assignment, both `s.Name` and `s.Artist.Name` return `"Natanael Cano"`.
-
-The first `fmt.Println` prints `"La Bebé by Natanael Cano"` because `s.Title` is `"La Bebé"` and `s.Name` (promoted from `Artist`) is now `"Natanael Cano"`.
-The second `fmt.Println` prints `"Natanael Cano"` because `s.Artist.Name` is the same field accessed through the explicit path.
-
-Key takeaway: embedding promotes fields; the promoted shorthand and the explicit path are identical at runtime.
-
----
-
-**Exercise 3** (Calculation):
-Given the following map and operations, what does `len(m)` return after the final line?
-
-```go
-m := map[string]int{
-    "pop":       1,
-    "rock":      2,
-    "jazz":      3,
-    "classical": 4,
-}
-delete(m, "rock")
-delete(m, "country") // key does not exist
-m["hip-hop"] = 5
-m["jazz"] = 99
-```
-
-`len(m)` returns **4**.
-
-Trace:
-
-1. After the literal, `m` has 4 entries: `pop`, `rock`, `jazz`, `classical`.
-2. `delete(m, "rock")` removes `rock` --- 3 entries remain.
-3. `delete(m, "country")` is a no-op; `country` is not in the map --- still 3 entries.
-4. `m["hip-hop"] = 5` inserts a new key --- 4 entries.
-5. `m["jazz"] = 99` updates an existing key; this does **not** change the count --- still 4 entries.
-
-Final map: `{"pop": 1, "jazz": 99, "classical": 4, "hip-hop": 5}`.
-`len(m)` is `4`.
-
----
-
-**Exercise 4** (Where is the bug?):
-The following function is supposed to count how many tracks in a catalog have a BPM above a threshold, but it always returns 0.
-
-```go
-package main
-
-import "fmt"
-
-func countFast(catalog map[string]int, threshold int) int {
-    var count int
-    for track := range catalog {
-        if catalog[track] > threshold {
-            count++
-        }
-    }
-    return count
-}
 
 func main() {
     catalog := map[string]int{
-        "Gasoline":      148,
-        "Industry Baby": 160,
-        "Numb":           72,
+        "Blinding Lights": 4_000_000_000,
+        "Shape of You":    3_600_000_000,
     }
-    fmt.Println(countFast(nil, 100))
-}
-```
-
-The bug is that `countFast` is called with `nil` instead of `catalog`.
-
-`main` creates `catalog` but then passes `nil` (not `catalog`) to `countFast`.
-A nil map has zero entries, so `for track := range nil` never executes, and `count` stays at `0`.
-
-Reading from a nil map is safe in Go --- `catalog[track]` on a nil map returns `0` --- but iterating over a nil map yields no iterations at all, so the loop body never runs.
-
-The fix is to pass the actual map:
-
-```go
-fmt.Println(countFast(catalog, 100))
-```
-
-With the correct call, the function returns `2` (`"Gasoline"` at 148 and `"Industry Baby"` at 160 both exceed the threshold of 100).
-
-A secondary improvement: the loop uses `for track := range catalog` and then does a second map lookup `catalog[track]`.
-This works, but the idiomatic form uses the value directly from the range:
-
-```go
-for _, bpm := range catalog {
-    if bpm > threshold {
-        count++
+    hits := []string{"Shape of You", "Watermelon Sugar", "Blinding Lights"}
+    for _, title := range hits {
+        if plays, ok := catalog[title]; ok {
+            fmt.Printf("%s: %d\n", title, plays)
+        } else {
+            fmt.Printf("%s: not found\n", title)
+        }
     }
 }
 ```
 
-This is one lookup per iteration instead of two.
+Output:
+```
+Shape of You: 3600000000
+Watermelon Sugar: not found
+Blinding Lights: 4000000000
+```
+
+The loop iterates the `hits` slice in order.
+`"Shape of You"` is in the catalog and its play count is printed.
+`"Watermelon Sugar"` is not in the catalog, so the comma-ok idiom sets `ok = false` and the `else` branch runs.
+`"Blinding Lights"` is in the catalog and is printed last.
+Map lookup order is random, but slice range iteration is always in index order, so the output is deterministic here.
 
 ---
 
-**Exercise 5** (Write a program):
-Define a `Song` struct with fields `Title string`, `Artist string`, and `Plays int`.
-Build a slice of at least four `Song` values.
-Write `topN(songs []Song, n int) []Song` that returns the `n` most-played songs in descending order.
-Use `slices.SortFunc` and `cmp.Compare`.
+**Exercise 3** (Calculation): Given the following code, trace the value of `len(s)` and `cap(s)` after each line.
+
+```go
+s := make([]int, 2, 5)
+s = append(s, 10)
+s = append(s, 20)
+s = append(s, 30)
+s = append(s, 40)
+```
+
+| After line | `len(s)` | `cap(s)` | New array? |
+|---|---|---|---|
+| `make([]int, 2, 5)` | 2 | 5 | Yes (initial) |
+| `append(s, 10)` | 3 | 5 | No |
+| `append(s, 20)` | 4 | 5 | No |
+| `append(s, 30)` | 5 | 5 | No |
+| `append(s, 40)` | 6 | ≥10 | **Yes** |
+
+`make([]int, 2, 5)` allocates a backing array with capacity 5.
+The first three `append` calls fit within the existing capacity (len grows 2 → 3 → 4 → 5).
+The fourth `append` exceeds capacity 5, so the runtime allocates a new array (typically double, so cap ≥ 10) and copies the existing elements.
+The exact new capacity is implementation-defined but at least 6; in current Go runtimes it is 10.
+
+---
+
+**Exercise 4** (Where is the bug?):
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+    words := []string{"Levitating", "Stay", "Heat Waves", "Stay", "As It Was"}
+    var freq map[string]int
+    for _, w := range words {
+        freq[w]++
+    }
+    for word, count := range freq {
+        if count > 1 {
+            fmt.Println(word, count)
+        }
+    }
+}
+```
+
+**The bug:** `var freq map[string]int` declares a nil map.
+Reading from a nil map returns the zero value (`0` for `int`), which is harmless.
+But **writing to a nil map panics** at runtime.
+The program panics at `freq[w]++` on the first iteration:
+
+```
+panic: assignment to entry in nil map
+```
+
+**Fix:** Initialise the map with `make` before the loop:
+
+```go
+freq := make(map[string]int)
+for _, w := range words {
+    freq[w]++
+}
+```
+
+With the fix, the program prints:
+
+```
+Stay 2
+```
+
+---
+
+**Exercise 5** (Write a program): Write a program that reads a slice of song titles and builds a map from the first letter to a slice of titles starting with that letter, then prints each letter and its titles in sorted order.
 
 ```go
 package main
 
 import (
-    "cmp"
     "fmt"
+    "maps"
     "slices"
 )
 
-type Song struct {
-    Title  string
-    Artist string
-    Plays  int
-}
-
-// topN returns the n most-played songs in descending order by Plays.
-// If n >= len(songs), all songs are returned.
-func topN(songs []Song, n int) []Song {
-    // work on a copy so the original slice is not reordered
-    result := make([]Song, len(songs))
-    copy(result, songs)
-
-    // sort descending: negate the comparison to reverse order
-    slices.SortFunc(result, func(a, b Song) int {
-        return cmp.Compare(b.Plays, a.Plays) // b before a for descending
-    })
-
-    if n > len(result) {
-        n = len(result)
-    }
-    return result[:n]
-}
-
 func main() {
-    songs := []Song{
-        {Title: "Blinding Lights",    Artist: "The Weeknd",      Plays: 4_000_000_000},
-        {Title: "Stay",               Artist: "The Kid LAROI",   Plays: 2_200_000_000},
-        {Title: "Unholy",             Artist: "Sam Smith",       Plays: 2_000_000_000},
-        {Title: "Save Your Tears",    Artist: "The Weeknd",      Plays: 1_800_000_000},
-        {Title: "Golden Hour",        Artist: "JVKE",            Plays:   900_000_000},
+    titles := []string{
+        "As It Was", "Blinding Lights", "Levitating",
+        "Bad Habit", "Kill Bill", "As The World Caves In",
     }
 
-    fmt.Println("Top 3:")
-    for _, s := range topN(songs, 3) {
-        fmt.Printf("  %-28s %d plays\n", s.Title, s.Plays)
+    byLetter := make(map[string][]string)
+    for _, t := range titles {
+        letter := string(t[0]) // first byte; safe because all titles start with ASCII
+        byLetter[letter] = append(byLetter[letter], t)
+    }
+
+    for _, ts := range byLetter {
+        slices.Sort(ts) // sort titles within each group
+    }
+
+    letters := slices.Collect(maps.Keys(byLetter))
+    slices.Sort(letters) // sort the letter keys
+
+    for _, letter := range letters {
+        fmt.Printf("%s: %v\n", letter, byLetter[letter])
     }
 }
 ```
 
 Output:
 ```
-Top 3:
-  Blinding Lights             4000000000 plays
-  Stay                        2200000000 plays
-  Unholy                      2000000000 plays
+A: [As It Was As The World Caves In]
+B: [Bad Habit Blinding Lights]
+K: [Kill Bill]
+L: [Levitating]
 ```
 
-Notes on the solution:
+Key points: always initialise a map with `make` before writing; `maps.Keys` returns an iterator (Go 1.23+) that `slices.Collect` converts to a sortable slice.
 
-- `copy(result, songs)` prevents `slices.SortFunc` from mutating the caller's slice.
-  If the caller passes a slice they intend to use in original order, an in-place sort would be a surprising side effect.
-- `cmp.Compare(b.Plays, a.Plays)` with arguments reversed produces descending order.
-  `cmp.Compare(a.Plays, b.Plays)` would sort ascending.
-- The `n > len(result)` guard avoids a slice-bounds panic when the caller asks for more songs than exist.
 
 ---
 
-# Chapter 9: Interfaces --- Answers
+# Chapter 8: Interfaces --- Answers
 
 **Exercise 1** (Think about it): Go's structural typing means any package can retroactively make its types satisfy an interface defined in any other package.
 In Java, if you want your `Song` class to satisfy a new interface `Playable` defined in a library you do not control, you must modify `Song`'s source.
@@ -1677,7 +1434,7 @@ This is the open/closed principle, Go style.
 
 ---
 
-# Chapter 10: Error Handling --- Answers
+# Chapter 9: Error Handling --- Answers
 
 **Exercise 1** (Think about it): Java uses checked exceptions to force callers to handle failures.
 Go returns `error` values that the compiler does not require you to inspect.
@@ -2020,7 +1777,7 @@ Using `fmt.Sscanf` or a regex are also valid; `strings.Split` is the most readab
 
 ---
 
-# Chapter 11: Goroutines and Channels --- Answers
+# Chapter 10: Goroutines and Channels --- Answers
 
 **Exercise 1** (Think about it): Java's `Thread` and `Runnable` model requires you to think about thread pool sizing.
 Go's goroutine model mostly frees you from this.
@@ -2312,7 +2069,7 @@ That is a concern for Chapter 15; the `time.After` form is idiomatic for simple 
 
 ---
 
-# Chapter 12: Synchronization --- Answers
+# Chapter 11: Synchronization --- Answers
 
 **Exercise 1** (Think about it): Java's `synchronized` keyword locks an object's monitor, which is built into every Java object.
 Go has no per-object monitor; instead you declare explicit `sync.Mutex` fields.
@@ -2632,7 +2389,7 @@ Key points of the implementation:
 
 ---
 
-# Chapter 13: Context and Concurrency Patterns --- Answers
+# Chapter 12: Context and Concurrency Patterns --- Answers
 
 **Exercise 1** (Think about it): In Java, cancelling an in-flight operation typically means calling `Future.cancel(true)` or interrupting a thread via `Thread.interrupt()`.
 Describe how Go's `context.Context` model differs from Java's thread-interrupt approach.
@@ -2915,7 +2672,7 @@ error: context deadline exceeded
 
 ---
 
-# Chapter 14: Packages and Modules --- Answers
+# Chapter 13: Packages and Modules --- Answers
 
 **Exercise 1** (Think about it): Maven and Gradle resolve transitive dependencies automatically and let two artifacts declare conflicting version requirements for the same library.
 They use a strategy (nearest-wins in Maven, highest-requested in Gradle) to pick a single version at build time.
@@ -3199,7 +2956,7 @@ Northern Attitude by Noah Kahan
 
 ---
 
-# Chapter 15: Essential Standard Library --- Answers
+# Chapter 14: Essential Standard Library --- Answers
 
 **Exercise 1** (Think about it): In Java, `InputStream`, `OutputStream`, `Reader`, and `Writer` are four separate abstract class hierarchies.
 Go has two interfaces --- `io.Reader` and `io.Writer` --- and a set of composition functions.
@@ -3463,7 +3220,7 @@ Key points in the solution:
 
 ---
 
-# Chapter 16: JSON, HTTP, and the Web --- Answers
+# Chapter 15: JSON, HTTP, and the Web --- Answers
 
 **Exercise 1** (Think about it): In Java with Spring MVC or JAX-RS, you annotate a class method with `@GetMapping("/songs/{id}")` or `@GET @Path("/songs/{id}")` and the framework discovers handlers via reflection and classpath scanning.
 In Go, you call `mux.HandleFunc("GET /songs/{id}/", getSong)` explicitly in `main`.
@@ -3711,7 +3468,7 @@ Key points illustrated by this solution:
 
 ---
 
-# Chapter 17: Database Access --- Answers
+# Chapter 16: Database Access --- Answers
 
 **Exercise 1** (Think about it): JDBC requires explicit transaction management and connection pooling through a `DataSource`, usually provided by an application server or a library like HikariCP.
 Go's `database/sql` builds connection pooling directly into `sql.DB`.
@@ -4020,7 +3777,7 @@ Key points demonstrated:
 
 ---
 
-# Chapter 18: Generics --- Answers
+# Chapter 17: Generics --- Answers
 
 **Exercise 1** (Think about it): Java generics use **type erasure**: at runtime, `List<String>` and `List<Integer>` are both just `List`.
 Generic type information is only available at compile time.
@@ -4283,7 +4040,7 @@ The second `Add("Heather")` call is a no-op because the map key already exists -
 
 ---
 
-# Chapter 19: Testing --- Answers
+# Chapter 18: Testing --- Answers
 
 **Exercise 1** (Think about it): JUnit 5's `@ParameterizedTest` with `@CsvSource` and Go's table-driven tests with `t.Run` both let you run the same logic against many inputs.
 Describe two concrete advantages that Go's table-driven approach gives you over `@CsvSource`.
@@ -4572,7 +4329,7 @@ PASS
 
 ---
 
-# Chapter 20: Reflection --- Answers
+# Chapter 19: Reflection --- Answers
 
 **Exercise 1** (Think about it): Both Java's `java.lang.reflect` and Go's `reflect` package let you inspect types and values at runtime.
 Name two ways they are fundamentally similar and two ways they differ.

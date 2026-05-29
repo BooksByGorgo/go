@@ -18,7 +18,7 @@ Audience: Java programmers learning Go for industry use
 - The `fmt` package basics
 
 ### Chapter 2: Types and Variables
-*Go's type system is familiar but has several sharp distinctions from Java.*
+*Go's type system is familiar but has several sharp distinctions from Java --- including structs, which replace Java classes as the primary way to group related data.*
 
 - Basic types: `int`, `int8/16/32/64`, `uint*`, `float32/64`, `bool`, `string`, `byte`, `rune`
 - `var` declarations and `:=` short declarations; when to use each
@@ -29,6 +29,8 @@ Audience: Java programmers learning Go for industry use
 - Integer literal prefixes: `0b`, `0o`, `0x`; `_` digit separator
 - `clear`, `min`, `max` built-ins (Go 1.21)
 - Blank identifier (`_`)
+- Structs --- struct literals, value semantics, methods, struct tags, embedding
+- `cmp` package (Go 1.21): `cmp.Compare`, `cmp.Ordered`
 
 ### Chapter 3: Strings, Bytes, and Runes
 *Java's `char` is a UTF-16 code unit; Go's `rune` is a full Unicode code point. This matters.*
@@ -80,9 +82,13 @@ Audience: Java programmers learning Go for industry use
 - Value receivers vs pointer receivers --- rules and tradeoffs
 - Escape analysis preview --- the compiler decides stack vs heap
 
-### Chapter 7: Slices
-*Go's slice is the workhorse sequence type. Arrays exist but are rarely used directly.*
+### Chapter 7: Maps and Slices
+*Go maps replace Java `HashMap`; Go slices replace `ArrayList`. Both are value-oriented and built into the language.*
 
+- Map literals, `make(map[K]V)`, operations (`m[k]`, delete, len)
+- Comma-ok idiom: `v, ok := m[key]`
+- Iteration order is random (by design)
+- `clear` on a map --- deletes all entries
 - Arrays --- value types, fixed size; `[3]int` vs `[]int`
 - Slices --- pointer + length + capacity triplet; the backing array
 - `make([]T, len, cap)`, `append`, `copy`
@@ -92,19 +98,7 @@ Audience: Java programmers learning Go for industry use
 - `slices` package (Go 1.21): `Sort`, `SortFunc`, `Contains`, `Index`, `Compact`, `Collect`
 - `clear` on a slice --- zeroes elements without changing length
 
-### Chapter 8: Maps and Structs
-*Go maps are like Java `HashMap`; Go structs are like Java classes without inheritance.*
-
-- Map literals, `make(map[K]V)`, operations (`m[k]`, delete, len)
-- Comma-ok idiom: `v, ok := m[key]`
-- Iteration order is random (by design)
-- `clear` on a map --- deletes all entries
-- Struct literals (named and positional); anonymous structs
-- Struct tags --- `` `json:"name,omitempty"` ``; general mechanism parsed via `reflect.StructTag`
-- Embedding --- promoted methods; composition over inheritance
-- `cmp` package (Go 1.21): `cmp.Compare`, `cmp.Ordered`
-
-### Chapter 9: Interfaces
+### Chapter 8: Interfaces
 *Go interfaces are satisfied implicitly. No `implements`. This changes everything.*
 
 - Implicit interface satisfaction --- any type with the right methods satisfies an interface
@@ -121,7 +115,7 @@ Audience: Java programmers learning Go for industry use
 
 ## Part III: Error Handling
 
-### Chapter 10: Error Handling
+### Chapter 9: Error Handling
 *Go has no exceptions. Errors are values returned from functions. This is the biggest mindset shift.*
 
 - `error` is an interface: `Error() string`
@@ -138,7 +132,7 @@ Audience: Java programmers learning Go for industry use
 
 ## Part IV: Concurrency
 
-### Chapter 11: Goroutines and Channels
+### Chapter 10: Goroutines and Channels
 *Goroutines are not threads. Channels are not queues. The model is different from Java.*
 
 - Goroutines --- `go f()`; lightweight, multiplexed onto OS threads
@@ -149,7 +143,7 @@ Audience: Java programmers learning Go for industry use
 - `select` statement --- fan-in, timeouts, non-blocking send/receive with `default`
 - "Don't communicate by sharing memory; share memory by communicating"
 
-### Chapter 12: Synchronization
+### Chapter 11: Synchronization
 *When channels are not the right tool, the `sync` package provides the primitives.*
 
 - Go memory model --- visibility between goroutines; happens-before relationships
@@ -162,7 +156,7 @@ Audience: Java programmers learning Go for industry use
 - `sync/atomic` --- typed atomics (Go 1.19+): `atomic.Int64`, `atomic.Pointer[T]`
 - Race detector: `go test -race`; run in CI always
 
-### Chapter 13: Context and Concurrency Patterns
+### Chapter 12: Context and Concurrency Patterns
 *`context.Context` is how you cancel work across goroutine boundaries.*
 
 - `context.Context` --- cancellation, deadlines, timeouts, value propagation
@@ -179,7 +173,7 @@ Audience: Java programmers learning Go for industry use
 
 ## Part V: The Ecosystem
 
-### Chapter 14: Packages and Modules
+### Chapter 13: Packages and Modules
 *Go modules replace Maven/Gradle. The conventions are simpler but different.*
 
 - Package naming --- short, lowercase, no underscores; package name matches directory
@@ -194,7 +188,7 @@ Audience: Java programmers learning Go for industry use
 - `//go:embed` --- embed static files into the binary at compile time
 - `//go:generate` directive
 
-### Chapter 15: Essential Standard Library
+### Chapter 14: Essential Standard Library
 *A tour of the packages every Go programmer reaches for daily.*
 
 - `fmt` --- verbs, `%v`, `%+v`, `%#v`, `%T`, `Fprintf` to any `io.Writer`
@@ -208,7 +202,7 @@ Audience: Java programmers learning Go for industry use
 - `log` / `log/slog` (Go 1.21) --- structured logging: `slog.Attr`, `slog.With`, `slog.Group`, custom `Handler`
 - `regexp` --- compile once, use many times
 
-### Chapter 16: JSON, HTTP, and the Web
+### Chapter 15: JSON, HTTP, and the Web
 *`encoding/json` and `net/http` are the backbone of Go web services.*
 
 - `encoding/json` --- `Marshal`, `Unmarshal`, streaming `Encoder`/`Decoder`
@@ -220,7 +214,7 @@ Audience: Java programmers learning Go for industry use
 - `encoding/xml` --- XML marshalling; same tag mechanism as JSON
 - `net` --- `net.Dial`, `net.Listen`; TCP/UDP below the HTTP layer
 
-### Chapter 17: Database Access
+### Chapter 16: Database Access
 *`database/sql` is Go's JDBC. Connection pooling is built in.*
 
 - `sql.DB` --- connection pool, not a connection; safe for concurrent use
@@ -235,7 +229,7 @@ Audience: Java programmers learning Go for industry use
 
 ## Part VI: Advanced Go
 
-### Chapter 18: Generics
+### Chapter 17: Generics
 *Go generics (1.18) are deliberately minimal. Know what they can and cannot do.*
 
 - Type parameters: `func Map[T, U any](s []T, f func(T) U) []U`
@@ -250,7 +244,7 @@ Audience: Java programmers learning Go for industry use
 - Generic type aliases (Go 1.24)
 - When NOT to use generics --- prefer concrete types; generics add complexity
 
-### Chapter 19: Testing
+### Chapter 18: Testing
 *Table-driven tests and the race detector are non-negotiable. Fuzzing is free coverage.*
 
 - `testing.T` --- `t.Error`, `t.Fatal`, `t.Log`; test function naming
@@ -263,7 +257,7 @@ Audience: Java programmers learning Go for industry use
 - Integration tests --- build tags to separate unit and integration tests
 - `go test ./...`, `-count=1` (disable caching), `-timeout`
 
-### Chapter 20: Reflection
+### Chapter 19: Reflection
 *Reflection is powerful and slow. Use it only when the type is truly unknown at compile time.*
 
 - The three laws of reflection --- value, type, and settability

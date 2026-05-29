@@ -1,35 +1,27 @@
-# Chapter 16: JSON, HTTP, and the Web --- Answers
+# Chapter 17: Database Access --- Answers
 
-**Exercise 1** (Think about it): In Java with Spring MVC or JAX-RS, you annotate a class method with `@GetMapping("/songs/{id}")` or `@GET @Path("/songs/{id}")` and the framework discovers handlers via reflection and classpath scanning.
-In Go, you call `mux.HandleFunc("GET /songs/{id}/", getSong)` explicitly in `main`.
+**Exercise 1** (Think about it): JDBC requires explicit transaction management and connection pooling through a `DataSource`, usually provided by an application server or a library like HikariCP.
+Go's `database/sql` builds connection pooling directly into `sql.DB`.
 What are the tradeoffs of each approach?
-Consider startup time, debuggability, IDE navigation, and what happens when two handlers are registered for the same pattern.
+In what situations might you still want an external connection pool in a Go application?
 
-**Annotation/reflection-based frameworks (Spring, JAX-RS):**
+Go's approach is simpler for the common case: you call `sql.Open`, tune a few settings (`SetMaxOpenConns`, `SetMaxIdleConns`, `SetConnMaxLifetime`), and the pool manages itself.
+There is no additional dependency, no configuration file, and no separate object to wire up.
+This is consistent with Go's philosophy of including batteries for common needs.
 
-- *Startup time:* The framework scans the classpath, processes annotations, and builds a routing table at startup.
-  For large applications this can add seconds --- sometimes tens of seconds.
-  Spring Boot's startup time is a well-known pain point for serverless and container workloads.
-- *IDE navigation:* IDEs understand Spring annotations deeply; `@GetMapping` provides clickable navigation to the handler.
-  However, understanding the full request path often requires tracing through a chain of `@RequestMapping` annotations on the class, the method, and any inherited base classes.
-- *Debuggability:* Routing bugs can be subtle; the framework discovers handlers at runtime, so a typo in a path annotation compiles cleanly and only fails when a request is made.
-  Error messages from annotation-driven frameworks can be verbose and hard to relate back to specific source lines.
-- *Duplicate pattern:* Spring raises a `BeanDefinitionOverrideException` or similar at startup.
+JDBC's reliance on an external pool (HikariCP, DBCP, c3p0, or an application server pool) adds setup complexity but provides more configurability.
+HikariCP, for example, offers connection validation queries, connection test-on-borrow, metric integration with Micrometer, and health check endpoints.
 
-**Explicit registration (Go `ServeMux`):**
+In a Go application you might still want an external or proxy pool in a few situations:
 
-- *Startup time:* Registration happens in `main` --- it is just function calls.
-  There is no scanning; startup overhead is negligible.
-- *IDE navigation:* `mux.HandleFunc("GET /songs/{id}/", getSong)` --- `getSong` is a direct function reference.
-  Your IDE can jump to it with a single click, with no framework-specific plugin needed.
-- *Debuggability:* The routing table is built from ordinary Go code.
-  If you register the wrong path, you can add a `fmt.Println` or set a debugger breakpoint in `main` and see exactly what is registered.
-- *Duplicate pattern:* Go 1.22 `ServeMux` panics at registration time if two patterns conflict.
-  This is a startup crash rather than a silent routing bug, which is the right trade-off --- it catches the mistake before any request is served.
+- **PgBouncer / ProxySQL:** These are database-side proxy pools that multiplex many application connections onto fewer server connections.
+  They are useful when you have many application instances and the database itself limits total connections.
+  `sql.DB`'s pool operates within one process; PgBouncer aggregates across many processes.
+- **Serverless / short-lived processes:** If your Go binary starts and exits quickly (a CLI, a Lambda function), the in-process pool provides little benefit.
+  A proxy pool keeps connections warm across many cold starts.
+- **Observability:** Some proxy pools offer detailed query-level metrics and slow-query logging that are difficult to achieve from application code alone.
 
-The Go approach is more explicit and has less magic.
-The annotation approach provides more convenience in large teams where developers add handlers in many files and rely on the framework to assemble the routing table.
-Neither is universally better; the right choice depends on team size, application complexity, and how much framework overhead you are willing to accept.
+In most long-running Go services, the built-in pool is sufficient and external pooling adds unnecessary complexity.
 
 ---
 
@@ -39,129 +31,146 @@ Neither is universally better; the right choice depends on team size, applicatio
 package main
 
 import (
-    "encoding/json"
+    "database/sql"
     "fmt"
 )
 
-type Artist struct {
-    Name    string `json:"name"`
-    Country string `json:"country,omitempty"`
-    Secret  string `json:"-"`
-}
-
 func main() {
-    a := Artist{Name: "Kali Uchis", Country: "", Secret: "Colombia"}
-    data, _ := json.Marshal(a)
-    fmt.Println(string(data))
+    a := sql.Null[string]{V: "Evergreen", Valid: true}
+    b := sql.Null[string]{V: "Killing Me", Valid: false}
+    c := sql.Null[int64]{V: 0, Valid: false}
 
-    var b Artist
-    json.Unmarshal([]byte(`{"name":"Rauw Alejandro","secret":"Puerto Rico"}`), &b)
-    fmt.Printf("Name: %s, Secret: %q\n", b.Name, b.Secret)
+    fmt.Println(a.Valid, a.V)
+    fmt.Println(b.Valid, b.V)
+    fmt.Println(c.Valid, c.V)
 }
 ```
 
 Output:
 ```
-{"name":"Kali Uchis"}
-Name: Rauw Alejandro, Secret: ""
+true Evergreen
+false Killing Me
+false 0
 ```
 
-**First `Println`:**
-`a.Country` is `""`, which is the zero value for `string`.
-The tag `json:"country,omitempty"` causes `encoding/json` to omit the `country` field from the output.
-`a.Secret` is `"Colombia"`, but the tag `json:"-"` instructs the encoder to always skip this field regardless of its value.
-The result is `{"name":"Kali Uchis"}` --- only `name` survives.
+`sql.Null[T]` is a plain struct with two exported fields: `V` (the value) and `Valid` (a bool).
+It has no logic in its fields; they are whatever you set them to.
 
-**Second `Printf`:**
-The JSON input contains a `"secret"` key.
-However, the Go struct has `Secret string \`json:"-"\``.
-The `json:"-"` tag means `encoding/json` ignores this field during both marshalling **and** unmarshalling.
-The `"secret"` key in the JSON is silently discarded; `b.Secret` remains the zero value `""`.
-`b.Name` is correctly set to `"Rauw Alejandro"` from the `"name"` key.
+- `a` has `Valid: true` and `V: "Evergreen"`, so `fmt.Println` prints `true Evergreen`.
+- `b` has `Valid: false` but `V` is still `"Killing Me"` --- setting `Valid` to `false` does not zero out `V`.
+  This might be surprising: the struct remembers the value even though it would represent `NULL` in the database.
+  `fmt.Println` prints `false Killing Me`.
+- `c` has `Valid: false` and `V: 0` (the zero value for `int64`).
+  `fmt.Println` prints `false 0`.
 
-`%q` formats a string with Go double-quote syntax, so an empty string prints as `""`.
+The key takeaway: `Valid` controls whether the value is considered non-NULL; it does not affect what is stored in `V`.
+When scanning from a database, `Scan` sets `V` to the zero value and `Valid` to `false` for a `NULL` column.
 
 ---
 
-**Exercise 3** (Calculation): Consider the following `ServeMux` registration and the three incoming requests.
-For each request, state which handler function is called, or `404` if none matches.
+**Exercise 3** (Calculation): Trace the following transaction sequence.
 
 ```go
-mux := http.NewServeMux()
-mux.HandleFunc("GET /tracks/",       listTracks)
-mux.HandleFunc("GET /tracks/{id}/",  getTrack)
-mux.HandleFunc("POST /tracks/",      createTrack)
+tx, _ := db.BeginTx(ctx, nil)
+defer tx.Rollback()
+
+_, err := tx.ExecContext(ctx, "INSERT INTO songs (title, artist) VALUES (?, ?)",
+    "On My Mama", "Victoria Monét")
+if err != nil {
+    return err
+}
+
+return tx.Commit()
 ```
 
-a. `GET /tracks/` --- **`listTracks`**
+**Case A: `ExecContext` succeeds and `Commit` succeeds.**
 
-The request method is `GET` and the path is exactly `/tracks/`.
-The pattern `GET /tracks/` is a subtree match that includes the exact path `/tracks/`.
-`GET /tracks/{id}/` requires at least one additional path segment between the slashes (e.g., `/tracks/42/`), so it does not match `/tracks/` alone.
-`listTracks` is called.
+The deferred `tx.Rollback()` fires after `tx.Commit()` returns.
+`Rollback` on a committed transaction is a no-op --- it returns `sql.ErrTxDone`, which is silently discarded because the return value of a deferred call is not used here.
+The row is **inserted and committed** permanently.
 
-b. `GET /tracks/42/` --- **`getTrack`**
+**Case B: `ExecContext` succeeds but `Commit` returns an error.**
 
-The request method is `GET` and the path is `/tracks/42/`.
-The pattern `GET /tracks/{id}/` matches: `{id}` captures `42`.
-`r.PathValue("id")` would return `"42"` inside the handler.
-`getTrack` is called.
+`tx.Commit()` fails, so the function returns an error.
+The deferred `tx.Rollback()` then fires.
+However, when a commit fails at the database level, the transaction is typically already rolled back by the database.
+`Rollback` here is a safety net that confirms the abort.
+The row is **not inserted** --- the transaction was not committed.
 
-c. `DELETE /tracks/7/` --- **`404`**
+**Case C: `ExecContext` returns an error.**
 
-None of the three registered patterns match a `DELETE` method on any path.
-`GET /tracks/{id}/` matches the path shape but requires `GET`.
-`ServeMux` returns a 405 Method Not Allowed response in Go 1.22 when the path matches a pattern but the method does not.
-Effectively the caller receives an HTTP error response, not a call to any registered handler.
+The `if err != nil { return err }` branch fires, returning the error.
+The deferred `tx.Rollback()` fires before the function returns to the caller.
+The `INSERT` is undone (or was never applied, depending on the database).
+The row is **not inserted**.
 
-(Note: technically Go 1.22 `ServeMux` sends `405 Method Not Allowed` with an `Allow` header listing valid methods when the path matches but the method does not --- this is more precise than a plain 404.)
+In all three cases the deferred rollback provides a guarantee: the transaction is always cleaned up, regardless of which path the function takes.
+This is the entire point of the deferred rollback pattern.
 
 ---
 
 **Exercise 4** (Where is the bug?):
 
 ```go
-func fetchLyrics(url string) (string, error) {
-    resp, err := http.Get(url)
+func getArtistSongs(ctx context.Context, db *sql.DB, artist string) ([]string, error) {
+    rows, err := db.QueryContext(ctx,
+        "SELECT title FROM songs WHERE artist = ?", artist)
     if err != nil {
-        return "", err
+        return nil, err
     }
-    body, err := io.ReadAll(resp.Body)
-    if err != nil {
-        return "", err
+
+    var titles []string
+    for rows.Next() {
+        var title string
+        if err := rows.Scan(&title); err != nil {
+            return nil, err
+        }
+        titles = append(titles, title)
     }
-    return string(body), nil
+    return titles, nil
 }
 ```
 
-**The bug:** `resp.Body` is never closed.
+**Two bugs:**
 
-When `http.Get` succeeds, `resp.Body` is a live network connection wrapped as an `io.ReadCloser`.
-If the function returns the body as a string but never calls `resp.Body.Close()`, the underlying TCP connection is not returned to the connection pool --- it is leaked.
-Under load, a server making many requests will exhaust its file descriptors and connection pool, eventually causing all new HTTP requests to fail.
+**Bug 1: `rows` is never closed.**
+If `rows.Next()` completes the loop normally, `rows` is closed automatically.
+But if `rows.Scan` returns an error and the function returns early via `return nil, err`, `rows` is never closed.
+The connection borrowed from the pool is never returned, leaking it.
+Under sustained load this exhausts the pool.
 
-Note that the early-return error path `return "", err` after `io.ReadAll` also leaks the body.
+**Bug 2: `rows.Err()` is never checked.**
+After the loop, `rows.Err()` may hold an error that caused iteration to stop early (e.g., a network failure mid-result-set).
+Ignoring it means the function silently returns a partial result as if it were complete.
 
-**The fix:**
+**Fixed version:**
 
 ```go
-func fetchLyrics(url string) (string, error) {
-    resp, err := http.Get(url)
+func getArtistSongs(ctx context.Context, db *sql.DB, artist string) ([]string, error) {
+    rows, err := db.QueryContext(ctx,
+        "SELECT title FROM songs WHERE artist = ?", artist)
     if err != nil {
-        return "", err
+        return nil, err
     }
-    defer resp.Body.Close()  // close on any return, success or error
+    defer rows.Close() // always close, even on early return
 
-    body, err := io.ReadAll(resp.Body)
-    if err != nil {
-        return "", err
+    var titles []string
+    for rows.Next() {
+        var title string
+        if err := rows.Scan(&title); err != nil {
+            return nil, err
+        }
+        titles = append(titles, title)
     }
-    return string(body), nil
+    if err := rows.Err(); err != nil { // check for iteration errors
+        return nil, err
+    }
+    return titles, nil
 }
 ```
 
-`defer resp.Body.Close()` immediately after the `err` check ensures the body is closed on every code path out of the function, including early returns.
-This is the canonical Go idiom for HTTP client response bodies.
+`defer rows.Close()` immediately after checking the error from `QueryContext` is the standard pattern.
+Calling `rows.Close()` on already-closed rows is a no-op, so it is always safe.
 
 ---
 
@@ -171,74 +180,126 @@ This is the canonical Go idiom for HTTP client response bodies.
 package main
 
 import (
-    "encoding/json"
-    "net/http"
-    "strconv"
+    "context"
+    "database/sql"
+    "fmt"
+    "log"
+
+    _ "github.com/mattn/go-sqlite3"
 )
 
-type Song struct {
-    ID     int    `json:"id"`
-    Title  string `json:"title"`
-    Artist string `json:"artist"`
-}
-
-var catalog = map[int]Song{
-    1: {ID: 1, Title: "Todo De Ti",      Artist: "Rauw Alejandro"},
-    2: {ID: 2, Title: "I Wish You Roses", Artist: "Kali Uchis"},
-}
-
-func listSongs(w http.ResponseWriter, r *http.Request) {
-    songs := make([]Song, 0, len(catalog))
-    for _, s := range catalog {
-        songs = append(songs, s)
-    }
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(songs)
-}
-
-func getSong(w http.ResponseWriter, r *http.Request) {
-    idStr := r.PathValue("id")
-    id, err := strconv.Atoi(idStr)
-    if err != nil {
-        http.Error(w, "invalid id", http.StatusBadRequest)
-        return
-    }
-    song, ok := catalog[id]
-    if !ok {
-        http.Error(w, "not found", http.StatusNotFound)
-        return
-    }
-    w.Header().Set("Content-Type", "application/json")
-    json.NewEncoder(w).Encode(song)
+type Playlist struct {
+    ID          int
+    Name        string
+    Owner       string
+    Description sql.Null[string]
 }
 
 func main() {
-    mux := http.NewServeMux()
-    mux.HandleFunc("GET /songs/",      listSongs)
-    mux.HandleFunc("GET /songs/{id}/", getSong)
-    http.ListenAndServe(":8080", mux)
+    db, err := sql.Open("sqlite3", ":memory:")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer db.Close()
+
+    ctx := context.Background()
+
+    if err := db.PingContext(ctx); err != nil {
+        log.Fatal(err)
+    }
+
+    _, err = db.ExecContext(ctx, `
+        CREATE TABLE playlists (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT    NOT NULL,
+            owner       TEXT    NOT NULL,
+            description TEXT
+        )`)
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // insert three rows inside a single transaction
+    if err := insertPlaylists(ctx, db); err != nil {
+        log.Fatal(err)
+    }
+
+    // query and print all rows
+    rows, err := db.QueryContext(ctx,
+        "SELECT id, name, owner, description FROM playlists ORDER BY id")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer rows.Close()
+
+    for rows.Next() {
+        var p Playlist
+        if err := rows.Scan(&p.ID, &p.Name, &p.Owner, &p.Description); err != nil {
+            log.Fatal(err)
+        }
+        desc := "(no description)"
+        if p.Description.Valid {
+            desc = p.Description.V
+        }
+        fmt.Printf("%d: %s by %s --- %s\n", p.ID, p.Name, p.Owner, desc)
+    }
+    if err := rows.Err(); err != nil {
+        log.Fatal(err)
+    }
+}
+
+func insertPlaylists(ctx context.Context, db *sql.DB) error {
+    tx, err := db.BeginTx(ctx, nil)
+    if err != nil {
+        return err
+    }
+    defer tx.Rollback() // no-op if Commit succeeds
+
+    stmt, err := tx.PrepareContext(ctx,
+        "INSERT INTO playlists (name, owner, description) VALUES (?, ?, ?)")
+    if err != nil {
+        return err
+    }
+    defer stmt.Close()
+
+    playlists := []Playlist{
+        {
+            Name:        "Victoria Vibes",
+            Owner:       "coastin_fan",
+            Description: sql.Null[string]{V: "Best of Victoria Monét", Valid: true},
+        },
+        {
+            Name:        "Omar After Midnight",
+            Owner:       "coastin_fan",
+            Description: sql.Null[string]{V: "Evergreen on repeat", Valid: true},
+        },
+        {
+            Name:        "Late Night Mix",
+            Owner:       "apollo_stan",
+            Description: sql.Null[string]{}, // NULL description
+        },
+    }
+
+    for _, p := range playlists {
+        if _, err := stmt.ExecContext(ctx, p.Name, p.Owner, p.Description); err != nil {
+            return err
+        }
+    }
+
+    return tx.Commit()
 }
 ```
 
-**Testing the server** (with `curl` in a second terminal):
-
+Output:
 ```
-$ curl http://localhost:8080/songs/
-[{"id":1,"title":"Todo De Ti","artist":"Rauw Alejandro"},{"id":2,"title":"I Wish You Roses","artist":"Kali Uchis"}]
-
-$ curl http://localhost:8080/songs/1/
-{"id":1,"title":"Todo De Ti","artist":"Rauw Alejandro"}
-
-$ curl http://localhost:8080/songs/99/
-not found
+1: Victoria Vibes by coastin_fan --- Best of Victoria Monét
+2: Omar After Midnight by coastin_fan --- Evergreen on repeat
+3: Late Night Mix by apollo_stan --- (no description)
 ```
 
-Key points illustrated by this solution:
-
-- `json.NewEncoder(w).Encode(songs)` streams the JSON directly to the `http.ResponseWriter` without allocating an intermediate `[]byte`.
-- `r.PathValue("id")` retrieves the wildcard captured by `{id}` in the Go 1.22 pattern.
-- `strconv.Atoi` converts the string path segment to an integer; a malformed segment returns `400 Bad Request` rather than panicking.
-- The `Content-Type` header is set before writing the body.
-  Headers must be set before the first call to `Write` or `Encode` --- once the body starts, the headers are sent and cannot be changed.
-- The map iteration order in `listSongs` is random (Chapter 8).
-  In a real service you would sort the result before encoding it to give clients a stable response.
+Key points demonstrated:
+- `sql.Open` + `PingContext` verifies connectivity before doing any work.
+- The transaction uses the **deferred rollback pattern**: `defer tx.Rollback()` is unconditional; `Commit` at the end makes it a no-op on success.
+- A prepared statement is created once inside the transaction and reused for each insert.
+- `sql.Null[string]` handles the nullable `description` column; `Valid: false` results in a `NULL` stored in the database and scanned back correctly.
+- `rows.Err()` is checked after the loop to catch any mid-stream errors.

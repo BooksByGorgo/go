@@ -1,50 +1,44 @@
-# Chapter 12: Synchronization --- Answers
+# Chapter 13: Context and Concurrency Patterns --- Answers
 
-**Exercise 1** (Think about it): Java's `synchronized` keyword locks an object's monitor, which is built into every Java object.
-Go has no per-object monitor; instead you declare explicit `sync.Mutex` fields.
-What are the practical advantages and disadvantages of each approach?
-Consider: what happens when you need to protect two independent fields in the same struct, and how would you do it with each language's mechanism?
+**Exercise 1** (Think about it): In Java, cancelling an in-flight operation typically means calling `Future.cancel(true)` or interrupting a thread via `Thread.interrupt()`.
+Describe how Go's `context.Context` model differs from Java's thread-interrupt approach.
+What are the advantages of passing a context explicitly rather than relying on a thread-level interrupt mechanism?
+Consider what happens when a Java thread is blocked in a third-party library that does not handle `InterruptedException`, compared to how a Go function using a context-aware library would behave.
 
-Java's per-object monitor is convenient for simple cases: every object already has a lock, so you can write `synchronized (this)` with no extra declarations.
-The downside is that the monitor is coarse-grained --- there is only one per object.
-If a struct (class in Java) has two independent fields that can be updated concurrently without affecting each other, locking the whole object monitor for either field creates unnecessary contention.
-Java programmers work around this with separate `java.util.concurrent.locks.Lock` objects or by using a dedicated inner lock object:
+Java's thread-interrupt model is **implicit and cooperative at the thread level**.
+When you call `Thread.interrupt()`, a flag is set on the thread, and blocking calls like `Object.wait()`, `Thread.sleep()`, and `java.io.InputStream.read()` on some implementations throw `InterruptedException` when they notice it.
+But not every blocking operation checks the flag: a thread blocked in a native call, a third-party lock, or a legacy `InputStream` implementation may never see the interrupt at all.
+The interrupt propagates up the call stack only as long as every layer catches and re-throws (or re-sets) the flag, which is notoriously easy to accidentally swallow:
 
 ```java
-private final Object tracksLock = new Object();
-private final Object playsLock  = new Object();
-
-synchronized (tracksLock) { tracks.add(track); }
-synchronized (playsLock)  { plays.increment(); }
-```
-
-Go's approach makes this natural: you simply declare two independent mutex fields.
-
-```go
-type Catalog struct {
-    tracksMu sync.Mutex
-    tracks   []string
-
-    playsMu sync.Mutex
-    plays   map[string]int
+try {
+    Thread.sleep(1000);
+} catch (InterruptedException e) {
+    // oops, swallowed it; the interrupt flag is now cleared
 }
 ```
 
-Each mutex protects only the field it is paired with, and neither blocks the other.
-This is less magic but more explicit.
+Go's `context.Context` is **explicit and uniform**.
+Every function that can be cancelled must accept a `context.Context` parameter.
+Cancellation is communicated by closing `ctx.Done()`, which is observable without any thread-local state.
+Any function that calls another context-aware function simply passes the same context through; the propagation is visible in every function signature.
 
-The practical advantages of Go's approach:
+The advantages over thread interrupts are:
 
-- **Granularity:** You can have as many independent mutexes as you need at zero structural cost.
-- **Clarity:** The pairing between a mutex and the data it protects is visible in the struct definition.
-- **No accidental sharing:** In Java, every synchronized method on the same object uses the same monitor, even if they protect unrelated state. In Go, each mutex is independent by default.
+1. **Explicit propagation.** You can see in the function signature that a function is cancellable.
+   In Java, there is no signature-level signal that a method checks `Thread.interrupted()`.
+2. **Deadlines and timeouts as first-class values.** `context.WithTimeout` and `context.WithDeadline` associate a deadline with the context object itself, not with a thread.
+   Multiple goroutines can share the same context and respect the same deadline without any shared mutable state.
+3. **No accidental swallowing.** Because `ctx.Done()` is a channel, you either select on it or you do not --- there is no exception to catch and accidentally discard.
+4. **Composability.** Derived contexts (`WithCancel`, `WithTimeout`) form a tree.
+   Cancelling a parent automatically cancels all children.
+   Java's thread-interrupt model is flat: each thread has exactly one interrupt flag.
+5. **Request-scoped values.** `context.WithValue` lets you attach metadata (trace IDs, auth tokens) to a context and retrieve it anywhere in the call tree without global state.
 
-The practical disadvantage:
-
-- **Verbosity:** You must declare, name, and document each mutex.
-  Java's implicit monitor requires no declaration.
-- **Copy hazard:** Go structs are value types. Copying a struct that contains a `sync.Mutex` is a bug; the struct must always be passed and stored by pointer.
-  Java objects are always references, so this hazard does not exist.
+If a Java thread is blocked in a third-party library that does not handle `InterruptedException` --- for example, a legacy JDBC driver --- calling `Thread.interrupt()` may have no effect.
+The thread stays blocked, and the only recourse is to close the underlying socket from another thread or wait for the operation to time out at the OS level.
+A Go function calling a database driver built on top of `database/sql` passes a context to `db.QueryContext`; the driver layer itself monitors `ctx.Done()` and closes the connection if the context is cancelled.
+The library author opts in once; all callers benefit automatically.
 
 ---
 
@@ -54,263 +48,232 @@ The practical disadvantage:
 package main
 
 import (
+    "context"
     "fmt"
-    "sync"
+    "time"
 )
 
+func work(ctx context.Context, label string) {
+    select {
+    case <-time.After(500 * time.Millisecond):
+        fmt.Println(label, "done")
+    case <-ctx.Done():
+        fmt.Println(label, "cancelled:", ctx.Err())
+    }
+}
+
 func main() {
-    var once sync.Once
-    var wg sync.WaitGroup
-    results := make([]string, 3)
+    ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+    defer cancel()
 
-    for i := 0; i < 3; i++ {
-        wg.Add(1)
-        go func(n int) {
-            defer wg.Done()
-            once.Do(func() {
-                results[n] = "loaded"
-            })
-            if results[n] == "" {
-                results[n] = "skipped"
-            }
-        }(i)
-    }
-
-    wg.Wait()
-    loaded := 0
-    skipped := 0
-    for _, r := range results {
-        if r == "loaded" {
-            loaded++
-        } else if r == "skipped" {
-            skipped++
-        }
-    }
-    fmt.Printf("loaded=%d skipped=%d\n", loaded, skipped)
+    go work(ctx, "Bewitched")
+    go work(ctx, "Too Sweet")
+    time.Sleep(400 * time.Millisecond)
+    fmt.Println("main done")
 }
 ```
 
-The output is:
-
+Output (order of the first two lines may vary):
 ```
-loaded=1 skipped=2
+Bewitched cancelled: context deadline exceeded
+Too Sweet cancelled: context deadline exceeded
+main done
 ```
 
-Here is why.
+The context has a 200 ms timeout.
+Both `work` goroutines are launched immediately and block in their `select` statement waiting for either `time.After(500ms)` or `ctx.Done()`.
+After 200 ms the timeout fires, `ctx.Done()` is closed, and both goroutines unblock on the `ctx.Done()` case.
+Each prints its label with `"cancelled: context deadline exceeded"`.
+The goroutines finish well before `main`'s `time.Sleep(400ms)` elapses, so `"main done"` appears last.
 
-`sync.Once` guarantees that the function passed to `Do` runs **exactly once** across all goroutines.
-One of the three goroutines (say goroutine with `n=0`, `n=1`, or `n=2` --- the scheduler decides which wins) will execute `results[n] = "loaded"`, setting one slot of the `results` slice.
-
-The other two goroutines call `once.Do` as well, but their function bodies are silently dropped because the once is already done.
-They proceed past `once.Do` and check `results[n] == ""` for their own slot `n`.
-Because the winning goroutine wrote to a **different** index than these two, their slots are still empty, so they set `results[n] = "skipped"`.
-
-The final tally is always exactly one `"loaded"` and two `"skipped"`, regardless of which goroutine wins the `once.Do` race.
-
-Note: even though goroutines access different indices of `results` concurrently, this specific program is **not** a data race because each goroutine always writes to its own `results[n]` (where `n` is passed by value), and no two goroutines write to the same index.
+The two cancelled lines may appear in either order because goroutine scheduling is not deterministic.
+`main done` always appears last because `time.Sleep(400ms)` is longer than the 200 ms timeout and the goroutines' response time.
 
 ---
 
-**Exercise 3** (Calculation):
+**Exercise 3** (Calculation): You run a worker pool with `workers = 3` and feed it a slice of 7 tasks.
+Each task takes exactly 100 ms.
+Assuming no overhead and perfect parallelism, how many milliseconds does the pool take to complete all 7 tasks?
 
-```go
-var counter atomic.Int64
-var wg sync.WaitGroup
+**Answer: 300 ms.**
 
-for i := 0; i < 4; i++ {
-    wg.Add(1)
-    go func() {
-        defer wg.Done()
-        counter.Add(10)
-    }()
-}
-wg.Wait()
-fmt.Println(counter.Load())
-```
+With 3 workers processing tasks that each take 100 ms:
 
-**(a)** `counter.Load()` always prints `40`.
+| Round | Tasks processed   | Wall-clock time elapsed |
+|-------|-------------------|------------------------|
+| 1     | tasks 1, 2, 3     | 0 -- 100 ms            |
+| 2     | tasks 4, 5, 6     | 100 -- 200 ms          |
+| 3     | task 7 (+ 2 idle) | 200 -- 300 ms          |
 
-`atomic.Int64.Add` is an atomic read-modify-write operation.
-No matter what order the four goroutines execute, each `Add(10)` is applied to the current value atomically, and all four additions will complete before `wg.Wait()` returns.
-The final value is always 4 × 10 = 40.
-This would **not** be true with a plain `int` counter and no synchronization --- that would be a data race with unpredictable results.
+Round 1 dispatches tasks 1--3 in parallel.
+All three finish at T=100 ms.
+Round 2 dispatches tasks 4--6 in parallel; all finish at T=200 ms.
+Round 3 dispatches task 7 alone (only one task remains); it finishes at T=300 ms.
 
-**(b)** Replacing `counter.Add(10)` with `counter.Add(int64(i))` introduces a **closure capture bug**.
+Total elapsed time = ceil(7 / 3) × 100 ms = 3 × 100 ms = **300 ms**.
 
-The goroutine closure captures the **variable** `i`, not its value at the moment the goroutine was launched.
-By the time the goroutines run, the loop may have already incremented `i` past the value it had when `go func()` was called.
-In the worst case, all four goroutines see `i == 4` (the value after the loop ends) and print `4 * 4 = 16`.
-In the best case, they each capture a different value (0, 1, 2, 3) and print 0 + 1 + 2 + 3 = 6.
-Any value between 0 and 16 is possible, and the result is non-deterministic.
-
-The fix is the same as described in Chapter 5 (closures): pass `i` as a parameter to the goroutine function.
-
-```go
-go func(n int) {
-    defer wg.Done()
-    counter.Add(int64(n))
-}(i) // pass i by value here
-```
-
-With this fix the result is always 0 + 1 + 2 + 3 = 6.
+General formula: `ceil(N / workers) × task_duration`.
 
 ---
 
 **Exercise 4** (Where is the bug?):
 
 ```go
-type SafeMap struct {
-    mu sync.Mutex
-    m  map[string]int
-}
+package main
 
-func NewSafeMap() SafeMap {
-    return SafeMap{m: make(map[string]int)}
-}
+import (
+    "context"
+    "fmt"
+    "time"
+)
 
-func (s SafeMap) Inc(key string) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    s.m[key]++
-}
-
-func (s SafeMap) Get(key string) int {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    return s.m[key]
-}
-```
-
-The bug is that `Inc` and `Get` have **value receivers** (`s SafeMap`), not pointer receivers (`s *SafeMap`).
-
-When a method has a value receiver, Go passes a **copy** of the struct.
-Each call to `Inc` locks the mutex in its own private copy --- a different mutex instance than the one in `sm` in `main`.
-The lock is acquired and released on a throwaway copy, providing no mutual exclusion on the real `sm`.
-One hundred goroutines therefore write to `sm.m["Butter"]` concurrently without any synchronization, which is a data race.
-
-The map itself (`sm.m`) is a reference type, so the map operations do land on the shared map --- but they are completely unprotected, and concurrent writes to a Go map without synchronization is undefined behavior (the runtime will panic with a "concurrent map writes" message).
-
-The fix is to use pointer receivers throughout:
-
-```go
-func (s *SafeMap) Inc(key string) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    s.m[key]++
-}
-
-func (s *SafeMap) Get(key string) int {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    return s.m[key]
-}
-```
-
-And in `main`, take the address of `sm` (or change `NewSafeMap` to return `*SafeMap`):
-
-```go
-func NewSafeMap() *SafeMap {
-    return &SafeMap{m: make(map[string]int)}
+func fetchData(url string) <-chan string {
+    ch := make(chan string)
+    go func() {
+        time.Sleep(2 * time.Second)
+        ch <- "result for " + url
+    }()
+    return ch
 }
 
 func main() {
-    sm := NewSafeMap() // *SafeMap; no copy needed
-    ...
-    sm.Inc("Butter")
-    ...
-    fmt.Println(sm.Get("Butter")) // 100
+    ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+    defer cancel()
+
+    ch := fetchData("https://example.com/songs")
+    select {
+    case result := <-ch:
+        fmt.Println(result)
+    case <-ctx.Done():
+        fmt.Println("timed out")
+    }
 }
 ```
 
-With pointer receivers and a pointer variable, every call to `Inc` and `Get` locks the **same** mutex, and the output is reliably `100`.
+**The bug: goroutine leak in `fetchData`.**
+
+`fetchData` launches a goroutine that sleeps for 2 seconds and then sends on `ch`.
+When the context times out after 500 ms, `main` exits the `select` via `ctx.Done()` and prints `"timed out"`.
+At this point `ch` is no longer being read by anyone.
+The goroutine inside `fetchData` is still sleeping; when it wakes up at T=2 s and tries to send `ch <- "result for ..."`, it blocks forever because nobody will ever receive from `ch`.
+The goroutine is leaked --- it will never exit.
+
+**The fix:** pass the context into `fetchData` so the goroutine can bail out early.
+
+```go
+func fetchData(ctx context.Context, url string) <-chan string {
+    ch := make(chan string, 1) // buffered so the goroutine can send even if nobody reads
+    go func() {
+        select {
+        case <-time.After(2 * time.Second):
+            ch <- "result for " + url // send result if we finish in time
+        case <-ctx.Done():
+            // context was cancelled; exit cleanly without sending
+        }
+    }()
+    return ch
+}
+
+func main() {
+    ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+    defer cancel()
+
+    ch := fetchData(ctx, "https://example.com/songs")
+    select {
+    case result := <-ch:
+        fmt.Println(result)
+    case <-ctx.Done():
+        fmt.Println("timed out")
+    }
+}
+```
+
+Using a buffered channel of capacity 1 also guards against a secondary leak: if the result arrives after `main`'s `select` exits the `ctx.Done()` branch (a narrow race), the goroutine can still send on `ch` without blocking, and then exit.
 
 ---
 
-**Exercise 5** (Write a program): Implement a concurrent-safe `RateLimiter` struct that uses a `sync.Mutex` to protect a counter and a `time.Time` field tracking when the window resets.
-The struct should have a method `Allow(n int) bool` that returns `true` if `n` tokens are available in the current one-second window, deducting them if so, and `false` otherwise (without deducting).
-Write a `main` function that launches 10 goroutines, each calling `Allow(1)` in a loop 5 times, and prints how many calls were allowed versus denied across all goroutines combined.
-Use `sync.WaitGroup` to wait for all goroutines to finish.
+**Exercise 5** (Write a program):
 
 ```go
 package main
 
 import (
+    "context"
     "fmt"
-    "sync"
-    "sync/atomic"
+    "math/rand"
     "time"
+
+    "golang.org/x/sync/errgroup"
 )
 
-// RateLimiter allows at most Limit tokens per one-second window.
-type RateLimiter struct {
-    mu      sync.Mutex
-    limit   int
-    used    int
-    resetAt time.Time
-}
+// fanOutFetch fetches all song titles concurrently using errgroup.
+// Each fetch is simulated with a random sleep between 50 and 150 ms.
+// The function returns the titles in the same order as songs, or an error
+// if the context is cancelled before all fetches complete.
+func fanOutFetch(ctx context.Context, songs []string) ([]string, error) {
+    results := make([]string, len(songs))
+    g, ctx := errgroup.WithContext(ctx)
 
-func NewRateLimiter(limit int) *RateLimiter {
-    return &RateLimiter{
-        limit:   limit,
-        resetAt: time.Now().Add(time.Second),
-    }
-}
-
-// Allow returns true and deducts n tokens if they are available.
-// It returns false without deducting if the window is exhausted.
-func (r *RateLimiter) Allow(n int) bool {
-    r.mu.Lock()
-    defer r.mu.Unlock()
-
-    now := time.Now()
-    if now.After(r.resetAt) {
-        r.used = 0
-        r.resetAt = now.Add(time.Second)
+    for i, song := range songs {
+        i, song := i, song // capture for Go < 1.22
+        g.Go(func() error {
+            delay := time.Duration(50+rand.Intn(100)) * time.Millisecond
+            select {
+            case <-time.After(delay):
+                results[i] = "fetched: " + song
+                return nil
+            case <-ctx.Done():
+                return ctx.Err()
+            }
+        })
     }
 
-    if r.used+n > r.limit {
-        return false
+    if err := g.Wait(); err != nil {
+        return nil, err
     }
-    r.used += n
-    return true
+    return results, nil
 }
 
 func main() {
-    limiter := NewRateLimiter(25) // allow 25 calls per second
-    var wg sync.WaitGroup
-    var allowed, denied atomic.Int64
-
-    for i := 0; i < 10; i++ {
-        wg.Add(1)
-        go func() {
-            defer wg.Done()
-            for j := 0; j < 5; j++ {
-                if limiter.Allow(1) {
-                    allowed.Add(1)
-                } else {
-                    denied.Add(1)
-                }
-            }
-        }()
+    songs := []string{
+        "From The Start",
+        "Bewitched",
+        "Too Sweet",
+        "Work Song",
     }
 
-    wg.Wait()
-    fmt.Printf("allowed=%d denied=%d total=%d\n",
-        allowed.Load(), denied.Load(), allowed.Load()+denied.Load())
+    ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+    defer cancel()
+
+    results, err := fanOutFetch(ctx, songs)
+    if err != nil {
+        fmt.Println("error:", err)
+        return
+    }
+    for _, r := range results {
+        fmt.Println(r)
+    }
 }
 ```
 
-Sample output (with a limit of 25 and 50 total calls):
+**Explanation:**
 
+`errgroup.WithContext` derives a new context from the one passed in.
+If any goroutine returns a non-nil error, `errgroup` cancels that derived context, causing all other goroutines that are still sleeping to unblock on `ctx.Done()` and return `ctx.Err()`.
+`g.Wait()` returns the first error.
+
+Because the outer `context.WithTimeout` fires after 300 ms, any fetch whose random delay exceeds the remaining budget will be cancelled.
+Fetches with delays in the 50--150 ms range should all complete well within 300 ms under normal conditions; set the timeout lower (e.g., 100 ms) to reliably trigger a cancellation in testing.
+
+Sample output when all fetches succeed:
 ```
-allowed=25 denied=25 total=50
+fetched: From The Start
+fetched: Bewitched
+fetched: Too Sweet
+fetched: Work Song
 ```
 
-Key points of the implementation:
-
-- The `sync.Mutex` in `RateLimiter` protects both `used` and `resetAt` together as a single invariant.
-  Neither field can be read or written outside the lock.
-- `Allow` checks the current time inside the lock so that the window reset and the token deduction are one atomic decision.
-  If the check and the deduction were in separate lock acquisitions, another goroutine could sneak in between them.
-- The `allowed` and `denied` counters in `main` use `atomic.Int64` rather than a mutex because they are independent single-variable updates --- a perfect atomic use case.
-- `wg.Add(1)` is called in the outer loop, before the goroutine is launched, not inside the goroutine --- following the `WaitGroup` rule from the chapter.
+Sample output when the timeout fires:
+```
+error: context deadline exceeded
+```

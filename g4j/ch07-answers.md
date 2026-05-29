@@ -1,8 +1,9 @@
-# Chapter 7: Slices --- Answers
+# Chapter 7: Maps and Slices --- Answers
 
-**Exercise 1** (Think about it): In Java, an `ArrayList<Integer>` holds references to `Integer` objects on the heap.
-A Go `[]int` holds the integers directly in the backing array.
-What are the performance implications of this difference?
+**Exercise 1** (Think about it): In Java, `HashMap<K,V>` requires keys to implement `hashCode()` and `equals()`, and `ArrayList<E>` stores references to boxed objects on the heap.
+Go's `map[K]V` requires `K` to be comparable at the language level, and a `[]E` slice stores values directly in the backing array.
+What are the trade-offs of Go's approach for each collection type?
+Give one example of a Java key type you cannot use directly as a Go map key, and explain one scenario where storing values directly in a slice (rather than as heap references) matters for performance.
 When would you feel the difference most?
 
 A Java `ArrayList<Integer>` stores a pointer (reference) to each boxed `Integer` object, and each `Integer` object lives somewhere on the heap.
@@ -26,6 +27,7 @@ For slices of interfaces or pointers, Go has the same indirection that Java does
 
 ---
 
+
 **Exercise 2** (What does this print?):
 
 ```go
@@ -34,60 +36,58 @@ package main
 import "fmt"
 
 func main() {
-    a := []int{10, 20, 30, 40, 50}
-    b := a[1:4]
-    b[0] = 99
-    b = append(b, 77)
-    fmt.Println(a)
-    fmt.Println(b)
+    catalog := map[string]int{
+        "Blinding Lights": 4_000_000_000,
+        "Shape of You":    3_600_000_000,
+    }
+    hits := []string{"Shape of You", "Watermelon Sugar", "Blinding Lights"}
+    for _, title := range hits {
+        if plays, ok := catalog[title]; ok {
+            fmt.Printf("%s: %d\n", title, plays)
+        } else {
+            fmt.Printf("%s: not found\n", title)
+        }
+    }
 }
 ```
 
 Output:
 ```
-[10 99 30 40 77]
-[99 30 40 77]
+Shape of You: 3600000000
+Watermelon Sugar: not found
+Blinding Lights: 4000000000
 ```
 
-Step by step:
-
-1. `a` is created with backing array `[10, 20, 30, 40, 50]`, len=5, cap=5.
-
-2. `b := a[1:4]` creates a slice header pointing at `a[1]`, len=3, cap=4 (from index 1 to the end of `a`'s backing array).
-   `b` sees `[20, 30, 40]`.
-
-3. `b[0] = 99` writes `99` to the backing array at `a`'s index 1.
-   Now the backing array is `[10, 99, 30, 40, 50]`.
-   `a` sees `[10, 99, 30, 40, 50]` and `b` sees `[99, 30, 40]`.
-
-4. `b = append(b, 77)`: `b` has len=3, cap=4, so there is room for one more element without reallocation.
-   `append` writes `77` to the backing array at `a`'s index 4 (the element after `b`'s current last element), and returns a new slice header with len=4.
-   The backing array is now `[10, 99, 30, 40, 77]`.
-   `a` still has len=5 and sees `[10, 99, 30, 40, 77]`.
-   `b` now has len=4 and sees `[99, 30, 40, 77]`.
-
-Both the `b[0] = 99` write and the `append(b, 77)` write go through to the shared backing array and are visible through `a`.
-This is the classic slice aliasing trap.
+The loop iterates the `hits` slice in order.
+`"Shape of You"` is in the catalog and its play count is printed.
+`"Watermelon Sugar"` is not in the catalog, so the comma-ok idiom sets `ok = false` and the `else` branch runs.
+`"Blinding Lights"` is in the catalog and is printed last.
+Map lookup order is random, but slice range iteration is always in index order, so the output is deterministic here.
 
 ---
 
-**Exercise 3** (Calculation):
+**Exercise 3** (Calculation): Given the following code, trace the value of `len(s)` and `cap(s)` after each line.
 
 ```go
-s := make([]int, 3, 8)
-s = append(s, 1, 2)
+s := make([]int, 2, 5)
+s = append(s, 10)
+s = append(s, 20)
+s = append(s, 30)
+s = append(s, 40)
 ```
 
-After the first line: `len(s) = 3`, `cap(s) = 8`.
-The backing array has eight slots; the first three are zero.
+| After line | `len(s)` | `cap(s)` | New array? |
+|---|---|---|---|
+| `make([]int, 2, 5)` | 2 | 5 | Yes (initial) |
+| `append(s, 10)` | 3 | 5 | No |
+| `append(s, 20)` | 4 | 5 | No |
+| `append(s, 30)` | 5 | 5 | No |
+| `append(s, 40)` | 6 | ≥10 | **Yes** |
 
-After the second line: `append` needs to add two elements to a slice with len=3 and cap=8.
-Since 3 + 2 = 5 ≤ 8, there is enough room in the existing backing array.
-No new backing array is allocated.
-`append` writes `1` and `2` at indices 3 and 4, and returns a new header with len=5.
-
-Final values: `len(s) = 5`, `cap(s) = 8`.
-No new backing array is allocated because the capacity was sufficient.
+`make([]int, 2, 5)` allocates a backing array with capacity 5.
+The first three `append` calls fit within the existing capacity (len grows 2 → 3 → 4 → 5).
+The fourth `append` exceeds capacity 5, so the runtime allocates a new array (typically double, so cap ≥ 10) and copies the existing elements.
+The exact new capacity is implementation-defined but at least 6; in current Go runtimes it is 10.
 
 ---
 
@@ -98,92 +98,88 @@ package main
 
 import "fmt"
 
-func removeFirst(s []int) []int {
-    return s[1:]
-}
-
 func main() {
-    data := []int{1, 2, 3, 4, 5}
-    trimmed := removeFirst(data)
-    trimmed[0] = 99
-    fmt.Println(data)
-    fmt.Println(trimmed)
+    words := []string{"Levitating", "Stay", "Heat Waves", "Stay", "As It Was"}
+    var freq map[string]int
+    for _, w := range words {
+        freq[w]++
+    }
+    for word, count := range freq {
+        if count > 1 {
+            fmt.Println(word, count)
+        }
+    }
 }
 ```
 
-Output:
+**The bug:** `var freq map[string]int` declares a nil map.
+Reading from a nil map returns the zero value (`0` for `int`), which is harmless.
+But **writing to a nil map panics** at runtime.
+The program panics at `freq[w]++` on the first iteration:
+
 ```
-[1 99 3 4 5]
-[99 3 4 5]
+panic: assignment to entry in nil map
 ```
 
-The bug is that `s[1:]` returns a sub-slice that **shares the backing array** with `data`.
-`trimmed` points at `data[1]`, so `trimmed[0]` is the same memory location as `data[1]`.
-Assigning `trimmed[0] = 99` visibly changes `data[1]`.
-
-The programmer likely intended `trimmed` to be an independent copy of the data with the first element removed.
-The fix is to use `copy`:
+**Fix:** Initialise the map with `make` before the loop:
 
 ```go
-func removeFirst(s []int) []int {
-    if len(s) == 0 {
-        return nil
-    }
-    result := make([]int, len(s)-1)
-    copy(result, s[1:])
-    return result
+freq := make(map[string]int)
+for _, w := range words {
+    freq[w]++
 }
 ```
 
-With this fix, `trimmed[0] = 99` does not affect `data` at all, and `fmt.Println(data)` prints `[1 2 3 4 5]`.
+With the fix, the program prints:
 
-Alternatively, if you want the three-index form to at least prevent accidental `append` overwrites (while still sharing memory for reads), you could write `s[1:len(s):len(s)]`.
-But if true independence is required, `copy` is the right tool.
+```
+Stay 2
+```
 
 ---
 
-**Exercise 5** (Write a program):
+**Exercise 5** (Write a program): Write a program that reads a slice of song titles and builds a map from the first letter to a slice of titles starting with that letter, then prints each letter and its titles in sorted order.
 
 ```go
 package main
 
-import "fmt"
-
-func unique(s []string) []string {
-    seen := make(map[string]bool)
-    result := make([]string, 0, len(s))
-    for _, v := range s {
-        if !seen[v] {
-            seen[v] = true
-            result = append(result, v)
-        }
-    }
-    return result
-}
+import (
+    "fmt"
+    "maps"
+    "slices"
+)
 
 func main() {
-    input := []string{"pop", "indie", "pop", "R&B", "indie"}
-    out := unique(input)
-    fmt.Println(out) // [pop indie R&B]
+    titles := []string{
+        "As It Was", "Blinding Lights", "Levitating",
+        "Bad Habit", "Kill Bill", "As The World Caves In",
+    }
 
-    // Confirm independence: modifying out does not touch input.
-    out[0] = "classical"
-    fmt.Println(input[0]) // pop --- unchanged
-    fmt.Println(out[0])   // classical
+    byLetter := make(map[string][]string)
+    for _, t := range titles {
+        letter := string(t[0]) // first byte; safe because all titles start with ASCII
+        byLetter[letter] = append(byLetter[letter], t)
+    }
+
+    for _, ts := range byLetter {
+        slices.Sort(ts) // sort titles within each group
+    }
+
+    letters := slices.Collect(maps.Keys(byLetter))
+    slices.Sort(letters) // sort the letter keys
+
+    for _, letter := range letters {
+        fmt.Printf("%s: %v\n", letter, byLetter[letter])
+    }
 }
 ```
 
 Output:
 ```
-[pop indie R&B]
-pop
-classical
+A: [As It Was As The World Caves In]
+B: [Bad Habit Blinding Lights]
+K: [Kill Bill]
+L: [Levitating]
 ```
 
-The `seen` map tracks which strings have already been added.
-The first time a value appears, it is added to `result` and recorded in `seen`; subsequent occurrences are skipped.
-
-`result` is built with `append` onto a freshly allocated slice (`make([]string, 0, len(s))`), so it has its own backing array and is fully independent of `input`.
-Modifying an element of `result` does not affect `input`.
-
-Pre-allocating with `cap=len(s)` is an optimization: in the worst case (all elements are distinct) `result` will grow to exactly `len(s)` elements, so pre-allocating avoids repeated reallocation.
+Key points: always initialise a map with `make` before writing; `maps.Keys` returns an iterator (Go 1.23+) that `slices.Collect` converts to a sortable slice.
