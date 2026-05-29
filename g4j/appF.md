@@ -4,7 +4,7 @@
 \index{Go Code Review Comments}
 The rules in this appendix are drawn from the official **Go Code Review Comments** wiki maintained by the Go team [@CodeReviewComments].
 That document describes the kinds of issues that arise during code review of Go programs --- the things that automated tools like `gofmt` and `go vet` do not catch.
-Each rule is numbered **CR-N** so it can be cited precisely from the main text.
+Each rule is numbered **CR-N** with a **short-descriptive-name** so it can be cited precisely from the main text.
 
 ## Formatting
 
