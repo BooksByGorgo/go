@@ -14,7 +14,7 @@ This appendix covers all of them.
 \index{escape analysis}
 \index{stack}
 \index{heap}
-Chapter 6 introduced escape analysis in the context of pointers.
+Chapter 5 introduced escape analysis in the context of pointers.
 Here we revisit it from a performance perspective, because whether a variable lives on the stack or the heap has a direct effect on GC pressure.
 
 Stack allocations are essentially free: the stack pointer advances, and when the function returns, the pointer retreats.

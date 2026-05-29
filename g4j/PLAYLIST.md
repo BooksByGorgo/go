@@ -42,15 +42,15 @@ Do not repeat any reference already listed here.
 
 *(no song/lyric references; Spanish vocabulary used: manzana, naranja, uva, lunes, sábado, domingo, fiebre, cancion)*
 
-## Chapter 5: Functions
+## Chapter 5: Pointers
+
+- Billie Eilish --- "Bad Guy" (used in Exercise 4: `msg := "Bad Guy"`)
+
+## Chapter 6: Functions
 
 - Billie Eilish --- "Birds of a Feather" (used in the first-class function / transformer example)
 - "hola, mundo!" --- Spanish greeting used in the middleware pattern example
 - "martes" / "jueves" --- Spanish day names used as map keys in the `init()` example
-
-## Chapter 6: Pointers
-
-- Billie Eilish --- "Bad Guy" (used in Exercise 4: `msg := "Bad Guy"`)
 
 ## Chapter 7: Maps and Slices
 

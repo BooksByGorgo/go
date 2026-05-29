@@ -62,7 +62,17 @@ Audience: Java programmers learning Go for industry use
 
 ## Part II: Go's Type System
 
-### Chapter 5: Functions
+### Chapter 5: Pointers
+*Go has pointers; Java does not expose them. Go pointers have no arithmetic.*
+
+- `&` (address-of) and `*` (dereference); declaring pointer types
+- No pointer arithmetic
+- Pointer vs value semantics --- Go structs are value types; Java objects are always references
+- When mutation requires a pointer
+- Value receivers vs pointer receivers --- rules and tradeoffs
+- Escape analysis preview --- the compiler decides stack vs heap
+
+### Chapter 6: Functions
 *Multiple return values, closures, and first-class functions replace most Java callback boilerplate.*
 
 - Multiple return values --- the primary error-handling mechanism
@@ -72,16 +82,6 @@ Audience: Java programmers learning Go for industry use
 - Closures --- capturing variables by reference; common gotcha in loop closures
 - `init()` revisited --- ordering guarantees across files and packages
 - Function types as parameters --- callbacks, middleware, the strategy pattern
-
-### Chapter 6: Pointers
-*Go has pointers; Java does not expose them. Go pointers have no arithmetic.*
-
-- `&` (address-of) and `*` (dereference); declaring pointer types
-- No pointer arithmetic
-- Pointer vs value semantics --- Go structs are value types; Java objects are always references
-- When mutation requires a pointer
-- Value receivers vs pointer receivers --- rules and tradeoffs
-- Escape analysis preview --- the compiler decides stack vs heap
 
 ### Chapter 7: Maps and Slices
 *Go maps replace Java `HashMap`; Go slices replace `ArrayList`. Both are value-oriented and built into the language.*
