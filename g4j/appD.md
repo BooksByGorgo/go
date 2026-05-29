@@ -229,7 +229,7 @@ Fix the allocation pattern instead; `runtime.GC()` is a diagnostic tool, not a s
 
 \index{GOMAXPROCS}
 \index{GC!GOMAXPROCS}
-Chapter 11 introduced `GOMAXPROCS` as the number of OS threads the Go scheduler uses to run goroutines.
+Chapter 13 introduced `GOMAXPROCS` as the number of OS threads the Go scheduler uses to run goroutines.
 The default is `runtime.NumCPU()` --- the number of logical CPUs the process can see.
 For most programs this default is correct and you should leave it alone.
 
