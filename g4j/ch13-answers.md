@@ -1,280 +1,260 @@
-# Chapter 14: Packages and Modules --- Answers
+# Chapter 13: Essential Standard Library --- Answers
 
-**Exercise 1** (Think about it): Maven and Gradle resolve transitive dependencies automatically and let two artifacts declare conflicting version requirements for the same library.
-They use a strategy (nearest-wins in Maven, highest-requested in Gradle) to pick a single version at build time.
-Go's module system takes a different approach called Minimum Version Selection (MVS): it always picks the minimum version that satisfies all requirements.
-Compare these two philosophies.
-What problems does MVS avoid?
-What does it make harder?
-When might the Go approach cause a surprise after running `go get pkg@latest`?
+**Exercise 1** (Think about it): In Java, `InputStream`, `OutputStream`, `Reader`, and `Writer` are four separate abstract class hierarchies.
+Go has two interfaces --- `io.Reader` and `io.Writer` --- and a set of composition functions.
+What design decision makes Go's two-interface model work where Java needed four base classes?
+What would be harder to express cleanly in Go's model?
 
-Go's Minimum Version Selection works by computing the maximum of the minimum required versions across all modules in the dependency graph.
-If module A requires `library v1.2.0` and module B requires `library v1.3.0`, Go selects `v1.3.0` --- the minimum version that satisfies both.
-No module ever gets a version newer than the one its author tested against, unless someone explicitly requests an upgrade.
+The key difference is that Java's hierarchy distinguishes between **byte-oriented** I/O (`InputStream`/`OutputStream`) and **character-oriented** I/O (`Reader`/`Writer`), with four root types as a result.
+Go does not make that split at the interface level: `io.Reader` and `io.Writer` always deal in `[]byte`.
+Character encoding is handled separately --- either at the edges (e.g., `bufio.Scanner` which returns `string` tokens), or by explicit conversion.
+This simplification is possible because Go treats `string` and `[]byte` as first-class, cheaply convertible types, so the language does not need a parallel hierarchy to make text feel natural.
 
-**Problems MVS avoids:**
+The composition functions (`io.TeeReader`, `io.MultiWriter`, etc.) are ordinary functions that return an interface value.
+In Java the same decorators are abstract classes (`FilterInputStream`, `BufferedInputStream`) because the language needed a concrete supertype to share implementation; Go can express the same patterns with zero-allocation wrappers because interfaces are structural.
 
-- **Silent upgrades.**
-  In Maven's nearest-wins model, adding a new dependency can silently pull in a newer (or older) version of a transitive library, breaking unrelated code.
-  MVS never introduces a version you did not ask for.
-- **Build irreproducibility.**
-  Because MVS is deterministic and recorded in `go.sum`, two developers checking out the same commit always get bit-for-bit identical dependencies.
-  Maven can produce different builds depending on which dependencies happen to be in the local repository cache.
+What is harder in Go's model:
 
-**What MVS makes harder:**
-
-- **Staying current.**
-  MVS actively resists upgrading.
-  If your dependency graph has pinned a library at `v1.2.0`, you will stay there until someone runs `go get library@v1.4.0`.
-  In a large organisation this can mean security patches go unnoticed.
-- **Downgrading.**
-  If you want to use an older version than the graph currently requires, you have to remove or downgrade every module that requires the newer version.
-
-**Surprise from `go get pkg@latest`:**
-After you run `go get pkg@latest`, the upgraded module may itself require newer versions of transitive dependencies.
-MVS will bump those transitives to the versions the new module requires --- which might be substantially newer than before.
-Your `go.mod` can change in unexpected ways beyond the single module you asked to upgrade.
-Running `go mod tidy` afterward and reviewing the diff in `go.mod` and `go.sum` is a good habit.
+- **Seeking and positioning.** Java's `RandomAccessFile` supports `seek` directly.
+  Go separates this into `io.Seeker` (a third interface) and requires callers to do a type assertion or accept an `io.ReadSeeker` parameter.
+- **Buffered reads with unread/pushback.** Java's `PushbackInputStream` is a first-class class.
+  In Go you use `bufio.Reader.UnreadByte()` or `bufio.Reader.UnreadRune()`, which requires wrapping in `bufio` first.
+- **Encoding-aware text I/O.** Java's `InputStreamReader` bridges bytes to characters with a named charset.
+  In Go you must use third-party packages (e.g., `golang.org/x/text/encoding`) or write the conversion yourself.
 
 ---
 
 **Exercise 2** (What does this print?):
 
-Given the following three files in a module `github.com/zachbryan/demo`:
-
-File `lyrics/lyrics.go`:
-```go
-package lyrics
-
-import "fmt"
-
-func Print() {
-    fmt.Println("something in the orange")
-}
-```
-
-File `lyrics/internal/detail/detail.go`:
-```go
-package detail
-
-import "fmt"
-
-func Show() {
-    fmt.Println("internal detail")
-}
-```
-
-File `main.go`:
 ```go
 package main
 
 import (
-    "github.com/zachbryan/demo/lyrics"
-    "github.com/zachbryan/demo/lyrics/internal/detail"
+    "bufio"
+    "fmt"
+    "log/slog"
+    "os"
+    "strings"
+    "time"
 )
 
 func main() {
-    lyrics.Print()
-    detail.Show()
-}
-```
+    logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+        ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
+            if a.Key == slog.TimeKey {
+                return slog.Attr{}  // suppress the timestamp
+            }
+            return a
+        },
+    }))
 
-What happens when you run `go build`?
-If the build succeeds, what does the program print?
-If not, explain why.
-
-**The build fails.**
-
-`main.go` is at the module root, which means its parent directory for the purposes of the `internal` rule is `github.com/zachbryan/demo`.
-The `internal` package's full path is `github.com/zachbryan/demo/lyrics/internal/detail`.
-For `main.go` to import it, `main.go` must live inside `github.com/zachbryan/demo/lyrics` or one of its subdirectories.
-`main.go` lives at the module root, which is `github.com/zachbryan/demo` --- it is not rooted under `github.com/zachbryan/demo/lyrics`, so the compiler rejects the import.
-
-The compiler error will say something like:
-```
-use of internal package github.com/zachbryan/demo/lyrics/internal/detail not allowed
-```
-
-The import of `github.com/zachbryan/demo/lyrics` (the public package) is fine.
-Only the `internal/detail` import is rejected.
-
-To fix this, either move `detail` out of `lyrics/internal/` into a location that `main.go` is allowed to reach (such as `internal/detail` directly under the module root), or move `main.go` into a directory under `lyrics/`.
-
----
-
-**Exercise 3** (Calculation): A module's `go.mod` contains the following:
-
-```
-module github.com/noahkahan/app
-
-go 1.26
-
-require (
-    github.com/noahkahan/audio v1.4.0
-    github.com/noahkahan/catalog v0.9.2
-    golang.org/x/text v0.14.0 // indirect
-)
-```
-
-`github.com/noahkahan/audio v1.4.0` itself requires `golang.org/x/text v0.12.0`.
-`github.com/noahkahan/catalog v0.9.2` requires `golang.org/x/text v0.14.0`.
-
-Under Go's Minimum Version Selection, which version of `golang.org/x/text` will the final build use?
-Explain why.
-Now suppose you add a new dependency that requires `golang.org/x/text v0.16.0`.
-What version will MVS select then?
-
-**First scenario: `v0.14.0`.**
-
-MVS collects the minimum required version from every module in the graph:
-- `github.com/noahkahan/app` itself requires `v0.14.0` (explicit `// indirect` entry).
-- `github.com/noahkahan/audio` requires `v0.12.0`.
-- `github.com/noahkahan/catalog` requires `v0.14.0`.
-
-MVS takes the maximum of these minimums: `max(v0.14.0, v0.12.0, v0.14.0)` = **`v0.14.0`**.
-The `// indirect` entry in the main module's `go.mod` already encodes this selection; `go mod tidy` placed it there when one of the direct dependencies required `v0.14.0` and the other only `v0.12.0`.
-
-**Second scenario: `v0.16.0`.**
-
-Adding a new dependency that requires `golang.org/x/text v0.16.0` raises the minimum for that module in the graph.
-MVS selects `max(v0.14.0, v0.12.0, v0.14.0, v0.16.0)` = **`v0.16.0`**.
-After `go mod tidy`, the `// indirect` entry in `go.mod` is updated to `golang.org/x/text v0.16.0`.
-No other dependency's version changes.
-
----
-
-**Exercise 4** (Where is the bug?): The following module has this layout and code:
-
-```
-northernattitude/
-├── go.mod           (module github.com/noahkahan/northernattitude)
-├── main.go
-└── internal/
-    └── config/
-        └── config.go
-```
-
-`player/main.go`:
-```go
-package main
-
-import (
-    "fmt"
-    "github.com/noahkahan/northernattitude/internal/config"
-)
-
-func main() {
-    fmt.Println(config.DefaultRegion)
-}
-```
-
-What happens when you run `go build ./...` inside the `player/` module?
-Identify the bug and describe how to fix it without moving the `config` package out of `internal/`.
-
-**The build fails.**
-
-The `internal/` package belongs to the module `github.com/noahkahan/northernattitude`.
-The compiler's rule is that only code whose import path has `github.com/noahkahan/northernattitude` as a prefix may import packages under that module's `internal/`.
-The `player` module has path `github.com/noahkahan/player`, which does not share that prefix.
-The build error will be:
-
-```
-use of internal package github.com/noahkahan/northernattitude/internal/config not allowed
-```
-
-**The fix --- without moving `config` out of `internal/`:**
-
-The `config` package contains information that `northernattitude` treats as a private implementation detail.
-If `player` genuinely needs access to it, the right solution is for `northernattitude` to expose the data through a **public API**.
-Create an exported package, for example `github.com/noahkahan/northernattitude/region`, that wraps or re-exports the value from `internal/config`:
-
-```go
-// northernattitude/region/region.go
-package region
-
-import "github.com/noahkahan/northernattitude/internal/config"
-
-// DefaultRegion is the default geographic region.
-var DefaultRegion = config.DefaultRegion
-```
-
-`player` then imports `github.com/noahkahan/northernattitude/region` instead of the internal package.
-The internal package remains private; its values are accessible only through the deliberately designed public surface.
-
-Alternatively, if `player` and `northernattitude` are developed together and the restriction is inconvenient, use a Go workspace (`go work init ./northernattitude ./player`) and promote `config` to a shared module or to a non-`internal` path.
-
----
-
-**Exercise 5** (Write a program):
-
-A complete implementation:
-
-File `stickseason/go.mod`:
-```
-module github.com/noahkahan/stickseason
-
-go 1.26
-```
-
-File `stickseason/tracks/tracks.go`:
-```go
-package tracks
-
-// Track holds the title and artist of a song.
-type Track struct {
-    Title  string // song title
-    Artist string // performing artist
-}
-
-// Catalog is the list of tracks in this module.
-var Catalog = []Track{
-    {Title: "Stick Season",     Artist: "Noah Kahan"},
-    {Title: "Northern Attitude", Artist: "Noah Kahan"},
-}
-```
-
-File `stickseason/internal/format/format.go`:
-```go
-package format
-
-import (
-    "fmt"
-    "github.com/noahkahan/stickseason/tracks"
-)
-
-// Label returns a human-readable label for a track.
-func Label(t tracks.Track) string {
-    return fmt.Sprintf("%s by %s", t.Title, t.Artist)
-}
-```
-
-File `stickseason/main.go`:
-```go
-package main
-
-import (
-    "fmt"
-    "github.com/noahkahan/stickseason/internal/format"
-    "github.com/noahkahan/stickseason/tracks"
-)
-
-func main() {
-    for _, t := range tracks.Catalog {
-        fmt.Println(format.Label(t))
+    input := "Physical\nDon't Start Now\nPositions\n"
+    scanner := bufio.NewScanner(strings.NewReader(input))
+    count := 0
+    for scanner.Scan() {
+        count++
     }
+
+    logger.Info("scan complete",
+        slog.Int("lines", count),
+        slog.Duration("elapsed", 0*time.Millisecond),
+    )
 }
 ```
 
 Output:
 ```
-Stick Season by Noah Kahan
-Northern Attitude by Noah Kahan
+level=INFO msg="scan complete" lines=3 elapsed=0s
 ```
 
-**Key observations:**
+Step-by-step:
 
-- `main.go` can import `internal/format` because it is inside the same module (`github.com/noahkahan/stickseason`).
-  An external module attempting the same import would receive a compile error.
-- `format.Label` is exported (capital `L`) so `main.go` can call it; it is still unreachable from outside the module because the package itself is under `internal/`.
-- The `tracks` package is public --- any module that depends on `github.com/noahkahan/stickseason` could import it.
-  Only `internal/format` is module-private.
+1. A `slog.TextHandler` is created writing to `os.Stdout`.
+   The `ReplaceAttr` function strips the `time` attribute, so no timestamp appears.
+2. `strings.NewReader` wraps the literal string as an `io.Reader`.
+   `bufio.NewScanner` wraps that reader.
+3. The scanner splits on newlines (the default).
+   The input has three non-empty lines (`"Physical"`, `"Don't Start Now"`, `"Positions"`) followed by a trailing newline.
+   `Scan` returns `true` three times and then `false` at EOF, so `count` ends up as `3`.
+4. `logger.Info` emits a text-format log line.
+   The `time` key is suppressed by `ReplaceAttr`.
+   `slog.Int("lines", 3)` formats as `lines=3`.
+   `slog.Duration("elapsed", 0)` formats as `elapsed=0s` --- `time.Duration` zero-value formats as `"0s"`.
+
+The exact key ordering in `log/slog` text format is: `level`, `msg`, then attributes in the order they were passed.
+
+---
+
+**Exercise 3** (Calculation): You open a 10 MiB file and read it in three ways:
+(a) `os.ReadFile` into a `[]byte`,
+(b) `bufio.NewScanner` reading line by line,
+(c) `io.Copy(io.Discard, f)` using the default 32 KiB copy buffer.
+For each approach, estimate the peak heap allocation in MiB, assuming the file contains 100,000 lines of 100 bytes each.
+Which approach is best for counting lines without storing the content?
+
+The file is 100,000 lines × 100 bytes = 10,000,000 bytes ≈ **9.5 MiB**.
+
+**(a) `os.ReadFile`**
+
+`os.ReadFile` reads the entire file into a single `[]byte`.
+Peak heap allocation: ≈ **9.5 MiB** (the whole file in one slice).
+Additionally, if you process the result into strings or split on newlines, you may double or triple the allocation.
+This is the simplest approach but the most memory-hungry for large files.
+
+**(b) `bufio.NewScanner`**
+
+`Scanner` uses an internal buffer (default 64 KiB maximum token size, starting at 4 KiB).
+It reads the file in chunks, scanning for newline boundaries.
+At any instant, only the current chunk plus the current token are in memory.
+Peak heap allocation: ≈ **64 KiB** (the scanner's internal buffer) plus the length of the longest individual line.
+For 100-byte lines this is well under 1 MiB.
+
+**(c) `io.Copy(io.Discard, f)`**
+
+`io.Copy` uses a single 32 KiB stack-allocated copy buffer (it uses `*[32*1024]byte` internally; in practice this ends up on the heap due to escape analysis, but it is still a single fixed allocation).
+Peak heap allocation: ≈ **32 KiB**.
+However, this approach does not count lines --- it just discards all bytes.
+
+**Best for counting lines without storing content: `bufio.NewScanner`.**
+
+`io.Copy(io.Discard, f)` uses the least memory but cannot count lines without inspecting the bytes.
+`bufio.NewScanner` counts lines with a constant-size buffer (< 1 MiB peak) and is the idiomatic Go choice.
+`os.ReadFile` uses the most memory and should be avoided for large files.
+
+---
+
+**Exercise 4** (Where is the bug?):
+
+```go
+package main
+
+import (
+    "fmt"
+    "regexp"
+)
+
+func countMatches(texts []string, pattern string) int {
+    total := 0
+    for _, t := range texts {
+        re := regexp.MustCompile(pattern)
+        if re.MatchString(t) {
+            total++
+        }
+    }
+    return total
+}
+
+func main() {
+    titles := []string{"positions", "Physical", "Don't Start Now", "thank u, next"}
+    fmt.Println(countMatches(titles, `^[A-Z]`))
+}
+```
+
+**The bug:** `regexp.MustCompile(pattern)` is called inside the `for` loop, so the pattern is compiled on every iteration.
+With four strings this is merely wasteful, but inside a hot path processing millions of records it becomes a serious performance problem --- `regexp.MustCompile` parses the pattern, builds a finite automaton, and allocates memory each time.
+
+The output is correct (it prints `2`, matching `"Physical"` and `"Don't Start Now"`), so this is a **performance bug**, not a logic bug.
+
+**The fix:** Compile the pattern once, before the loop.
+If the pattern is constant, hoist it to a package-level variable:
+
+```go
+var startsUpperRE = regexp.MustCompile(`^[A-Z]`)
+
+func countMatches(texts []string) int {
+    total := 0
+    for _, t := range texts {
+        if startsUpperRE.MatchString(t) {
+            total++
+        }
+    }
+    return total
+}
+```
+
+If the pattern is a runtime parameter, compile it once before the loop and return an error if the pattern is invalid:
+
+```go
+func countMatches(texts []string, pattern string) (int, error) {
+    re, err := regexp.Compile(pattern)
+    if err != nil {
+        return 0, fmt.Errorf("invalid pattern %q: %w", pattern, err)
+    }
+    total := 0
+    for _, t := range texts {
+        if re.MatchString(t) {
+            total++
+        }
+    }
+    return total, nil
+}
+```
+
+Note the switch from `MustCompile` to `Compile` with a returned error --- caller-supplied patterns should never `MustCompile` because a bad pattern would crash the program.
+`MustCompile` is reserved for compile-time-constant patterns where a bad pattern is a programmer error, not a user error.
+
+---
+
+**Exercise 5** (Write a program):
+
+```go
+package main
+
+import (
+    "flag"
+    "fmt"
+    "io/fs"
+    "log/slog"
+    "os"
+    "path/filepath"
+    "strings"
+)
+
+func main() {
+    dir     := flag.String("dir",     ".",   "directory to search")
+    ext     := flag.String("ext",     ".go", "file extension to count")
+    verbose := flag.Bool("verbose",   false, "log each matching file")
+    flag.Parse()
+
+    logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
+    count := 0
+    err := filepath.WalkDir(*dir, func(path string, d fs.DirEntry, err error) error {
+        if err != nil {
+            return err
+        }
+        if !d.IsDir() && strings.HasSuffix(d.Name(), *ext) {
+            count++
+            if *verbose {
+                logger.Info("match", slog.String("file", path))
+            }
+        }
+        return nil
+    })
+    if err != nil {
+        logger.Error("walk failed", slog.Any("error", err))
+        os.Exit(1)
+    }
+
+    fmt.Printf("found %d %s file(s) in %s\n", count, *ext, *dir)
+}
+```
+
+Sample runs:
+
+```
+$ go run main.go -dir . -ext .go -verbose
+time=... level=INFO msg=match file=main.go
+found 1 .go file(s) in .
+
+$ go run main.go -dir /usr/local/go/src -ext .go
+found 1847 .go file(s) in /usr/local/go/src
+```
+
+Key points in the solution:
+
+- `flag.Parse()` is called at the start of `main`, after all flag variables are defined, so all flags are parsed before use.
+- `slog.New(slog.NewTextHandler(os.Stderr, nil))` writes structured logs to stderr, leaving stdout clean for program output.
+- `filepath.WalkDir` is preferred over `filepath.Walk` because it passes `fs.DirEntry` (which avoids an extra `os.Stat` call per entry).
+- `strings.HasSuffix(d.Name(), *ext)` matches only the file name, not the full path, so `--ext .go` does not accidentally match a directory named `foo.go/`.
+- The error from `WalkDir` is checked and reported; a non-nil error from the callback halts the walk.

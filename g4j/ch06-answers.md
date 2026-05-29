@@ -1,35 +1,32 @@
-# Chapter 5: Functions --- Answers
+# Chapter 5: Maps and Slices --- Answers
 
-**Exercise 1** (Think about it):
-Go returns errors as values rather than throwing exceptions.
-A Java checked exception forces the caller to handle it --- the compiler will not let you ignore it.
-Go's multi-return error is also explicit, but you can discard it with `_` or simply not assign the second return value.
-Does Go's approach give you the same safety guarantee as Java's checked exceptions?
-What is gained and what is lost by each approach?
+**Exercise 1** (Think about it): In Java, `HashMap<K,V>` requires keys to implement `hashCode()` and `equals()`, and `ArrayList<E>` stores references to boxed objects on the heap.
+Go's `map[K]V` requires `K` to be comparable at the language level, and a `[]E` slice stores values directly in the backing array.
+What are the trade-offs of Go's approach for each collection type?
+Give one example of a Java key type you cannot use directly as a Go map key, and explain one scenario where storing values directly in a slice (rather than as heap references) matters for performance.
+When would you feel the difference most?
 
-Java's checked exceptions provide a compiler-enforced contract: if a method declares `throws IOException`, the caller must either catch it or declare that it also throws it.
-There is no way to silently ignore a checked exception in Java without at least writing a catch block (even an empty one is conspicuous).
+A Java `ArrayList<Integer>` stores a pointer (reference) to each boxed `Integer` object, and each `Integer` object lives somewhere on the heap.
+Iterating over the list means following a pointer for every element, and those `Integer` objects may be scattered around memory --- poor cache locality.
+Each `Integer` also carries object header overhead (typically 16 bytes) even though the actual integer value is just 4 bytes.
 
-Go does not provide that same guarantee.
-You can write `result, _ := divide(a, b)` or even `result := somePackage.Lookup(key)` if you know (or ignore) that `Lookup` returns `(string, error)` but only assign one variable --- though the compiler will reject an assignment that captures the wrong number of values, it will happily accept `_` for any of them.
+A Go `[]int` stores the integer values **directly** and **contiguously** in the backing array.
+Iterating is a sequential scan through a flat region of memory: the CPU prefetcher handles this extremely well.
+There is no per-element allocation overhead and no pointer chasing.
 
-**What Go gains:**
+You feel the difference most in:
 
-- Error handling is explicit code, not a separate control-flow mechanism.
-  Errors flow through the same call stack as regular values, which makes them easier to wrap, annotate, and inspect.
-- There is no distinction between checked and unchecked exceptions to manage.
-  In Java, many APIs force you to wrap checked exceptions in `RuntimeException` just to use them in lambdas or streams.
-- Errors are plain values you can store, compare, pass around, and test --- no reflection required.
+- **Tight loops** that process large slices: the sequential memory access pattern is cache-friendly, and modern CPUs can vectorize flat integer arrays.
+- **Memory usage**: a Go `[]int` of a million elements is roughly 8 MB (64-bit ints).
+  A Java `ArrayList<Integer>` of a million elements is the list's pointer array (8 MB of references) plus a million `Integer` objects on the heap (at least 16 MB more), for a minimum of 24 MB --- and GC pressure from all those small objects.
+- **GC pauses**: the Go garbage collector has no pointers to trace inside a `[]int`, so it scans the array in constant time.
+  A Java `ArrayList<Integer>` forces the GC to follow a million references.
 
-**What Java gains:**
-
-- The compiler can prove at build time that every failure path is addressed.
-  Go relies on code review and tools like `errcheck` to catch ignored errors.
-- Stack traces are attached to exceptions automatically; in Go you must explicitly wrap errors with `fmt.Errorf("...: %w", err)` to build a chain.
-
-In practice, Go's approach leads to more explicit error-handling code and fewer "surprise" failures from unchecked exceptions --- but it also produces more repetitive `if err != nil` checks that disciplined engineers must not skip.
+The trade-off is that Go's approach works for slices of value types (`int`, `float64`, structs).
+For slices of interfaces or pointers, Go has the same indirection that Java does.
 
 ---
+
 
 **Exercise 2** (What does this print?):
 
@@ -38,84 +35,63 @@ package main
 
 import "fmt"
 
-func makeAdder(n int) func(int) int {
-    return func(x int) int {
-        return x + n
-    }
-}
-
 func main() {
-    add5 := makeAdder(5)
-    add10 := makeAdder(10)
-    fmt.Println(add5(3))
-    fmt.Println(add10(3))
-    fmt.Println(add5(add10(1)))
+    catalog := map[string]int{
+        "Blinding Lights": 4_000_000_000,
+        "Shape of You":    3_600_000_000,
+    }
+    hits := []string{"Shape of You", "Watermelon Sugar", "Blinding Lights"}
+    for _, title := range hits {
+        if plays, ok := catalog[title]; ok {
+            fmt.Printf("%s: %d\n", title, plays)
+        } else {
+            fmt.Printf("%s: not found\n", title)
+        }
+    }
 }
 ```
 
 Output:
 ```
-8
-13
-16
+Shape of You: 3600000000
+Watermelon Sugar: not found
+Blinding Lights: 4000000000
 ```
 
-`makeAdder(5)` returns a closure that captures `n = 5`.
-`makeAdder(10)` returns a separate closure that captures `n = 10`.
-Each closure has its own independent copy of `n` because each call to `makeAdder` creates a new variable.
-
-`add5(3)` returns `3 + 5 = 8`.
-`add10(3)` returns `3 + 10 = 13`.
-`add5(add10(1))` evaluates inside-out: `add10(1)` returns `1 + 10 = 11`, then `add5(11)` returns `11 + 5 = 16`.
+The loop iterates the `hits` slice in order.
+`"Shape of You"` is in the catalog and its play count is printed.
+`"Watermelon Sugar"` is not in the catalog, so the comma-ok idiom sets `ok = false` and the `else` branch runs.
+`"Blinding Lights"` is in the catalog and is printed last.
+Map lookup order is random, but slice range iteration is always in index order, so the output is deterministic here.
 
 ---
 
-**Exercise 3** (Calculation):
-Given the function below, what values are printed by the three `fmt.Println` calls?
-Trace the value of `total` at each step.
+**Exercise 3** (Calculation): Given the following code, trace the value of `len(s)` and `cap(s)` after each line.
 
 ```go
-package main
-
-import "fmt"
-
-func running(start int) func(int) int {
-    total := start
-    return func(n int) int {
-        total += n
-        return total
-    }
-}
-
-func main() {
-    acc := running(100)
-    fmt.Println(acc(10))
-    fmt.Println(acc(20))
-    fmt.Println(acc(-5))
-}
+s := make([]int, 2, 5)
+s = append(s, 10)
+s = append(s, 20)
+s = append(s, 30)
+s = append(s, 40)
 ```
 
-Output:
-```
-110
-130
-125
-```
+| After line | `len(s)` | `cap(s)` | New array? |
+|---|---|---|---|
+| `make([]int, 2, 5)` | 2 | 5 | Yes (initial) |
+| `append(s, 10)` | 3 | 5 | No |
+| `append(s, 20)` | 4 | 5 | No |
+| `append(s, 30)` | 5 | 5 | No |
+| `append(s, 40)` | 6 | ≥10 | **Yes** |
 
-`running(100)` creates a closure that captures `total`, initialised to `100`.
-The same `total` variable is shared across all calls through `acc` because the closure captures it by reference --- it is the same memory location every time.
-
-- `acc(10)`: `total = 100 + 10 = 110`; returns and prints `110`.
-- `acc(20)`: `total = 110 + 20 = 130`; returns and prints `130`.
-- `acc(-5)`: `total = 130 + (-5) = 125`; returns and prints `125`.
-
-This is a running total (accumulator) implemented with a closure.
-Each call modifies and returns the accumulated value.
+`make([]int, 2, 5)` allocates a backing array with capacity 5.
+The first three `append` calls fit within the existing capacity (len grows 2 → 3 → 4 → 5).
+The fourth `append` exceeds capacity 5, so the runtime allocates a new array (typically double, so cap ≥ 10) and copies the existing elements.
+The exact new capacity is implementation-defined but at least 6; in current Go runtimes it is 10.
 
 ---
 
 **Exercise 4** (Where is the bug?):
-The following code tries to build a slice of greeting functions, one for each name in a list, using a Go 1.21 module.
 
 ```go
 package main
@@ -123,94 +99,87 @@ package main
 import "fmt"
 
 func main() {
-    names := []string{"benson", "amara", "priya"}
-    greets := make([]func(), len(names))
-    for i, name := range names {
-        greets[i] = func() { fmt.Println("hola,", name) }
+    words := []string{"Levitating", "Stay", "Heat Waves", "Stay", "As It Was"}
+    var freq map[string]int
+    for _, w := range words {
+        freq[w]++
     }
-    for _, g := range greets {
-        g()
+    for word, count := range freq {
+        if count > 1 {
+            fmt.Println(word, count)
+        }
     }
 }
 ```
 
-**The bug:** Under Go 1.21 semantics, the `for range` loop reuses the same `i` and `name` variables for every iteration.
-All three closures capture the same `name` variable --- not a copy of its value, but a reference to the single loop variable.
-By the time any of the closures run, the loop has finished and `name` holds the last value: `"priya"`.
+**The bug:** `var freq map[string]int` declares a nil map.
+Reading from a nil map returns the zero value (`0` for `int`), which is harmless.
+But **writing to a nil map panics** at runtime.
+The program panics at `freq[w]++` on the first iteration:
 
-Actual output under Go 1.21:
 ```
-hola, priya
-hola, priya
-hola, priya
+panic: assignment to entry in nil map
 ```
 
-Expected output:
-```
-hola, benson
-hola, amara
-hola, priya
-```
-
-**Fix 1 (works in all Go versions):** Create a new local variable inside the loop body to shadow the loop variable:
+**Fix:** Initialise the map with `make` before the loop:
 
 ```go
-for i, name := range names {
-    name := name // create a new variable for this iteration
-    greets[i] = func() { fmt.Println("hola,", name) }
+freq := make(map[string]int)
+for _, w := range words {
+    freq[w]++
 }
 ```
 
-**Fix 2 (works in Go 1.22+):** Update the `go` directive in `go.mod` to `go 1.22` or later.
-The language change makes each loop iteration create its own variable automatically, so all existing closure-in-loop code behaves correctly without any source changes.
+With the fix, the program prints:
+
+```
+Stay 2
+```
 
 ---
 
-**Exercise 5** (Write a program):
-Write a function `pipeline(fns ...func(int) int) func(int) int` that takes any number of `func(int) int` functions and returns a new function that applies them in order.
+**Exercise 5** (Write a program): Write a program that reads a slice of song titles and builds a map from the first letter to a slice of titles starting with that letter, then prints each letter and its titles in sorted order.
 
 ```go
 package main
 
-import "fmt"
-
-// pipeline returns a function that applies each fn in fns left to right.
-func pipeline(fns ...func(int) int) func(int) int {
-    return func(x int) int {
-        result := x
-        for _, fn := range fns {
-            result = fn(result) // apply each transform in sequence
-        }
-        return result
-    }
-}
+import (
+    "fmt"
+    "maps"
+    "slices"
+)
 
 func main() {
-    double  := func(n int) int { return n * 2 }   // multiply by 2
-    addTen  := func(n int) int { return n + 10 }  // add 10
-    square  := func(n int) int { return n * n }   // square the value
+    titles := []string{
+        "As It Was", "Blinding Lights", "Levitating",
+        "Bad Habit", "Kill Bill", "As The World Caves In",
+    }
 
-    // double then addTen: (3*2)+10 = 16
-    p1 := pipeline(double, addTen)
-    fmt.Println(p1(3)) // 16
+    byLetter := make(map[string][]string)
+    for _, t := range titles {
+        letter := string(t[0]) // first byte; safe because all titles start with ASCII
+        byLetter[letter] = append(byLetter[letter], t)
+    }
 
-    // addTen then double: (3+10)*2 = 26
-    p2 := pipeline(addTen, double)
-    fmt.Println(p2(3)) // 26
+    for _, ts := range byLetter {
+        slices.Sort(ts) // sort titles within each group
+    }
 
-    // double then square: (3*2)^2 = 36
-    p3 := pipeline(double, square)
-    fmt.Println(p3(3)) // 36
+    letters := slices.Collect(maps.Keys(byLetter))
+    slices.Sort(letters) // sort the letter keys
 
-    // empty pipeline --- identity
-    p4 := pipeline()
-    fmt.Println(p4(7)) // 7
+    for _, letter := range letters {
+        fmt.Printf("%s: %v\n", letter, byLetter[letter])
+    }
 }
 ```
 
-Key points in this solution:
+Output:
+```
+A: [As It Was As The World Caves In]
+B: [Bad Habit Blinding Lights]
+K: [Kill Bill]
+L: [Levitating]
+```
 
-- `pipeline` is variadic: it accepts any number of `func(int) int` values.
-- Inside the returned closure, `fns` is captured by reference --- the same `[]func(int) int` slice the outer call built.
-- The order of application matters: `pipeline(double, addTen)` and `pipeline(addTen, double)` produce different results for the same input.
-- An empty `pipeline()` call returns an identity function because the loop body never executes.
+Key points: always initialise a map with `make` before writing; `maps.Keys` returns an iterator (Go 1.23+) that `slices.Collect` converts to a sortable slice.

@@ -1,27 +1,40 @@
-# Chapter 17: Database Access --- Answers
+# Chapter 16: Generics --- Answers
 
-**Exercise 1** (Think about it): JDBC requires explicit transaction management and connection pooling through a `DataSource`, usually provided by an application server or a library like HikariCP.
-Go's `database/sql` builds connection pooling directly into `sql.DB`.
-What are the tradeoffs of each approach?
-In what situations might you still want an external connection pool in a Go application?
+**Exercise 1** (Think about it): Java generics use **type erasure**: at runtime, `List<String>` and `List<Integer>` are both just `List`.
+Generic type information is only available at compile time.
+Go generics use **monomorphization** (or a shared pointer-shaped representation): the compiler may generate distinct code for each instantiation.
+Describe one concrete advantage and one concrete disadvantage of each approach.
+How does type erasure affect what you can do with a Java generic type at runtime (e.g., `instanceof List<String>`)? Does Go have the same limitation?
 
-Go's approach is simpler for the common case: you call `sql.Open`, tune a few settings (`SetMaxOpenConns`, `SetMaxIdleConns`, `SetConnMaxLifetime`), and the pool manages itself.
-There is no additional dependency, no configuration file, and no separate object to wire up.
-This is consistent with Go's philosophy of including batteries for common needs.
+**Type erasure (Java):**
 
-JDBC's reliance on an external pool (HikariCP, DBCP, c3p0, or an application server pool) adds setup complexity but provides more configurability.
-HikariCP, for example, offers connection validation queries, connection test-on-borrow, metric integration with Micrometer, and health check endpoints.
+*Advantage:* A single compiled class file handles all instantiations.
+`ArrayList<String>` and `ArrayList<Integer>` share bytecode, which keeps the compiled output compact and means that libraries compiled against an older JDK are forward-compatible with new generic code without recompilation.
 
-In a Go application you might still want an external or proxy pool in a few situations:
+*Disadvantage:* The generic type argument is gone at runtime.
+You cannot write `obj instanceof List<String>` --- the JVM sees only `List`.
+Creating a generic array (`new T[]`) is illegal because the runtime cannot know the element type.
+Working around these limitations requires unchecked casts and `@SuppressWarnings("unchecked")`, which reintroduces the `ClassCastException` risk that generics were designed to prevent.
 
-- **PgBouncer / ProxySQL:** These are database-side proxy pools that multiplex many application connections onto fewer server connections.
-  They are useful when you have many application instances and the database itself limits total connections.
-  `sql.DB`'s pool operates within one process; PgBouncer aggregates across many processes.
-- **Serverless / short-lived processes:** If your Go binary starts and exits quickly (a CLI, a Lambda function), the in-process pool provides little benefit.
-  A proxy pool keeps connections warm across many cold starts.
-- **Observability:** Some proxy pools offer detailed query-level metrics and slow-query logging that are difficult to achieve from application code alone.
+**Monomorphization (Go):**
 
-In most long-running Go services, the built-in pool is sufficient and external pooling adds unnecessary complexity.
+*Advantage:* The compiler generates type-specific code, so operations on value types like `int` or `float64` are never boxed.
+A `Stack[int]` stores plain `int` values directly in the backing slice --- no `Integer` wrapper objects, no extra allocations, no GC pressure.
+There is no unchecked cast at runtime; type safety is total.
+
+*Disadvantage:* The compiler may produce multiple instantiations of the same function, increasing binary size.
+For large programs with many instantiation combinations, compile times can grow.
+(In practice, Go mitigates this by using a GC-shape-based approach that shares code for pointer-shaped types, but the tradeoff is still present for value types.)
+
+**Runtime reflection:**
+
+In Java, because of erasure, `List<String>.class` does not exist; you can only get `List.class`.
+`instanceof List<String>` is a compile-time warning and a runtime check against `List`, not `List<String>`.
+Accessing the actual type argument at runtime requires passing a `Class<T>` token explicitly.
+
+In Go, you can use `reflect.TypeOf` to inspect the concrete type of a value, and since Go does not erase type information the way Java does, the concrete type is always available.
+However, Go reflection operates on concrete values, not on type parameters themselves --- you cannot query "what was `T`?" from inside a generic function without passing the type explicitly.
+Both languages have some limitations here, but the flavor of the limitation differs.
 
 ---
 
@@ -30,147 +43,157 @@ In most long-running Go services, the built-in pool is sufficient and external p
 ```go
 package main
 
-import (
-    "database/sql"
-    "fmt"
-)
+import "fmt"
+
+func Filter[T any](s []T, keep func(T) bool) []T {
+    var out []T
+    for _, v := range s {
+        if keep(v) {
+            out = append(out, v)
+        }
+    }
+    return out
+}
+
+type BPM int
 
 func main() {
-    a := sql.Null[string]{V: "Evergreen", Valid: true}
-    b := sql.Null[string]{V: "Killing Me", Valid: false}
-    c := sql.Null[int64]{V: 0, Valid: false}
+    beats := []BPM{72, 128, 96, 140, 80}
+    fast := Filter(beats, func(b BPM) bool { return b >= 120 })
+    fmt.Println(fast)
 
-    fmt.Println(a.Valid, a.V)
-    fmt.Println(b.Valid, b.V)
-    fmt.Println(c.Valid, c.V)
+    words := []string{"greedy", "Heather", "Astronomy", "you broke me first"}
+    long := Filter(words, func(s string) bool { return len(s) > 7 })
+    fmt.Println(long)
 }
 ```
 
 Output:
 ```
-true Evergreen
-false Killing Me
-false 0
+[128 140]
+[Astronomy you broke me first]
 ```
 
-`sql.Null[T]` is a plain struct with two exported fields: `V` (the value) and `Valid` (a bool).
-It has no logic in its fields; they are whatever you set them to.
+For the first call, `T` is inferred as `BPM`.
+The predicate keeps elements greater than or equal to 120.
+`72`, `96`, and `80` are below 120 and are excluded.
+`128` and `140` pass and are appended to `out`.
 
-- `a` has `Valid: true` and `V: "Evergreen"`, so `fmt.Println` prints `true Evergreen`.
-- `b` has `Valid: false` but `V` is still `"Killing Me"` --- setting `Valid` to `false` does not zero out `V`.
-  This might be surprising: the struct remembers the value even though it would represent `NULL` in the database.
-  `fmt.Println` prints `false Killing Me`.
-- `c` has `Valid: false` and `V: 0` (the zero value for `int64`).
-  `fmt.Println` prints `false 0`.
-
-The key takeaway: `Valid` controls whether the value is considered non-NULL; it does not affect what is stored in `V`.
-When scanning from a database, `Scan` sets `V` to the zero value and `Valid` to `false` for a `NULL` column.
+For the second call, `T` is inferred as `string`.
+The predicate keeps strings longer than 7 characters.
+`"greedy"` has 6 characters (excluded), `"Heather"` has 7 (excluded, because 7 is not greater than 7), `"Astronomy"` has 9 (included), and `"you broke me first"` has 18 (included).
 
 ---
 
-**Exercise 3** (Calculation): Trace the following transaction sequence.
+**Exercise 3** (Calculation): The function below has the signature `func Reduce[T, U any](s []T, init U, f func(U, T) U) U`.
+Trace the execution of `Reduce([]int{1, 2, 3, 4}, 0, func(acc, v int) int { return acc + v })`.
+What is the concrete type bound to `T`?
+What is the concrete type bound to `U`?
+What value does the function return, and what are the intermediate values of `acc` after each call to `f`?
+
+`T` is bound to `int` (the element type of `[]int{1, 2, 3, 4}`).
+`U` is also bound to `int` (the type of the initial accumulator `0` and the return type of `f`).
+
+The function body would be:
 
 ```go
-tx, _ := db.BeginTx(ctx, nil)
-defer tx.Rollback()
-
-_, err := tx.ExecContext(ctx, "INSERT INTO songs (title, artist) VALUES (?, ?)",
-    "On My Mama", "Victoria Monét")
-if err != nil {
-    return err
+func Reduce[T, U any](s []T, init U, f func(U, T) U) U {
+    acc := init
+    for _, v := range s {
+        acc = f(acc, v)
+    }
+    return acc
 }
-
-return tx.Commit()
 ```
 
-**Case A: `ExecContext` succeeds and `Commit` succeeds.**
+Tracing each call to `f`:
 
-The deferred `tx.Rollback()` fires after `tx.Commit()` returns.
-`Rollback` on a committed transaction is a no-op --- it returns `sql.ErrTxDone`, which is silently discarded because the return value of a deferred call is not used here.
-The row is **inserted and committed** permanently.
+| Iteration | `acc` before | `v` | `acc` after (`acc + v`) |
+|-----------|-------------|-----|------------------------|
+| 1         | 0           | 1   | 1                      |
+| 2         | 1           | 2   | 3                      |
+| 3         | 3           | 3   | 6                      |
+| 4         | 6           | 4   | 10                     |
 
-**Case B: `ExecContext` succeeds but `Commit` returns an error.**
-
-`tx.Commit()` fails, so the function returns an error.
-The deferred `tx.Rollback()` then fires.
-However, when a commit fails at the database level, the transaction is typically already rolled back by the database.
-`Rollback` here is a safety net that confirms the abort.
-The row is **not inserted** --- the transaction was not committed.
-
-**Case C: `ExecContext` returns an error.**
-
-The `if err != nil { return err }` branch fires, returning the error.
-The deferred `tx.Rollback()` fires before the function returns to the caller.
-The `INSERT` is undone (or was never applied, depending on the database).
-The row is **not inserted**.
-
-In all three cases the deferred rollback provides a guarantee: the transaction is always cleaned up, regardless of which path the function takes.
-This is the entire point of the deferred rollback pattern.
+The function returns **10**.
 
 ---
 
 **Exercise 4** (Where is the bug?):
 
 ```go
-func getArtistSongs(ctx context.Context, db *sql.DB, artist string) ([]string, error) {
-    rows, err := db.QueryContext(ctx,
-        "SELECT title FROM songs WHERE artist = ?", artist)
-    if err != nil {
-        return nil, err
-    }
+package main
 
-    var titles []string
-    for rows.Next() {
-        var title string
-        if err := rows.Scan(&title); err != nil {
-            return nil, err
+import "fmt"
+
+type Playlist []string
+
+func Dedupe[T any](s []T) []T {
+    seen := make(map[T]bool)
+    var out []T
+    for _, v := range s {
+        if !seen[v] {
+            seen[v] = true
+            out = append(out, v)
         }
-        titles = append(titles, title)
     }
-    return titles, nil
+    return out
+}
+
+func main() {
+    p := Playlist{"greedy", "Heather", "greedy", "Astronomy", "Heather"}
+    fmt.Println(Dedupe(p))
 }
 ```
 
-**Two bugs:**
+**The bug:** `T` is constrained to `any`, but `map[T]bool` requires `T` to be `comparable`.
+The compiler rejects this with an error like:
 
-**Bug 1: `rows` is never closed.**
-If `rows.Next()` completes the loop normally, `rows` is closed automatically.
-But if `rows.Scan` returns an error and the function returns early via `return nil, err`, `rows` is never closed.
-The connection borrowed from the pool is never returned, leaking it.
-Under sustained load this exhausts the pool.
+```
+invalid map key type T (missing comparable constraint)
+```
 
-**Bug 2: `rows.Err()` is never checked.**
-After the loop, `rows.Err()` may hold an error that caused iteration to stop early (e.g., a network failure mid-result-set).
-Ignoring it means the function silently returns a partial result as if it were complete.
+Using a type as a map key requires that it support `==` and `!=`.
+`any` does not guarantee this.
 
-**Fixed version:**
+**The fix:** Change the constraint from `any` to `comparable`:
 
 ```go
-func getArtistSongs(ctx context.Context, db *sql.DB, artist string) ([]string, error) {
-    rows, err := db.QueryContext(ctx,
-        "SELECT title FROM songs WHERE artist = ?", artist)
-    if err != nil {
-        return nil, err
-    }
-    defer rows.Close() // always close, even on early return
-
-    var titles []string
-    for rows.Next() {
-        var title string
-        if err := rows.Scan(&title); err != nil {
-            return nil, err
+func Dedupe[T comparable](s []T) []T {
+    seen := make(map[T]bool)
+    var out []T
+    for _, v := range s {
+        if !seen[v] {
+            seen[v] = true
+            out = append(out, v)
         }
-        titles = append(titles, title)
     }
-    if err := rows.Err(); err != nil { // check for iteration errors
-        return nil, err
-    }
-    return titles, nil
+    return out
 }
 ```
 
-`defer rows.Close()` immediately after checking the error from `QueryContext` is the standard pattern.
-Calling `rows.Close()` on already-closed rows is a no-op, so it is always safe.
+`string` and `Playlist` (whose underlying type is `[]string`) --- wait: `Playlist` is `[]string`, and slices are **not** comparable.
+So even with `comparable`, passing `Playlist` would fail because `[]string` does not satisfy `comparable`.
+
+The call in `main` passes `p` (of type `Playlist`, underlying type `[]string`) directly.
+Slices are never comparable in Go.
+
+The correct fix is to change the call to pass the string slice elements rather than the slice type:
+
+```go
+func main() {
+    p := []string{"greedy", "Heather", "greedy", "Astronomy", "Heather"}
+    fmt.Println(Dedupe(p))
+}
+```
+
+With `T comparable` and `p` as `[]string`, the output is:
+
+```
+[greedy Heather Astronomy]
+```
+
+In summary, there are two bugs: the constraint must be `comparable`, and `Playlist` (a `[]string`) cannot be used as a map key because slices are not comparable.
 
 ---
 
@@ -179,127 +202,58 @@ Calling `rows.Close()` on already-closed rows is a no-op, so it is always safe.
 ```go
 package main
 
-import (
-    "context"
-    "database/sql"
-    "fmt"
-    "log"
+import "fmt"
 
-    _ "github.com/mattn/go-sqlite3"
-)
+// Set is a generic unordered collection of unique comparable values.
+type Set[T comparable] struct {
+    m map[T]struct{}
+}
 
-type Playlist struct {
-    ID          int
-    Name        string
-    Owner       string
-    Description sql.Null[string]
+// Add inserts v into the set.
+func (s *Set[T]) Add(v T) {
+    if s.m == nil {
+        s.m = make(map[T]struct{})  // lazy initialization
+    }
+    s.m[v] = struct{}{}
+}
+
+// Contains reports whether v is in the set.
+func (s *Set[T]) Contains(v T) bool {
+    _, ok := s.m[v]
+    return ok
+}
+
+// Values returns all elements of the set as a slice in unspecified order.
+func (s *Set[T]) Values() []T {
+    out := make([]T, 0, len(s.m))
+    for v := range s.m {
+        out = append(out, v)  // iteration order is random
+    }
+    return out
 }
 
 func main() {
-    db, err := sql.Open("sqlite3", ":memory:")
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer db.Close()
+    var songs Set[string]
+    songs.Add("greedy")
+    songs.Add("you broke me first")
+    songs.Add("Heather")
+    songs.Add("Astronomy")
+    songs.Add("Heather") // duplicate --- should be ignored
 
-    ctx := context.Background()
-
-    if err := db.PingContext(ctx); err != nil {
-        log.Fatal(err)
-    }
-
-    _, err = db.ExecContext(ctx, `
-        CREATE TABLE playlists (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT    NOT NULL,
-            owner       TEXT    NOT NULL,
-            description TEXT
-        )`)
-    if err != nil {
-        log.Fatal(err)
-    }
-
-    // insert three rows inside a single transaction
-    if err := insertPlaylists(ctx, db); err != nil {
-        log.Fatal(err)
-    }
-
-    // query and print all rows
-    rows, err := db.QueryContext(ctx,
-        "SELECT id, name, owner, description FROM playlists ORDER BY id")
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer rows.Close()
-
-    for rows.Next() {
-        var p Playlist
-        if err := rows.Scan(&p.ID, &p.Name, &p.Owner, &p.Description); err != nil {
-            log.Fatal(err)
-        }
-        desc := "(no description)"
-        if p.Description.Valid {
-            desc = p.Description.V
-        }
-        fmt.Printf("%d: %s by %s --- %s\n", p.ID, p.Name, p.Owner, desc)
-    }
-    if err := rows.Err(); err != nil {
-        log.Fatal(err)
-    }
-}
-
-func insertPlaylists(ctx context.Context, db *sql.DB) error {
-    tx, err := db.BeginTx(ctx, nil)
-    if err != nil {
-        return err
-    }
-    defer tx.Rollback() // no-op if Commit succeeds
-
-    stmt, err := tx.PrepareContext(ctx,
-        "INSERT INTO playlists (name, owner, description) VALUES (?, ?, ?)")
-    if err != nil {
-        return err
-    }
-    defer stmt.Close()
-
-    playlists := []Playlist{
-        {
-            Name:        "Victoria Vibes",
-            Owner:       "coastin_fan",
-            Description: sql.Null[string]{V: "Best of Victoria Monét", Valid: true},
-        },
-        {
-            Name:        "Omar After Midnight",
-            Owner:       "coastin_fan",
-            Description: sql.Null[string]{V: "Evergreen on repeat", Valid: true},
-        },
-        {
-            Name:        "Late Night Mix",
-            Owner:       "apollo_stan",
-            Description: sql.Null[string]{}, // NULL description
-        },
-    }
-
-    for _, p := range playlists {
-        if _, err := stmt.ExecContext(ctx, p.Name, p.Owner, p.Description); err != nil {
-            return err
-        }
-    }
-
-    return tx.Commit()
+    fmt.Println("length:", len(songs.Values()))          // 4
+    fmt.Println("contains Heather:", songs.Contains("Heather"))      // true
+    fmt.Println("contains Maniac:", songs.Contains("Maniac")) // false
 }
 ```
 
 Output:
 ```
-1: Victoria Vibes by coastin_fan --- Best of Victoria Monét
-2: Omar After Midnight by coastin_fan --- Evergreen on repeat
-3: Late Night Mix by apollo_stan --- (no description)
+length: 4
+contains Heather: true
+contains Maniac: false
 ```
 
-Key points demonstrated:
-- `sql.Open` + `PingContext` verifies connectivity before doing any work.
-- The transaction uses the **deferred rollback pattern**: `defer tx.Rollback()` is unconditional; `Commit` at the end makes it a no-op on success.
-- A prepared statement is created once inside the transaction and reused for each insert.
-- `sql.Null[string]` handles the nullable `description` column; `Valid: false` results in a `NULL` stored in the database and scanned back correctly.
-- `rows.Err()` is checked after the loop to catch any mid-stream errors.
+`map[T]struct{}` is the standard Go idiom for a set.
+An empty struct (`struct{}`) occupies zero bytes, so only the keys consume memory.
+The second `Add("Heather")` call is a no-op because the map key already exists --- map assignment is idempotent.
+`Values()` returns four strings because the duplicate was silently dropped, but their order will vary between runs since Go map iteration is randomized.

@@ -1,26 +1,35 @@
-# Chapter 15: Essential Standard Library --- Answers
+# Chapter 14: JSON, HTTP, and the Web --- Answers
 
-**Exercise 1** (Think about it): In Java, `InputStream`, `OutputStream`, `Reader`, and `Writer` are four separate abstract class hierarchies.
-Go has two interfaces --- `io.Reader` and `io.Writer` --- and a set of composition functions.
-What design decision makes Go's two-interface model work where Java needed four base classes?
-What would be harder to express cleanly in Go's model?
+**Exercise 1** (Think about it): In Java with Spring MVC or JAX-RS, you annotate a class method with `@GetMapping("/songs/{id}")` or `@GET @Path("/songs/{id}")` and the framework discovers handlers via reflection and classpath scanning.
+In Go, you call `mux.HandleFunc("GET /songs/{id}/", getSong)` explicitly in `main`.
+What are the tradeoffs of each approach?
+Consider startup time, debuggability, IDE navigation, and what happens when two handlers are registered for the same pattern.
 
-The key difference is that Java's hierarchy distinguishes between **byte-oriented** I/O (`InputStream`/`OutputStream`) and **character-oriented** I/O (`Reader`/`Writer`), with four root types as a result.
-Go does not make that split at the interface level: `io.Reader` and `io.Writer` always deal in `[]byte`.
-Character encoding is handled separately --- either at the edges (e.g., `bufio.Scanner` which returns `string` tokens), or by explicit conversion.
-This simplification is possible because Go treats `string` and `[]byte` as first-class, cheaply convertible types, so the language does not need a parallel hierarchy to make text feel natural.
+**Annotation/reflection-based frameworks (Spring, JAX-RS):**
 
-The composition functions (`io.TeeReader`, `io.MultiWriter`, etc.) are ordinary functions that return an interface value.
-In Java the same decorators are abstract classes (`FilterInputStream`, `BufferedInputStream`) because the language needed a concrete supertype to share implementation; Go can express the same patterns with zero-allocation wrappers because interfaces are structural.
+- *Startup time:* The framework scans the classpath, processes annotations, and builds a routing table at startup.
+  For large applications this can add seconds --- sometimes tens of seconds.
+  Spring Boot's startup time is a well-known pain point for serverless and container workloads.
+- *IDE navigation:* IDEs understand Spring annotations deeply; `@GetMapping` provides clickable navigation to the handler.
+  However, understanding the full request path often requires tracing through a chain of `@RequestMapping` annotations on the class, the method, and any inherited base classes.
+- *Debuggability:* Routing bugs can be subtle; the framework discovers handlers at runtime, so a typo in a path annotation compiles cleanly and only fails when a request is made.
+  Error messages from annotation-driven frameworks can be verbose and hard to relate back to specific source lines.
+- *Duplicate pattern:* Spring raises a `BeanDefinitionOverrideException` or similar at startup.
 
-What is harder in Go's model:
+**Explicit registration (Go `ServeMux`):**
 
-- **Seeking and positioning.** Java's `RandomAccessFile` supports `seek` directly.
-  Go separates this into `io.Seeker` (a third interface) and requires callers to do a type assertion or accept an `io.ReadSeeker` parameter.
-- **Buffered reads with unread/pushback.** Java's `PushbackInputStream` is a first-class class.
-  In Go you use `bufio.Reader.UnreadByte()` or `bufio.Reader.UnreadRune()`, which requires wrapping in `bufio` first.
-- **Encoding-aware text I/O.** Java's `InputStreamReader` bridges bytes to characters with a named charset.
-  In Go you must use third-party packages (e.g., `golang.org/x/text/encoding`) or write the conversion yourself.
+- *Startup time:* Registration happens in `main` --- it is just function calls.
+  There is no scanning; startup overhead is negligible.
+- *IDE navigation:* `mux.HandleFunc("GET /songs/{id}/", getSong)` --- `getSong` is a direct function reference.
+  Your IDE can jump to it with a single click, with no framework-specific plugin needed.
+- *Debuggability:* The routing table is built from ordinary Go code.
+  If you register the wrong path, you can add a `fmt.Println` or set a debugger breakpoint in `main` and see exactly what is registered.
+- *Duplicate pattern:* Go 1.22 `ServeMux` panics at registration time if two patterns conflict.
+  This is a startup crash rather than a silent routing bug, which is the right trade-off --- it catches the mistake before any request is served.
+
+The Go approach is more explicit and has less magic.
+The annotation approach provides more convenience in large teams where developers add handlers in many files and rely on the framework to assemble the routing table.
+Neither is universally better; the right choice depends on team size, application complexity, and how much framework overhead you are willing to accept.
 
 ---
 
@@ -30,168 +39,129 @@ What is harder in Go's model:
 package main
 
 import (
-    "bufio"
+    "encoding/json"
     "fmt"
-    "log/slog"
-    "os"
-    "strings"
-    "time"
 )
 
+type Artist struct {
+    Name    string `json:"name"`
+    Country string `json:"country,omitempty"`
+    Secret  string `json:"-"`
+}
+
 func main() {
-    logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-        ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-            if a.Key == slog.TimeKey {
-                return slog.Attr{}  // suppress the timestamp
-            }
-            return a
-        },
-    }))
+    a := Artist{Name: "Kali Uchis", Country: "", Secret: "Colombia"}
+    data, _ := json.Marshal(a)
+    fmt.Println(string(data))
 
-    input := "Physical\nDon't Start Now\nPositions\n"
-    scanner := bufio.NewScanner(strings.NewReader(input))
-    count := 0
-    for scanner.Scan() {
-        count++
-    }
-
-    logger.Info("scan complete",
-        slog.Int("lines", count),
-        slog.Duration("elapsed", 0*time.Millisecond),
-    )
+    var b Artist
+    json.Unmarshal([]byte(`{"name":"Rauw Alejandro","secret":"Puerto Rico"}`), &b)
+    fmt.Printf("Name: %s, Secret: %q\n", b.Name, b.Secret)
 }
 ```
 
 Output:
 ```
-level=INFO msg="scan complete" lines=3 elapsed=0s
+{"name":"Kali Uchis"}
+Name: Rauw Alejandro, Secret: ""
 ```
 
-Step-by-step:
+**First `Println`:**
+`a.Country` is `""`, which is the zero value for `string`.
+The tag `json:"country,omitempty"` causes `encoding/json` to omit the `country` field from the output.
+`a.Secret` is `"Colombia"`, but the tag `json:"-"` instructs the encoder to always skip this field regardless of its value.
+The result is `{"name":"Kali Uchis"}` --- only `name` survives.
 
-1. A `slog.TextHandler` is created writing to `os.Stdout`.
-   The `ReplaceAttr` function strips the `time` attribute, so no timestamp appears.
-2. `strings.NewReader` wraps the literal string as an `io.Reader`.
-   `bufio.NewScanner` wraps that reader.
-3. The scanner splits on newlines (the default).
-   The input has three non-empty lines (`"Physical"`, `"Don't Start Now"`, `"Positions"`) followed by a trailing newline.
-   `Scan` returns `true` three times and then `false` at EOF, so `count` ends up as `3`.
-4. `logger.Info` emits a text-format log line.
-   The `time` key is suppressed by `ReplaceAttr`.
-   `slog.Int("lines", 3)` formats as `lines=3`.
-   `slog.Duration("elapsed", 0)` formats as `elapsed=0s` --- `time.Duration` zero-value formats as `"0s"`.
+**Second `Printf`:**
+The JSON input contains a `"secret"` key.
+However, the Go struct has `Secret string \`json:"-"\``.
+The `json:"-"` tag means `encoding/json` ignores this field during both marshalling **and** unmarshalling.
+The `"secret"` key in the JSON is silently discarded; `b.Secret` remains the zero value `""`.
+`b.Name` is correctly set to `"Rauw Alejandro"` from the `"name"` key.
 
-The exact key ordering in `log/slog` text format is: `level`, `msg`, then attributes in the order they were passed.
+`%q` formats a string with Go double-quote syntax, so an empty string prints as `""`.
 
 ---
 
-**Exercise 3** (Calculation): You open a 10 MiB file and read it in three ways:
-(a) `os.ReadFile` into a `[]byte`,
-(b) `bufio.NewScanner` reading line by line,
-(c) `io.Copy(io.Discard, f)` using the default 32 KiB copy buffer.
-For each approach, estimate the peak heap allocation in MiB, assuming the file contains 100,000 lines of 100 bytes each.
-Which approach is best for counting lines without storing the content?
+**Exercise 3** (Calculation): Consider the following `ServeMux` registration and the three incoming requests.
+For each request, state which handler function is called, or `404` if none matches.
 
-The file is 100,000 lines × 100 bytes = 10,000,000 bytes ≈ **9.5 MiB**.
+```go
+mux := http.NewServeMux()
+mux.HandleFunc("GET /tracks/",       listTracks)
+mux.HandleFunc("GET /tracks/{id}/",  getTrack)
+mux.HandleFunc("POST /tracks/",      createTrack)
+```
 
-**(a) `os.ReadFile`**
+a. `GET /tracks/` --- **`listTracks`**
 
-`os.ReadFile` reads the entire file into a single `[]byte`.
-Peak heap allocation: ≈ **9.5 MiB** (the whole file in one slice).
-Additionally, if you process the result into strings or split on newlines, you may double or triple the allocation.
-This is the simplest approach but the most memory-hungry for large files.
+The request method is `GET` and the path is exactly `/tracks/`.
+The pattern `GET /tracks/` is a subtree match that includes the exact path `/tracks/`.
+`GET /tracks/{id}/` requires at least one additional path segment between the slashes (e.g., `/tracks/42/`), so it does not match `/tracks/` alone.
+`listTracks` is called.
 
-**(b) `bufio.NewScanner`**
+b. `GET /tracks/42/` --- **`getTrack`**
 
-`Scanner` uses an internal buffer (default 64 KiB maximum token size, starting at 4 KiB).
-It reads the file in chunks, scanning for newline boundaries.
-At any instant, only the current chunk plus the current token are in memory.
-Peak heap allocation: ≈ **64 KiB** (the scanner's internal buffer) plus the length of the longest individual line.
-For 100-byte lines this is well under 1 MiB.
+The request method is `GET` and the path is `/tracks/42/`.
+The pattern `GET /tracks/{id}/` matches: `{id}` captures `42`.
+`r.PathValue("id")` would return `"42"` inside the handler.
+`getTrack` is called.
 
-**(c) `io.Copy(io.Discard, f)`**
+c. `DELETE /tracks/7/` --- **`404`**
 
-`io.Copy` uses a single 32 KiB stack-allocated copy buffer (it uses `*[32*1024]byte` internally; in practice this ends up on the heap due to escape analysis, but it is still a single fixed allocation).
-Peak heap allocation: ≈ **32 KiB**.
-However, this approach does not count lines --- it just discards all bytes.
+None of the three registered patterns match a `DELETE` method on any path.
+`GET /tracks/{id}/` matches the path shape but requires `GET`.
+`ServeMux` returns a 405 Method Not Allowed response in Go 1.22 when the path matches a pattern but the method does not.
+Effectively the caller receives an HTTP error response, not a call to any registered handler.
 
-**Best for counting lines without storing content: `bufio.NewScanner`.**
-
-`io.Copy(io.Discard, f)` uses the least memory but cannot count lines without inspecting the bytes.
-`bufio.NewScanner` counts lines with a constant-size buffer (< 1 MiB peak) and is the idiomatic Go choice.
-`os.ReadFile` uses the most memory and should be avoided for large files.
+(Note: technically Go 1.22 `ServeMux` sends `405 Method Not Allowed` with an `Allow` header listing valid methods when the path matches but the method does not --- this is more precise than a plain 404.)
 
 ---
 
 **Exercise 4** (Where is the bug?):
 
 ```go
-package main
-
-import (
-    "fmt"
-    "regexp"
-)
-
-func countMatches(texts []string, pattern string) int {
-    total := 0
-    for _, t := range texts {
-        re := regexp.MustCompile(pattern)
-        if re.MatchString(t) {
-            total++
-        }
-    }
-    return total
-}
-
-func main() {
-    titles := []string{"positions", "Physical", "Don't Start Now", "thank u, next"}
-    fmt.Println(countMatches(titles, `^[A-Z]`))
-}
-```
-
-**The bug:** `regexp.MustCompile(pattern)` is called inside the `for` loop, so the pattern is compiled on every iteration.
-With four strings this is merely wasteful, but inside a hot path processing millions of records it becomes a serious performance problem --- `regexp.MustCompile` parses the pattern, builds a finite automaton, and allocates memory each time.
-
-The output is correct (it prints `2`, matching `"Physical"` and `"Don't Start Now"`), so this is a **performance bug**, not a logic bug.
-
-**The fix:** Compile the pattern once, before the loop.
-If the pattern is constant, hoist it to a package-level variable:
-
-```go
-var startsUpperRE = regexp.MustCompile(`^[A-Z]`)
-
-func countMatches(texts []string) int {
-    total := 0
-    for _, t := range texts {
-        if startsUpperRE.MatchString(t) {
-            total++
-        }
-    }
-    return total
-}
-```
-
-If the pattern is a runtime parameter, compile it once before the loop and return an error if the pattern is invalid:
-
-```go
-func countMatches(texts []string, pattern string) (int, error) {
-    re, err := regexp.Compile(pattern)
+func fetchLyrics(url string) (string, error) {
+    resp, err := http.Get(url)
     if err != nil {
-        return 0, fmt.Errorf("invalid pattern %q: %w", pattern, err)
+        return "", err
     }
-    total := 0
-    for _, t := range texts {
-        if re.MatchString(t) {
-            total++
-        }
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return "", err
     }
-    return total, nil
+    return string(body), nil
 }
 ```
 
-Note the switch from `MustCompile` to `Compile` with a returned error --- caller-supplied patterns should never `MustCompile` because a bad pattern would crash the program.
-`MustCompile` is reserved for compile-time-constant patterns where a bad pattern is a programmer error, not a user error.
+**The bug:** `resp.Body` is never closed.
+
+When `http.Get` succeeds, `resp.Body` is a live network connection wrapped as an `io.ReadCloser`.
+If the function returns the body as a string but never calls `resp.Body.Close()`, the underlying TCP connection is not returned to the connection pool --- it is leaked.
+Under load, a server making many requests will exhaust its file descriptors and connection pool, eventually causing all new HTTP requests to fail.
+
+Note that the early-return error path `return "", err` after `io.ReadAll` also leaks the body.
+
+**The fix:**
+
+```go
+func fetchLyrics(url string) (string, error) {
+    resp, err := http.Get(url)
+    if err != nil {
+        return "", err
+    }
+    defer resp.Body.Close()  // close on any return, success or error
+
+    body, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return "", err
+    }
+    return string(body), nil
+}
+```
+
+`defer resp.Body.Close()` immediately after the `err` check ensures the body is closed on every code path out of the function, including early returns.
+This is the canonical Go idiom for HTTP client response bodies.
 
 ---
 
@@ -201,60 +171,74 @@ Note the switch from `MustCompile` to `Compile` with a returned error --- caller
 package main
 
 import (
-    "flag"
-    "fmt"
-    "io/fs"
-    "log/slog"
-    "os"
-    "path/filepath"
-    "strings"
+    "encoding/json"
+    "net/http"
+    "strconv"
 )
 
-func main() {
-    dir     := flag.String("dir",     ".",   "directory to search")
-    ext     := flag.String("ext",     ".go", "file extension to count")
-    verbose := flag.Bool("verbose",   false, "log each matching file")
-    flag.Parse()
+type Song struct {
+    ID     int    `json:"id"`
+    Title  string `json:"title"`
+    Artist string `json:"artist"`
+}
 
-    logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+var catalog = map[int]Song{
+    1: {ID: 1, Title: "Todo De Ti",      Artist: "Rauw Alejandro"},
+    2: {ID: 2, Title: "I Wish You Roses", Artist: "Kali Uchis"},
+}
 
-    count := 0
-    err := filepath.WalkDir(*dir, func(path string, d fs.DirEntry, err error) error {
-        if err != nil {
-            return err
-        }
-        if !d.IsDir() && strings.HasSuffix(d.Name(), *ext) {
-            count++
-            if *verbose {
-                logger.Info("match", slog.String("file", path))
-            }
-        }
-        return nil
-    })
-    if err != nil {
-        logger.Error("walk failed", slog.Any("error", err))
-        os.Exit(1)
+func listSongs(w http.ResponseWriter, r *http.Request) {
+    songs := make([]Song, 0, len(catalog))
+    for _, s := range catalog {
+        songs = append(songs, s)
     }
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(songs)
+}
 
-    fmt.Printf("found %d %s file(s) in %s\n", count, *ext, *dir)
+func getSong(w http.ResponseWriter, r *http.Request) {
+    idStr := r.PathValue("id")
+    id, err := strconv.Atoi(idStr)
+    if err != nil {
+        http.Error(w, "invalid id", http.StatusBadRequest)
+        return
+    }
+    song, ok := catalog[id]
+    if !ok {
+        http.Error(w, "not found", http.StatusNotFound)
+        return
+    }
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(song)
+}
+
+func main() {
+    mux := http.NewServeMux()
+    mux.HandleFunc("GET /songs/",      listSongs)
+    mux.HandleFunc("GET /songs/{id}/", getSong)
+    http.ListenAndServe(":8080", mux)
 }
 ```
 
-Sample runs:
+**Testing the server** (with `curl` in a second terminal):
 
 ```
-$ go run main.go -dir . -ext .go -verbose
-time=... level=INFO msg=match file=main.go
-found 1 .go file(s) in .
+$ curl http://localhost:8080/songs/
+[{"id":1,"title":"Todo De Ti","artist":"Rauw Alejandro"},{"id":2,"title":"I Wish You Roses","artist":"Kali Uchis"}]
 
-$ go run main.go -dir /usr/local/go/src -ext .go
-found 1847 .go file(s) in /usr/local/go/src
+$ curl http://localhost:8080/songs/1/
+{"id":1,"title":"Todo De Ti","artist":"Rauw Alejandro"}
+
+$ curl http://localhost:8080/songs/99/
+not found
 ```
 
-Key points in the solution:
+Key points illustrated by this solution:
 
-- `flag.Parse()` is called at the start of `main`, after all flag variables are defined, so all flags are parsed before use.
-- `slog.New(slog.NewTextHandler(os.Stderr, nil))` writes structured logs to stderr, leaving stdout clean for program output.
-- `filepath.WalkDir` is preferred over `filepath.Walk` because it passes `fs.DirEntry` (which avoids an extra `os.Stat` call per entry).
-- `strings.HasSuffix(d.Name(), *ext)` matches only the file name, not the full path, so `--ext .go` does not accidentally match a directory named `foo.go/`.
-- The error from `WalkDir` is checked and reported; a non-nil error from the callback halts the walk.
+- `json.NewEncoder(w).Encode(songs)` streams the JSON directly to the `http.ResponseWriter` without allocating an intermediate `[]byte`.
+- `r.PathValue("id")` retrieves the wildcard captured by `{id}` in the Go 1.22 pattern.
+- `strconv.Atoi` converts the string path segment to an integer; a malformed segment returns `400 Bad Request` rather than panicking.
+- The `Content-Type` header is set before writing the body.
+  Headers must be set before the first call to `Write` or `Encode` --- once the body starts, the headers are sent and cannot be changed.
+- The map iteration order in `listSongs` is random (Chapter 6).
+  In a real service you would sort the result before encoding it to give clients a stable response.

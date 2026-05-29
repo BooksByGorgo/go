@@ -14,7 +14,7 @@ This appendix covers all of them.
 \index{escape analysis}
 \index{stack}
 \index{heap}
-Chapter 5 introduced escape analysis in the context of pointers.
+Chapter 2 introduced escape analysis in the context of pointers.
 Here we revisit it from a performance perspective, because whether a variable lives on the stack or the heap has a direct effect on GC pressure.
 
 Stack allocations are essentially free: the stack pointer advances, and when the function returns, the pointer retreats.
@@ -58,7 +58,7 @@ The output looks like:
 
 ::: {.tip}
 **Tip:** You do not need to read this output in daily work.
-It becomes useful when profiling (Chapter 15) shows unexpected heap allocations, or when you are tuning a hot inner loop and want to confirm that temporary values are not leaking to the heap.
+It becomes useful when profiling (Chapter 14) shows unexpected heap allocations, or when you are tuning a hot inner loop and want to confirm that temporary values are not leaking to the heap.
 :::
 
 ::: {.tip}
@@ -229,7 +229,7 @@ Fix the allocation pattern instead; `runtime.GC()` is a diagnostic tool, not a s
 
 \index{GOMAXPROCS}
 \index{GC!GOMAXPROCS}
-Chapter 13 introduced `GOMAXPROCS` as the number of OS threads the Go scheduler uses to run goroutines.
+Chapter 12 introduced `GOMAXPROCS` as the number of OS threads the Go scheduler uses to run goroutines.
 The default is `runtime.NumCPU()` --- the number of logical CPUs the process can see.
 For most programs this default is correct and you should leave it alone.
 
@@ -274,7 +274,7 @@ runtime.GOMAXPROCS(4)        // set to 4 OS threads
 
 \index{sync!Pool}
 \index{allocation pressure}
-Chapter 12 introduced `sync.Pool` as a way to reuse temporary objects.
+Chapter 11 introduced `sync.Pool` as a way to reuse temporary objects.
 Here we revisit it from the GC tuning perspective: `sync.Pool` is one of the most effective tools for reducing **allocation pressure** --- the rate at which new objects are added to the heap, forcing more frequent GC cycles.
 
 The pattern is most valuable when:
