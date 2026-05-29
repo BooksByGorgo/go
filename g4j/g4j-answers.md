@@ -64,20 +64,37 @@ quoted: "Chappell Roan"
 
 ---
 
-**Exercise 3** (Calculation): A Go source file imports three packages: `"fmt"`, `"os"`, and `"math"`.
-The code calls `fmt.Println` and `os.Exit`, but never calls anything from `math`.
-How many compiler errors does this program produce, and which import causes them?
-
-One compiler error.
-Go emits one error per unused import, not one per symbol.
-The error points to the `"math"` import:
+**Exercise 3** (Calculation): You run the following program as:
 
 ```
-./main.go:5:2: "math" imported and not used
+go run main.go Espresso Gresso Sabrina
 ```
 
-`"fmt"` and `"os"` are used, so they cause no error.
-The build fails entirely --- there is no "compile with warnings" mode in Go.
+```go
+package main
+
+import (
+    "fmt"
+    "os"
+)
+
+func main() {
+    fmt.Println(len(os.Args))
+    fmt.Println(os.Args[2])
+}
+```
+
+What does it print?
+
+`os.Args` contains every token on the command line including the program name at index 0.
+The full slice is `["<binary>", "Espresso", "Gresso", "Sabrina"]`, so `len(os.Args)` is `4`.
+`os.Args[2]` is `"Gresso"` (the second user-supplied argument, at index 2).
+
+Output:
+```
+4
+Gresso
+```
 
 ---
 
@@ -109,33 +126,39 @@ If you were writing this in an editor with `goimports` configured to run on save
 
 ---
 
-**Exercise 5** (Write a program): Write a Go program that declares a `const` string with a song title of your choice and prints three lines: the title using `%s`, the title using `%q`, and the Go type of the title using `%T`.
-Run it with `go run`.
+**Exercise 5** (Write a program): Write a Go program that accepts a song title as the first command-line argument and a play count as the second, then prints them formatted as `"<title>" has <count> plays`.
+If fewer than two arguments are provided (not counting the program name), print a usage message and exit.
 
 ```go
 package main
 
-import "fmt"
-
-const title = "Good Luck, Babe!"
+import (
+    "fmt"
+    "os"
+)
 
 func main() {
-    fmt.Printf("%s\n", title)
-    fmt.Printf("%q\n", title)
-    fmt.Printf("%T\n", title)
+    if len(os.Args) < 3 {
+        fmt.Fprintln(os.Stderr, "usage: plays <title> <count>")
+        os.Exit(1)
+    }
+    title := os.Args[1]
+    count := os.Args[2]
+    fmt.Printf("%q has %s plays\n", title, count)
 }
 ```
 
-Output:
+Sample run:
 ```
-Good Luck, Babe!
-"Good Luck, Babe!"
-string
+$ go run main.go "Espresso" 1500000
+"Espresso" has 1500000 plays
 ```
 
-`const` values are untyped string constants when declared without an explicit type.
-`%T` prints `string` because the constant's default type is `string`.
-Note that `%q` adds the double quotes and would also escape any special characters inside the string, such as newlines or backslashes.
+Notes:
+- `len(os.Args) < 3` because index 0 is the binary name, 1 is the title, and 2 is the count.
+- The play count is kept as a string here; Chapter 3 covers `strconv.Atoi` for converting it to an integer.
+- `fmt.Fprintln(os.Stderr, ...)` sends the usage message to standard error, which is the convention for diagnostic output.
+- `os.Exit(1)` terminates the program immediately with a non-zero exit code, signalling failure to the shell.
 
 ---
 

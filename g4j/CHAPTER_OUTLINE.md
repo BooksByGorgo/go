@@ -16,6 +16,7 @@ Audience: Java programmers learning Go for industry use
 - `go mod init` --- your first module; `go.mod` and `go.sum`
 - Exported vs unexported identifiers (capitalization, not `public`/`private`)
 - The `fmt` package basics
+- Command-line arguments --- `os.Args[0]` is the binary; `os.Args[1:]` are the user's arguments
 
 ### Chapter 2: Types and Variables
 *Go's type system is familiar but has several sharp distinctions from Java --- including structs, which replace Java classes as the primary way to group related data.*
