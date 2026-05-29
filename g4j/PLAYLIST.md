@@ -149,6 +149,7 @@ Do not repeat any reference already listed here.
 - Tate McRae --- "you broke me first" (used in Map function example, ArtistTitles iterator, Set exercise)
 - Conan Gray --- "Heather" (used in Stack example, Map function example, ArtistTitles iterator, Filter exercise, Dedupe exercise, Set exercise)
 - Conan Gray --- "Astronomy" (used in Map function example, ArtistTitles iterator, Filter exercise, Dedupe exercise, Set exercise)
+- Conan Gray --- "Maniac" (used in Set exercise as a negative Contains test)
 
 ## Chapter 19: Testing
 

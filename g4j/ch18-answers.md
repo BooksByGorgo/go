@@ -242,7 +242,7 @@ func main() {
 
     fmt.Println("length:", len(songs.Values()))          // 4
     fmt.Println("contains Heather:", songs.Contains("Heather"))      // true
-    fmt.Println("contains Levitating:", songs.Contains("Levitating")) // false
+    fmt.Println("contains Maniac:", songs.Contains("Maniac")) // false
 }
 ```
 
@@ -250,7 +250,7 @@ Output:
 ```
 length: 4
 contains Heather: true
-contains Levitating: false
+contains Maniac: false
 ```
 
 `map[T]struct{}` is the standard Go idiom for a set.
