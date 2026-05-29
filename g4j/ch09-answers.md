@@ -1,25 +1,39 @@
-# Chapter 9: Goroutines and Channels --- Answers
+# Chapter 10: Error Handling --- Answers
 
-**Exercise 1** (Think about it): Java's `Thread` and `Runnable` model requires you to think about thread pool sizing.
-Go's goroutine model mostly frees you from this.
-Explain the runtime mechanism that makes goroutines cheap enough to use one per task.
-What cost, if any, do goroutines impose that Java threads do not, and when might you still want to limit the number of running goroutines?
+**Exercise 1** (Think about it): Java uses checked exceptions to force callers to handle failures.
+Go returns `error` values that the compiler does not require you to inspect.
+What are the trade-offs of each approach?
+In what situations does Go's approach lead to more reliable code, and in what situations might it lead to less reliable code compared to Java's checked exceptions?
 
-The key mechanism is **M:N scheduling**: the Go runtime multiplexes M goroutines onto N OS threads, where N defaults to the number of CPU cores (`GOMAXPROCS`).
-The scheduler lives in user space, so switching between goroutines does not require a kernel mode transition --- it is many times faster than a Java thread context switch.
+Java's checked exceptions make the compiler your partner: if a method declares `throws IOException`, every caller must either catch it or re-declare the throws clause.
+This guarantees that failure modes are documented in method signatures and that callers cannot silently ignore them --- the code will not compile otherwise.
 
-Goroutines start with a ~2 KB stack that grows dynamically as needed (up to a configurable maximum, typically 1 GB).
-Java threads allocate their full stack (512 KB to 1 MB) up front, from virtual memory at minimum.
-This means creating a million goroutines consumes roughly 2 GB of initial stack memory; creating a million Java threads would require 500 GB to 1 TB.
-In practice, the OS would refuse long before that.
+Go takes the opposite position: `error` is a return value like any other.
+The compiler does not prevent you from discarding it with `_` or simply not capturing it at all.
+The discipline must come from the programmer and tooling (`errcheck`, `staticcheck`) rather than the language itself.
 
-**Costs goroutines impose:** Each goroutine is a heap allocation tracked by the scheduler.
-At very high goroutine counts (hundreds of thousands) the scheduler itself becomes a bottleneck, and GC pressure increases because goroutine stacks are heap-allocated.
-There is also some overhead per goroutine in the runtime's internal bookkeeping structures.
+**Where Go tends to win:**
 
-**When to still limit goroutines:** Any time the goroutines are doing I/O-bound work that creates downstream resource pressure --- for example, goroutines that each open a database connection or a file descriptor.
-Even if the goroutines themselves are cheap, the external resources they consume (connections, file descriptors, memory for outbound HTTP requests) are not.
-The common Go idiom for bounding concurrency is a buffered channel used as a semaphore, or the worker-pool pattern covered in Chapter 11.
+- Error handling becomes regular control flow, not exception propagation through a separate, parallel mechanism.
+Errors can be stored in slices, combined with `errors.Join`, and processed with the same code that handles any other value.
+- There is no checked-exception pollution: Java's `throws` clauses ripple upward through call chains, forcing every intermediate method to declare or re-wrap exceptions even when it has nothing meaningful to add.
+Go functions that merely forward an error just `return err` --- no signature change required.
+- Errors do not skip stack frames invisibly.
+The flow of control through a Go program is always traceable by reading the `if err != nil` checks; no hidden stack unwinding occurs.
+
+**Where Java's checked exceptions tend to win:**
+
+- The compiler catches ignored errors at the call site.
+A Go developer who writes `n, _ := parseTrackNumber(s)` has silently discarded the error, and the compiler says nothing.
+- Checked exceptions create a discoverable, machine-readable contract: the method signature lists every failure mode.
+Go's error convention requires reading documentation or source code to learn what errors a function may return.
+- Refactoring is easier in Java when you add a new failure mode: the compiler identifies every call site that needs updating.
+In Go, adding a new error condition to a function is invisible to callers.
+
+**The bottom line:**
+Go trades compile-time enforcement for simplicity and composability.
+The approach works well in teams that run linters and review code carefully, and it shines in functions that produce or transform errors as data.
+It can lead to less reliable code in projects where error checking is informal or tooling is not enforced.
 
 ---
 
@@ -28,110 +42,128 @@ The common Go idiom for bounding concurrency is a buffered channel used as a sem
 ```go
 package main
 
-import "fmt"
+import (
+    "errors"
+    "fmt"
+)
+
+var ErrNotFound = errors.New("not found")
+
+type CatalogError struct {
+    Track string
+    Err   error
+}
+
+func (e *CatalogError) Error() string {
+    return fmt.Sprintf("catalog: %s: %s", e.Track, e.Err)
+}
+
+func (e *CatalogError) Unwrap() error {
+    return e.Err
+}
+
+func lookup(track string) error {
+    return &CatalogError{Track: track, Err: ErrNotFound}
+}
 
 func main() {
-    ch := make(chan int, 3)
+    err := lookup("Tití Me Preguntó")
+    fmt.Println(err)
+    fmt.Println(errors.Is(err, ErrNotFound))
 
-    ch <- 7
-    ch <- 13
-    ch <- 21
-    close(ch)
-
-    for v := range ch {
-        fmt.Println(v)
+    var ce *CatalogError
+    if errors.As(err, &ce) {
+        fmt.Println(ce.Track)
     }
-
-    v, ok := <-ch
-    fmt.Println(v, ok)
 }
 ```
 
 Output:
+
 ```
-7
-13
-21
-0 false
+catalog: Tití Me Preguntó: not found
+true
+Tití Me Preguntó
 ```
 
-**Why:**
+**Line-by-line explanation:**
 
-The channel has capacity 3, so all three sends succeed without blocking --- no goroutine is needed.
-`close(ch)` marks the channel closed; the three buffered values are still available to receive.
+`lookup("Tití Me Preguntó")` returns a `*CatalogError` with `Track = "Tití Me Preguntó"` and `Err = ErrNotFound`.
 
-`range ch` drains the channel in FIFO order, printing `7`, `13`, and `21`.
-When the buffer is empty and the channel is closed, `range` terminates.
+`fmt.Println(err)` calls `err.Error()`, which returns `"catalog: Tití Me Preguntó: not found"`.
+`fmt.Println` appends a newline, so the first line of output is `catalog: Tití Me Preguntó: not found`.
 
-After the loop, `<-ch` receives from a channel that is both closed and empty.
-The comma-ok idiom returns the **zero value** of the element type (`0` for `int`) and `false` for `ok`, because the channel is exhausted.
-`fmt.Println(v, ok)` prints `0 false`.
+`errors.Is(err, ErrNotFound)` starts at `err` (a `*CatalogError`) and calls `==` against `ErrNotFound` --- no match.
+It then calls `err.Unwrap()`, which returns `ErrNotFound` itself.
+`ErrNotFound == ErrNotFound` is `true`.
+So `errors.Is` returns `true`, and `fmt.Println(true)` prints `true`.
 
-This demonstrates two important rules: buffered values survive a `close`, and receiving from an empty closed channel always returns `(zero, false)` rather than blocking or panicking.
+`errors.As(err, &ce)` checks whether `err` is assignable to `*CatalogError`.
+It is, so `ce` is set to the `*CatalogError` value and `errors.As` returns `true`.
+The `if` body prints `ce.Track`, which is `"Tití Me Preguntó"`.
 
 ---
 
-**Exercise 3** (Calculation): Consider the following program.
-Trace its execution and determine the exact output.
-How many goroutines are alive (other than `main`) when the final `fmt.Println` in `main` runs?
+**Exercise 3** (Calculation): Consider the following code.
+How many distinct, non-nil error values does `validateSong` return for the input `Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}`?
+What is the output of `fmt.Println(err)` for that input?
 
 ```go
 package main
 
-import "fmt"
+import (
+    "errors"
+    "fmt"
+)
 
-func double(in <-chan int, out chan<- int) {
-    for v := range in {
-        out <- v * 2
+type Song struct {
+    Title  string
+    Artist string
+    Year   int
+    BPM    int
+}
+
+func validateSong(s Song) error {
+    var errs []error
+    if s.Title == "" {
+        errs = append(errs, errors.New("title required"))
     }
-    close(out)
+    if s.Year < 2000 || s.Year > 2030 {
+        errs = append(errs, fmt.Errorf("year %d out of range", s.Year))
+    }
+    if s.BPM <= 0 {
+        errs = append(errs, errors.New("BPM must be positive"))
+    }
+    return errors.Join(errs...)
 }
 
 func main() {
-    src := make(chan int, 3)
-    dst := make(chan int, 3)
-
-    src <- 3
-    src <- 5
-    src <- 8
-    close(src)
-
-    go double(src, dst)
-
-    for result := range dst {
-        fmt.Println(result)
-    }
-    fmt.Println("done")
+    s := Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}
+    err := validateSong(s)
+    fmt.Println(err)
 }
 ```
 
+**Answer:** `validateSong` collects **2** distinct, non-nil error values.
+
+Trace through the conditions for `Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}`:
+
+- `s.Title == ""` is `true` --- `errors.New("title required")` is appended. (1 error)
+- `s.Year < 2000 || s.Year > 2030`: `2021 < 2000` is `false`; `2021 > 2030` is `false` --- condition is `false`, no error appended.
+- `s.BPM <= 0`: `-1 <= 0` is `true` --- `errors.New("BPM must be positive")` is appended. (2 errors)
+
+`errors.Join` receives a slice of 2 non-nil errors.
+Its `Error()` method joins their messages with a newline between them.
+
 Output:
+
 ```
-6
-10
-16
-done
+title required
+BPM must be positive
 ```
 
-**Trace:**
-
-1. `src` is a buffered channel with capacity 3.
-   The three sends (`3`, `5`, `8`) all succeed immediately without blocking.
-   `src` is then closed.
-
-2. `go double(src, dst)` launches `double` as a goroutine.
-   `double` reads from `src` using `range`, which drains the buffered values `3`, `5`, `8` in order and then exits when `src` is empty and closed.
-   For each value, it sends the doubled result to `dst` (also buffered with capacity 3, so no blocking occurs).
-   After the loop, `double` calls `close(dst)`.
-
-3. Back in `main`, `for result := range dst` drains `dst`.
-   The values arrive in order: `6`, `10`, `16`.
-   When `dst` is closed and empty, the loop ends.
-
-4. `fmt.Println("done")` runs last.
-
-**Goroutines alive when `fmt.Println("done")` runs:** Zero (other than `main`).
-The `double` goroutine has already returned --- it finished draining `src`, called `close(dst)`, and exited before `main`'s `range dst` loop could finish (since `close(dst)` is what caused the loop to terminate).
+Note that `Artist` has no validation rule, so `"Karol G"` (a valid, non-empty value) does not contribute any error.
+`Year = 2021` falls within the range `[2000, 2030]`, so no year error is produced either.
 
 ---
 
@@ -141,79 +173,90 @@ The `double` goroutine has already returned --- it finished draining `src`, call
 package main
 
 import (
+    "errors"
     "fmt"
-    "sync"
+    "io"
 )
 
+func readAll(r io.Reader) ([]byte, error) {
+    buf := make([]byte, 4)
+    var result []byte
+    for {
+        n, err := r.Read(buf)
+        result = append(result, buf[:n]...)
+        if err == io.EOF {
+            break
+        }
+        if err != nil {
+            return nil, fmt.Errorf("readAll: %w", err)
+        }
+    }
+    return result, nil
+}
+
 func main() {
-    var wg sync.WaitGroup
-    results := make(chan string, 3)
-    tracks := []string{"rockstar", "Circles", "Earfquake"}
-
-    for _, t := range tracks {
-        wg.Add(1)
-        go func() {
-            defer wg.Done()
-            results <- "Playing: " + t
-        }()
+    r := strings.NewReader("TQG")
+    data, err := readAll(r)
+    if err != nil {
+        fmt.Println("error:", err)
+        return
     }
-
-    wg.Wait()
-    close(results)
-
-    for r := range results {
-        fmt.Println(r)
-    }
+    fmt.Println(string(data))
 }
 ```
 
-**The bug:** The goroutine closure captures the loop variable `t` by reference, not by value.
-By the time the goroutines run, the `for` loop has advanced `t` to the last value in the slice.
-All three goroutines read the same final value --- `"Earfquake"` --- and send it three times.
-The output is likely:
+**The bug:** There are actually two problems.
 
-```
-Playing: Earfquake
-Playing: Earfquake
-Playing: Earfquake
-```
-
-This is the **loop-closure capture bug** described in Chapter 2.
-
-**Why it happens:** In Go, the range variable `t` is a single variable whose value is updated on each iteration.
-All three goroutines close over the same `t` variable (a single memory address), not over a copy of its value at the time the goroutine was launched.
-Because the goroutines are scheduled after the loop completes, `t` holds the last assigned value when they execute.
-
-**The fix:** Capture the value at goroutine launch time by passing it as a parameter to the anonymous function, or by introducing a local copy:
+**Bug 1 --- missing import:** `strings.NewReader` is used in `main` but `"strings"` is not in the import list.
+The program will not compile.
+The import block should be:
 
 ```go
-for _, t := range tracks {
-    t := t  // new variable scoped to this iteration
-    wg.Add(1)
-    go func() {
-        defer wg.Done()
-        results <- "Playing: " + t
-    }()
-}
+import (
+    "errors"
+    "fmt"
+    "io"
+    "strings"
+)
 ```
 
-Or equivalently, pass `t` as a function argument:
+**Bug 2 --- comparing `err == io.EOF` directly instead of using `errors.Is`:** The sentinel check `if err == io.EOF` works correctly for `io.EOF` itself, but it will silently miss `io.EOF` if the reader ever wraps it (e.g., `fmt.Errorf("read: %w", io.EOF)`).
+The idiomatic fix is:
 
 ```go
-for _, t := range tracks {
-    wg.Add(1)
-    go func(track string) {
-        defer wg.Done()
-        results <- "Playing: " + track
-    }(t)
+if errors.Is(err, io.EOF) {
+    break
 }
 ```
 
-Both fixes capture the value of `t` at the point of goroutine creation so each goroutine gets its own independent copy.
+Using `errors.Is` is consistent, future-proof, and is what the chapter recommends.
+The `errors` import is already present, so this is a zero-cost change.
 
-Note: In Go 1.22 and later, range variables are per-iteration by default, which eliminates this class of bug automatically.
-If you are on Go 1.22 or newer, the original code would work correctly.
-On earlier versions, the fix is required.
+**Corrected `readAll`:**
+
+```go
+func readAll(r io.Reader) ([]byte, error) {
+    buf := make([]byte, 4)
+    var result []byte
+    for {
+        n, err := r.Read(buf)
+        result = append(result, buf[:n]...)
+        if errors.Is(err, io.EOF) {
+            break
+        }
+        if err != nil {
+            return nil, fmt.Errorf("readAll: %w", err)
+        }
+    }
+    return result, nil
+}
+```
+
+With both fixes applied, the program compiles and prints:
+
+```
+TQG
+```
 
 ---
 
@@ -223,66 +266,76 @@ On earlier versions, the fix is required.
 package main
 
 import (
+    "errors"
     "fmt"
-    "time"
+    "strconv"
+    "strings"
 )
 
+var ErrInvalidTimecode = errors.New("invalid timecode")
+
+func parseTimecode(s string) (int, int, int, error) {
+    parts := strings.Split(s, ":")
+    if len(parts) != 2 {
+        return 0, 0, 0, fmt.Errorf("parseTimecode: expected MM:SS, got %q: %w", s, ErrInvalidTimecode)
+    }
+
+    minutes, err := strconv.Atoi(parts[0])
+    if err != nil {
+        return 0, 0, 0, fmt.Errorf("parseTimecode: invalid minutes %q: %w", parts[0], ErrInvalidTimecode)
+    }
+
+    seconds, err := strconv.Atoi(parts[1])
+    if err != nil {
+        return 0, 0, 0, fmt.Errorf("parseTimecode: invalid seconds %q: %w", parts[1], ErrInvalidTimecode)
+    }
+
+    if minutes < 0 {
+        return 0, 0, 0, fmt.Errorf("parseTimecode: minutes %d is negative: %w", minutes, ErrInvalidTimecode)
+    }
+    if seconds < 0 || seconds > 59 {
+        return 0, 0, 0, fmt.Errorf("parseTimecode: seconds %d out of range [0,59]: %w", seconds, ErrInvalidTimecode)
+    }
+
+    total := minutes*60 + seconds
+    return minutes, seconds, total, nil
+}
+
 func main() {
-    ch1 := make(chan string, 1)
-    ch2 := make(chan string, 1)
-    ch3 := make(chan string, 1)
+    inputs := []string{"03:45", "345", "01:61"}
 
-    go func() {
-        time.Sleep(10 * time.Millisecond)
-        ch1 <- "Post Malone: Circles"
-    }()
-    go func() {
-        time.Sleep(20 * time.Millisecond)
-        ch2 <- "Tyler: Wilder World"
-    }()
-    go func() {
-        time.Sleep(30 * time.Millisecond)
-        ch3 <- "Post Malone: rockstar"
-    }()
-
-    received := 0
-    total := 3
-    for received < total {
-        select {
-        case msg := <-ch1:
-            fmt.Println(msg)
-            received++
-        case msg := <-ch2:
-            fmt.Println(msg)
-            received++
-        case msg := <-ch3:
-            fmt.Println(msg)
-            received++
-        case <-time.After(100 * time.Millisecond):
-            fmt.Println("timeout")
-            received = total  // exit the loop
+    for _, tc := range inputs {
+        m, s, total, err := parseTimecode(tc)
+        if err != nil {
+            fmt.Printf("%-10s => error: %s\n", tc, err)
+            fmt.Printf("           is ErrInvalidTimecode: %v\n", errors.Is(err, ErrInvalidTimecode))
+        } else {
+            fmt.Printf("%-10s => %dm %ds (%d total seconds)\n", tc, m, s, total)
         }
     }
 }
 ```
 
-Output (order reflects goroutine sleep durations):
+Output:
+
 ```
-Post Malone: Circles
-Tyler: Wilder World
-Post Malone: rockstar
+03:45      => 3m 45s (225 total seconds)
+345        => error: parseTimecode: expected MM:SS, got "345": invalid timecode
+           is ErrInvalidTimecode: true
+01:61      => error: parseTimecode: seconds 61 out of range [0,59]: invalid timecode
+           is ErrInvalidTimecode: true
 ```
 
-**How it works:**
+**Key design decisions explained:**
 
-Each goroutine sleeps for a different duration before sending on its dedicated channel.
-`main` loops using `select`, blocking until any of the four cases is ready.
-Because the goroutines sleep for 10 ms, 20 ms, and 30 ms, the messages arrive in that order.
+- `ErrInvalidTimecode` is a package-level sentinel declared with `errors.New`.
+Exporting it (capital `E`) lets callers in other packages use `errors.Is` to distinguish timecode errors from other error kinds.
 
-The `time.After(100 * time.Millisecond)` case provides a safety net.
-`time.After` returns a receive-only channel (`<-chan time.Time`) that the `time` package sends a value on after the specified duration.
-If no message arrives within 100 ms, that case fires, prints `"timeout"`, and sets `received = total` to exit the loop.
+- Every error path uses `fmt.Errorf("...: %w", ErrInvalidTimecode)` to wrap the sentinel.
+This means the returned error has a human-readable message that includes the context (the bad input, the specific reason) **and** a chain that `errors.Is` can walk to find `ErrInvalidTimecode`.
 
-A subtle point: `time.After` creates a new timer on every call to `select`, which is fine for correctness but slightly wasteful.
-In production code that needs tight control over timer lifetimes, you would create a `time.NewTimer` once and reuse it.
-That is a concern for Chapter 13; the `time.After` form is idiomatic for simple timeouts.
+- The function returns four values: `(int, int, int, error)`.
+The three `int` values are zero on error, consistent with the Go convention of returning zero values alongside a non-nil error.
+
+- `strings.Split(s, ":")` with a check on `len(parts) != 2` is the idiomatic way to parse a two-part format.
+Using `fmt.Sscanf` or a regex are also valid; `strings.Split` is the most readable for this simple case.

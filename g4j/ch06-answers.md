@@ -1,32 +1,37 @@
-# Chapter 5: Maps and Slices --- Answers
+# Chapter 6: Methods and Embedding --- Answers
 
-**Exercise 1** (Think about it): In Java, `HashMap<K,V>` requires keys to implement `hashCode()` and `equals()`, and `ArrayList<E>` stores references to boxed objects on the heap.
-Go's `map[K]V` requires `K` to be comparable at the language level, and a `[]E` slice stores values directly in the backing array.
-What are the trade-offs of Go's approach for each collection type?
-Give one example of a Java key type you cannot use directly as a Go map key, and explain one scenario where storing values directly in a slice (rather than as heap references) matters for performance.
-When would you feel the difference most?
+**Exercise 1** (Think about it): In Java, a class bundles data and behavior together and inheritance lets you share both across a type hierarchy.
+Go separates data (struct), behavior (methods), and code reuse (embedding) into three distinct mechanisms, and interfaces handle polymorphism independently of all three.
+What advantages does Go's separated approach offer over Java's unified class model?
+Can you think of a scenario where Java's approach is simpler or more convenient?
 
-A Java `ArrayList<Integer>` stores a pointer (reference) to each boxed `Integer` object, and each `Integer` object lives somewhere on the heap.
-Iterating over the list means following a pointer for every element, and those `Integer` objects may be scattered around memory --- poor cache locality.
-Each `Integer` also carries object header overhead (typically 16 bytes) even though the actual integer value is just 4 bytes.
+**Advantages of Go's separated approach:**
 
-A Go `[]int` stores the integer values **directly** and **contiguously** in the backing array.
-Iterating is a sequential scan through a flat region of memory: the CPU prefetcher handles this extremely well.
-There is no per-element allocation overhead and no pointer chasing.
+1. **You can attach methods to any type, not just classes.**
+   In Java, methods live inside class bodies and you cannot add methods to types defined in other packages.
+   In Go, you can define methods on any named type in the same package, including types imported from the standard library via type definitions (e.g., `type Seconds float64`).
 
-You feel the difference most in:
+2. **Code reuse without coupling.**
+   Java inheritance forces an is-a relationship: `FeaturedTrack extends Track` means every `FeaturedTrack` is substitutable for a `Track`.
+   Go embedding is a has-a relationship with no substitutability.
+   You get promoted fields and methods without locking yourself into a hierarchy that may become wrong later.
 
-- **Tight loops** that process large slices: the sequential memory access pattern is cache-friendly, and modern CPUs can vectorize flat integer arrays.
-- **Memory usage**: a Go `[]int` of a million elements is roughly 8 MB (64-bit ints).
-  A Java `ArrayList<Integer>` of a million elements is the list's pointer array (8 MB of references) plus a million `Integer` objects on the heap (at least 16 MB more), for a minimum of 24 MB --- and GC pressure from all those small objects.
-- **GC pauses**: the Go garbage collector has no pointers to trace inside a `[]int`, so it scans the array in constant time.
-  A Java `ArrayList<Integer>` forces the GC to follow a million references.
+3. **Interfaces decouple behavior from data completely.**
+   A type satisfies a Go interface without knowing the interface exists.
+   This lets you define interfaces in the consumer package, not the producer package, making dependencies flow the right way.
 
-The trade-off is that Go's approach works for slices of value types (`int`, `float64`, structs).
-For slices of interfaces or pointers, Go has the same indirection that Java does.
+4. **No fragile base-class problem.**
+   Java's virtual dispatch means a change to a superclass method can silently alter the behavior of all subclasses.
+   Go's promoted methods are not virtual: calling a promoted method on an outer struct always calls the embedded type's method, unless the outer struct explicitly defines its own method with the same name.
+
+**Where Java's approach is simpler:**
+
+- When you genuinely want polymorphism through a type hierarchy (e.g., a UI widget tree), Java's `extends` gives you substitutability, virtual dispatch, and `instanceof` checks in one declaration.
+  In Go you need an interface plus embedding, and you must ensure both the outer and inner types implement the interface explicitly.
+- A `toString()` override in Java is automatic through the `Object` base class.
+  In Go, `fmt.Stringer` requires you to implement `String() string` on each type that wants custom formatting; there is no default.
 
 ---
-
 
 **Exercise 2** (What does this print?):
 
@@ -35,59 +40,103 @@ package main
 
 import "fmt"
 
+type Base struct {
+    ID int
+}
+
+func (b Base) Describe() string {
+    return fmt.Sprintf("Base ID=%d", b.ID)
+}
+
+type Widget struct {
+    Base
+    Color string
+}
+
 func main() {
-    catalog := map[string]int{
-        "Blinding Lights": 4_000_000_000,
-        "Shape of You":    3_600_000_000,
+    w := Widget{
+        Base:  Base{ID: 42},
+        Color: "blue",
     }
-    hits := []string{"Shape of You", "Watermelon Sugar", "Blinding Lights"}
-    for _, title := range hits {
-        if plays, ok := catalog[title]; ok {
-            fmt.Printf("%s: %d\n", title, plays)
-        } else {
-            fmt.Printf("%s: not found\n", title)
-        }
-    }
+    fmt.Println(w.ID)
+    fmt.Println(w.Color)
+    fmt.Println(w.Describe())
+    fmt.Println(w.Base.Describe())
 }
 ```
 
 Output:
 ```
-Shape of You: 3600000000
-Watermelon Sugar: not found
-Blinding Lights: 4000000000
+42
+blue
+Base ID=42
+Base ID=42
 ```
 
-The loop iterates the `hits` slice in order.
-`"Shape of You"` is in the catalog and its play count is printed.
-`"Watermelon Sugar"` is not in the catalog, so the comma-ok idiom sets `ok = false` and the `else` branch runs.
-`"Blinding Lights"` is in the catalog and is printed last.
-Map lookup order is random, but slice range iteration is always in index order, so the output is deterministic here.
+`w.ID` is promoted from `w.Base.ID` --- accessing `w.ID` and `w.Base.ID` reach the same field.
+`w.Color` is a direct field of `Widget`.
+`w.Describe()` calls the promoted `Base.Describe()` method, because `Widget` has no `Describe` method of its own.
+`w.Base.Describe()` calls the same method through the explicit path.
+Both calls produce identical output.
 
 ---
 
-**Exercise 3** (Calculation): Given the following code, trace the value of `len(s)` and `cap(s)` after each line.
+**Exercise 3** (Calculation): Trace the following program by hand.
 
 ```go
-s := make([]int, 2, 5)
-s = append(s, 10)
-s = append(s, 20)
-s = append(s, 30)
-s = append(s, 40)
+package main
+
+import "fmt"
+
+type Track struct {
+    Title  string
+    Artist string
+    BPM    int
+}
+
+func (t Track) String() string {
+    return fmt.Sprintf("%s by %s", t.Title, t.Artist)
+}
+
+type FeaturedTrack struct {
+    Track
+    Feature string
+}
+
+func (ft FeaturedTrack) String() string {
+    return ft.Track.String() + " ft. " + ft.Feature
+}
+
+func main() {
+    t := Track{Title: "Golden Hour", Artist: "JVKE", BPM: 97}
+    ft := FeaturedTrack{Track: t, Feature: "Rosalía"}
+
+    fmt.Println(t.String())
+    fmt.Println(ft.String())
+    fmt.Println(ft.Track.String())
+    fmt.Println(ft.BPM)
+}
 ```
 
-| After line | `len(s)` | `cap(s)` | New array? |
-|---|---|---|---|
-| `make([]int, 2, 5)` | 2 | 5 | Yes (initial) |
-| `append(s, 10)` | 3 | 5 | No |
-| `append(s, 20)` | 4 | 5 | No |
-| `append(s, 30)` | 5 | 5 | No |
-| `append(s, 40)` | 6 | ≥10 | **Yes** |
+Output:
+```
+Golden Hour by JVKE
+Golden Hour by JVKE ft. Rosalía
+Golden Hour by JVKE
+97
+```
 
-`make([]int, 2, 5)` allocates a backing array with capacity 5.
-The first three `append` calls fit within the existing capacity (len grows 2 → 3 → 4 → 5).
-The fourth `append` exceeds capacity 5, so the runtime allocates a new array (typically double, so cap ≥ 10) and copies the existing elements.
-The exact new capacity is implementation-defined but at least 6; in current Go runtimes it is 10.
+Step by step:
+
+- `t.String()`: calls `Track.String()` directly on `t`. Returns `"Golden Hour by JVKE"`.
+- `ft.String()`: `FeaturedTrack` has its own `String()` method, so the promoted `Track.String()` is shadowed.
+  `FeaturedTrack.String()` calls `ft.Track.String()` (returns `"Golden Hour by JVKE"`) and appends `" ft. "` and `ft.Feature`.
+  Returns `"Golden Hour by JVKE ft. Rosalía"`.
+- `ft.Track.String()`: calls `Track.String()` through the explicit embedded path, bypassing `FeaturedTrack.String()`.
+  Returns `"Golden Hour by JVKE"`.
+- `ft.BPM`: promoted from `ft.Track.BPM`. The value is `97`.
+
+The key insight: writing `ft.String()` calls `FeaturedTrack.String()` (the outer type's method), while `ft.Track.String()` bypasses the outer method and calls `Track.String()` directly.
 
 ---
 
@@ -98,88 +147,102 @@ package main
 
 import "fmt"
 
+type Artist struct {
+    Name string
+}
+
+func (a Artist) Label() string {
+    return "Artist: " + a.Name
+}
+
+type Song struct {
+    *Artist
+    Title string
+}
+
 func main() {
-    words := []string{"Levitating", "Stay", "Heat Waves", "Stay", "As It Was"}
-    var freq map[string]int
-    for _, w := range words {
-        freq[w]++
-    }
-    for word, count := range freq {
-        if count > 1 {
-            fmt.Println(word, count)
-        }
-    }
+    s := Song{Title: "Chorizo Asado"}
+    fmt.Println(s.Title)
+    fmt.Println(s.Label()) // line A
 }
 ```
 
-**The bug:** `var freq map[string]int` declares a nil map.
-Reading from a nil map returns the zero value (`0` for `int`), which is harmless.
-But **writing to a nil map panics** at runtime.
-The program panics at `freq[w]++` on the first iteration:
+**The bug:** `Song` is initialized without setting the `*Artist` pointer, so `s.Artist` is `nil`.
+The first `fmt.Println(s.Title)` prints `"Chorizo Asado"` successfully.
+The second call `s.Label()` is promoted from the embedded `*Artist`.
+To call a method on the embedded type, Go dereferences the embedded pointer.
+Dereferencing a `nil` pointer causes a runtime panic:
 
 ```
-panic: assignment to entry in nil map
+panic: runtime error: invalid memory address or nil pointer dereference
 ```
 
-**Fix:** Initialise the map with `make` before the loop:
+**Fix:** initialize the embedded pointer before use:
 
 ```go
-freq := make(map[string]int)
-for _, w := range words {
-    freq[w]++
+s := Song{
+    Artist: &Artist{Name: "Feid"},
+    Title:  "Chorizo Asado",
 }
+fmt.Println(s.Title)   // Chorizo Asado
+fmt.Println(s.Label()) // Artist: Feid
 ```
 
-With the fix, the program prints:
+Alternatively, construct `Song` using `NewSong` to enforce initialization:
 
-```
-Stay 2
+```go
+func NewSong(title, artistName string) Song {
+    return Song{Artist: &Artist{Name: artistName}, Title: title}
+}
 ```
 
 ---
 
-**Exercise 5** (Write a program): Write a program that reads a slice of song titles and builds a map from the first letter to a slice of titles starting with that letter, then prints each letter and its titles in sorted order.
+**Exercise 5** (Write a program):
 
 ```go
 package main
 
-import (
-    "fmt"
-    "maps"
-    "slices"
-)
+import "fmt"
+
+type Counter struct {
+    Value int
+}
+
+func NewCounter(start int) *Counter {   // constructor: returns *Counter so callers can use pointer receivers
+    return &Counter{Value: start}
+}
+
+func (c *Counter) Increment() {         // pointer receiver: mutates Value
+    c.Value++
+}
+
+func (c *Counter) Reset() {             // pointer receiver: mutates Value
+    c.Value = 0
+}
+
+func (c *Counter) String() string {     // pointer receiver for consistency
+    return fmt.Sprintf("count: %d", c.Value)
+}
 
 func main() {
-    titles := []string{
-        "As It Was", "Blinding Lights", "Levitating",
-        "Bad Habit", "Kill Bill", "As The World Caves In",
-    }
-
-    byLetter := make(map[string][]string)
-    for _, t := range titles {
-        letter := string(t[0]) // first byte; safe because all titles start with ASCII
-        byLetter[letter] = append(byLetter[letter], t)
-    }
-
-    for _, ts := range byLetter {
-        slices.Sort(ts) // sort titles within each group
-    }
-
-    letters := slices.Collect(maps.Keys(byLetter))
-    slices.Sort(letters) // sort the letter keys
-
-    for _, letter := range letters {
-        fmt.Printf("%s: %v\n", letter, byLetter[letter])
-    }
+    c := NewCounter(10)
+    c.Increment()
+    c.Increment()
+    c.Increment()
+    fmt.Println(c)  // count: 13
+    c.Reset()
+    fmt.Println(c)  // count: 0
 }
 ```
 
 Output:
 ```
-A: [As It Was As The World Caves In]
-B: [Bad Habit Blinding Lights]
-K: [Kill Bill]
-L: [Levitating]
+count: 13
+count: 0
 ```
 
-Key points: always initialise a map with `make` before writing; `maps.Keys` returns an iterator (Go 1.23+) that `slices.Collect` converts to a sortable slice.
+Notes:
+- `NewCounter` returns `*Counter` so every method call works without taking an address at the call site.
+- All three methods use pointer receivers for consistency --- since `Increment` and `Reset` must mutate `c.Value`, all methods on `*Counter` use the pointer form.
+- `fmt.Println(c)` calls `c.String()` automatically because `*Counter` satisfies `fmt.Stringer` (which requires `String() string`).

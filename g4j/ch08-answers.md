@@ -1,39 +1,20 @@
-# Chapter 8: Error Handling --- Answers
+# Chapter 9: Interfaces --- Answers
 
-**Exercise 1** (Think about it): Java uses checked exceptions to force callers to handle failures.
-Go returns `error` values that the compiler does not require you to inspect.
-What are the trade-offs of each approach?
-In what situations does Go's approach lead to more reliable code, and in what situations might it lead to less reliable code compared to Java's checked exceptions?
+**Exercise 1** (Think about it): Go's structural typing means any package can retroactively make its types satisfy an interface defined in any other package.
+In Java, if you want your `Song` class to satisfy a new interface `Playable` defined in a library you do not control, you must modify `Song`'s source.
+Explain how Go's approach changes the relationship between library authors and library users.
+What does this mean for extending types from packages you cannot modify?
 
-Java's checked exceptions make the compiler your partner: if a method declares `throws IOException`, every caller must either catch it or re-declare the throws clause.
-This guarantees that failure modes are documented in method signatures and that callers cannot silently ignore them --- the code will not compile otherwise.
+Go's structural typing means that the author of a type and the author of an interface are completely decoupled.
+If library A defines `type Track struct { ... }` and later library B defines `interface Playable { Play() }`, and `Track` already has a `Play()` method, then `Track` satisfies `Playable` automatically --- neither author needs to know about the other.
 
-Go takes the opposite position: `error` is a return value like any other.
-The compiler does not prevent you from discarding it with `_` or simply not capturing it at all.
-The discipline must come from the programmer and tooling (`errcheck`, `staticcheck`) rather than the language itself.
+For types you cannot modify, the picture is similar: if the type already has the methods you need, you can use it directly where your interface is expected.
+If it does not, you have two options: wrap the type in your own struct that adds the missing methods (the adapter pattern), or define a new named type based on the original and add methods to that.
 
-**Where Go tends to win:**
-
-- Error handling becomes regular control flow, not exception propagation through a separate, parallel mechanism.
-Errors can be stored in slices, combined with `errors.Join`, and processed with the same code that handles any other value.
-- There is no checked-exception pollution: Java's `throws` clauses ripple upward through call chains, forcing every intermediate method to declare or re-wrap exceptions even when it has nothing meaningful to add.
-Go functions that merely forward an error just `return err` --- no signature change required.
-- Errors do not skip stack frames invisibly.
-The flow of control through a Go program is always traceable by reading the `if err != nil` checks; no hidden stack unwinding occurs.
-
-**Where Java's checked exceptions tend to win:**
-
-- The compiler catches ignored errors at the call site.
-A Go developer who writes `n, _ := parseTrackNumber(s)` has silently discarded the error, and the compiler says nothing.
-- Checked exceptions create a discoverable, machine-readable contract: the method signature lists every failure mode.
-Go's error convention requires reading documentation or source code to learn what errors a function may return.
-- Refactoring is easier in Java when you add a new failure mode: the compiler identifies every call site that needs updating.
-In Go, adding a new error condition to a function is invisible to callers.
-
-**The bottom line:**
-Go trades compile-time enforcement for simplicity and composability.
-The approach works well in teams that run linters and review code carefully, and it shines in functions that produce or transform errors as data.
-It can lead to less reliable code in projects where error checking is informal or tooling is not enforced.
+This is a fundamental philosophical difference.
+In Java, the relationship between a class and an interface is declared at write-time and embedded in the source.
+In Go, the relationship is discovered at compile-time by the compiler --- it emerges from what the type does, not from what it says it is.
+This makes Go code easier to extend and test, because you can define narrow interfaces in your own package that third-party types satisfy without any changes to the third-party source.
 
 ---
 
@@ -42,128 +23,60 @@ It can lead to less reliable code in projects where error checking is informal o
 ```go
 package main
 
-import (
-    "errors"
-    "fmt"
-)
+import "fmt"
 
-var ErrNotFound = errors.New("not found")
+type Celsius float64
+type Fahrenheit float64
 
-type CatalogError struct {
-    Track string
-    Err   error
+func (c Celsius) String() string {
+    return fmt.Sprintf("%.1f°C", float64(c))
 }
 
-func (e *CatalogError) Error() string {
-    return fmt.Sprintf("catalog: %s: %s", e.Track, e.Err)
-}
-
-func (e *CatalogError) Unwrap() error {
-    return e.Err
-}
-
-func lookup(track string) error {
-    return &CatalogError{Track: track, Err: ErrNotFound}
+func printTemp(v fmt.Stringer) {
+    fmt.Println(v.String())
 }
 
 func main() {
-    err := lookup("Tití Me Preguntó")
-    fmt.Println(err)
-    fmt.Println(errors.Is(err, ErrNotFound))
-
-    var ce *CatalogError
-    if errors.As(err, &ce) {
-        fmt.Println(ce.Track)
-    }
+    c := Celsius(37.5)
+    f := Fahrenheit(99.5)
+    printTemp(c)
+    fmt.Println(f)
 }
 ```
 
 Output:
-
 ```
-catalog: Tití Me Preguntó: not found
-true
-Tití Me Preguntó
+37.5°C
+99.5
 ```
 
-**Line-by-line explanation:**
+`Celsius` has a `String() string` method, so it satisfies `fmt.Stringer`.
+`printTemp` calls `v.String()` and passes the result to `fmt.Println`, which prints `37.5°C` followed by a newline.
 
-`lookup("Tití Me Preguntó")` returns a `*CatalogError` with `Track = "Tití Me Preguntó"` and `Err = ErrNotFound`.
-
-`fmt.Println(err)` calls `err.Error()`, which returns `"catalog: Tití Me Preguntó: not found"`.
-`fmt.Println` appends a newline, so the first line of output is `catalog: Tití Me Preguntó: not found`.
-
-`errors.Is(err, ErrNotFound)` starts at `err` (a `*CatalogError`) and calls `==` against `ErrNotFound` --- no match.
-It then calls `err.Unwrap()`, which returns `ErrNotFound` itself.
-`ErrNotFound == ErrNotFound` is `true`.
-So `errors.Is` returns `true`, and `fmt.Println(true)` prints `true`.
-
-`errors.As(err, &ce)` checks whether `err` is assignable to `*CatalogError`.
-It is, so `ce` is set to the `*CatalogError` value and `errors.As` returns `true`.
-The `if` body prints `ce.Track`, which is `"Tití Me Preguntó"`.
+`Fahrenheit` does **not** have a `String() string` method, so it does not satisfy `fmt.Stringer`.
+`fmt.Println(f)` formats `f` using the default verb for its underlying type, which is `float64`.
+The default formatting for a float is the shortest decimal representation that rounds back to the same value --- here that is `99.5`.
+No degree symbol, no unit: just the number.
 
 ---
 
-**Exercise 3** (Calculation): Consider the following code.
-How many distinct, non-nil error values does `validateSong` return for the input `Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}`?
-What is the output of `fmt.Println(err)` for that input?
+**Exercise 3** (Calculation): An interface value in Go stores two fields: a pointer to type information and a pointer to (or copy of) the data.
+Given a variable declared as `var r io.Reader = &bytes.Buffer{}`, how many distinct type/value components does `r` hold?
+If `r` is then assigned `nil`, describe the type and value components of the resulting interface value.
 
-```go
-package main
+`r` holds **two** components:
+- **Type:** a pointer to the runtime type descriptor for `*bytes.Buffer`.
+- **Value:** a pointer to the `bytes.Buffer` value on the heap.
 
-import (
-    "errors"
-    "fmt"
-)
+After `r = nil`, both components are set to `nil`:
+- **Type:** `nil` (no concrete type information).
+- **Value:** `nil` (no data pointer).
 
-type Song struct {
-    Title  string
-    Artist string
-    Year   int
-    BPM    int
-}
+This is the **untyped nil** interface value.
+`r == nil` is `true` after this assignment.
 
-func validateSong(s Song) error {
-    var errs []error
-    if s.Title == "" {
-        errs = append(errs, errors.New("title required"))
-    }
-    if s.Year < 2000 || s.Year > 2030 {
-        errs = append(errs, fmt.Errorf("year %d out of range", s.Year))
-    }
-    if s.BPM <= 0 {
-        errs = append(errs, errors.New("BPM must be positive"))
-    }
-    return errors.Join(errs...)
-}
-
-func main() {
-    s := Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}
-    err := validateSong(s)
-    fmt.Println(err)
-}
-```
-
-**Answer:** `validateSong` collects **2** distinct, non-nil error values.
-
-Trace through the conditions for `Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}`:
-
-- `s.Title == ""` is `true` --- `errors.New("title required")` is appended. (1 error)
-- `s.Year < 2000 || s.Year > 2030`: `2021 < 2000` is `false`; `2021 > 2030` is `false` --- condition is `false`, no error appended.
-- `s.BPM <= 0`: `-1 <= 0` is `true` --- `errors.New("BPM must be positive")` is appended. (2 errors)
-
-`errors.Join` receives a slice of 2 non-nil errors.
-Its `Error()` method joins their messages with a newline between them.
-
-Output:
-
-```
-title required
-BPM must be positive
-```
-
-Note that `Artist` has no validation rule, so `"Karol G"` (a valid, non-empty value) does not contribute any error.
-`Year = 2021` falls within the range `[2000, 2030]`, so no year error is produced either.
+Contrast this with the nil trap in the chapter: if instead you wrote `var buf *bytes.Buffer = nil; r = buf`, the type component would be `*bytes.Buffer` (non-nil) and the value component would be `nil`.
+That interface value is **not** nil even though `buf` is nil.
 
 ---
 
@@ -172,91 +85,49 @@ Note that `Artist` has no validation rule, so `"Karol G"` (a valid, non-empty va
 ```go
 package main
 
-import (
-    "errors"
-    "fmt"
-    "io"
-)
+import "fmt"
 
-func readAll(r io.Reader) ([]byte, error) {
-    buf := make([]byte, 4)
-    var result []byte
-    for {
-        n, err := r.Read(buf)
-        result = append(result, buf[:n]...)
-        if err == io.EOF {
-            break
-        }
-        if err != nil {
-            return nil, fmt.Errorf("readAll: %w", err)
-        }
+type DBError struct{ code int }
+
+func (e *DBError) Error() string { return fmt.Sprintf("db error %d", e.code) }
+
+func connect(bad bool) error {
+    var err *DBError
+    if bad {
+        err = &DBError{code: 500}
     }
-    return result, nil
+    return err
 }
 
 func main() {
-    r := strings.NewReader("TQG")
-    data, err := readAll(r)
-    if err != nil {
-        fmt.Println("error:", err)
-        return
+    e := connect(false)
+    if e == nil {
+        fmt.Println("connected OK")
+    } else {
+        fmt.Println("failed:", e)
     }
-    fmt.Println(string(data))
 }
 ```
 
-**The bug:** There are actually two problems.
+**The bug:** `connect` always returns a non-nil `error`, even when `bad` is `false`.
 
-**Bug 1 --- missing import:** `strings.NewReader` is used in `main` but `"strings"` is not in the import list.
-The program will not compile.
-The import block should be:
+When `bad` is `false`, `err` is a nil `*DBError`.
+The `return err` statement wraps that typed nil in an `error` interface value.
+The interface value has type `*DBError` (non-nil) and value `nil`.
+Because the type component is non-nil, `e == nil` evaluates to `false`, and the program prints `failed: <nil>` instead of `connected OK`.
 
-```go
-import (
-    "errors"
-    "fmt"
-    "io"
-    "strings"
-)
-```
-
-**Bug 2 --- comparing `err == io.EOF` directly instead of using `errors.Is`:** The sentinel check `if err == io.EOF` works correctly for `io.EOF` itself, but it will silently miss `io.EOF` if the reader ever wraps it (e.g., `fmt.Errorf("read: %w", io.EOF)`).
-The idiomatic fix is:
+**The fix:**
 
 ```go
-if errors.Is(err, io.EOF) {
-    break
-}
-```
-
-Using `errors.Is` is consistent, future-proof, and is what the chapter recommends.
-The `errors` import is already present, so this is a zero-cost change.
-
-**Corrected `readAll`:**
-
-```go
-func readAll(r io.Reader) ([]byte, error) {
-    buf := make([]byte, 4)
-    var result []byte
-    for {
-        n, err := r.Read(buf)
-        result = append(result, buf[:n]...)
-        if errors.Is(err, io.EOF) {
-            break
-        }
-        if err != nil {
-            return nil, fmt.Errorf("readAll: %w", err)
-        }
+func connect(bad bool) error {
+    if bad {
+        return &DBError{code: 500}
     }
-    return result, nil
+    return nil  // untyped nil: type=nil, value=nil --- this is a true nil error
 }
 ```
 
-With both fixes applied, the program compiles and prints:
-
-```
-TQG
-```
+Return `nil` directly rather than returning a typed nil pointer through an interface variable.
 
 ---
 
@@ -266,76 +137,67 @@ TQG
 package main
 
 import (
-    "errors"
     "fmt"
-    "strconv"
-    "strings"
+    "math"
 )
 
-var ErrInvalidTimecode = errors.New("invalid timecode")
+type Shape interface {
+    Area() float64      // returns the area of the shape
+    Perimeter() float64 // returns the perimeter of the shape
+}
 
-func parseTimecode(s string) (int, int, int, error) {
-    parts := strings.Split(s, ":")
-    if len(parts) != 2 {
-        return 0, 0, 0, fmt.Errorf("parseTimecode: expected MM:SS, got %q: %w", s, ErrInvalidTimecode)
-    }
+type Rectangle struct {
+    Width  float64
+    Height float64
+}
 
-    minutes, err := strconv.Atoi(parts[0])
-    if err != nil {
-        return 0, 0, 0, fmt.Errorf("parseTimecode: invalid minutes %q: %w", parts[0], ErrInvalidTimecode)
-    }
+func (r Rectangle) Area() float64 {
+    return r.Width * r.Height
+}
 
-    seconds, err := strconv.Atoi(parts[1])
-    if err != nil {
-        return 0, 0, 0, fmt.Errorf("parseTimecode: invalid seconds %q: %w", parts[1], ErrInvalidTimecode)
-    }
+func (r Rectangle) Perimeter() float64 {
+    return 2 * (r.Width + r.Height)
+}
 
-    if minutes < 0 {
-        return 0, 0, 0, fmt.Errorf("parseTimecode: minutes %d is negative: %w", minutes, ErrInvalidTimecode)
-    }
-    if seconds < 0 || seconds > 59 {
-        return 0, 0, 0, fmt.Errorf("parseTimecode: seconds %d out of range [0,59]: %w", seconds, ErrInvalidTimecode)
-    }
+type Circle struct {
+    Radius float64
+}
 
-    total := minutes*60 + seconds
-    return minutes, seconds, total, nil
+func (c Circle) Area() float64 {
+    return math.Pi * c.Radius * c.Radius
+}
+
+func (c Circle) Perimeter() float64 {
+    return 2 * math.Pi * c.Radius
+}
+
+func printShapeInfo(s Shape) {
+    fmt.Printf("Area:      %.4f\n", s.Area())
+    fmt.Printf("Perimeter: %.4f\n", s.Perimeter())
 }
 
 func main() {
-    inputs := []string{"03:45", "345", "01:61"}
+    r := Rectangle{Width: 4.0, Height: 3.0}
+    c := Circle{Radius: 5.0}
 
-    for _, tc := range inputs {
-        m, s, total, err := parseTimecode(tc)
-        if err != nil {
-            fmt.Printf("%-10s => error: %s\n", tc, err)
-            fmt.Printf("           is ErrInvalidTimecode: %v\n", errors.Is(err, ErrInvalidTimecode))
-        } else {
-            fmt.Printf("%-10s => %dm %ds (%d total seconds)\n", tc, m, s, total)
-        }
-    }
+    fmt.Println("Rectangle:")
+    printShapeInfo(r)
+
+    fmt.Println("Circle:")
+    printShapeInfo(c)
 }
 ```
 
 Output:
-
 ```
-03:45      => 3m 45s (225 total seconds)
-345        => error: parseTimecode: expected MM:SS, got "345": invalid timecode
-           is ErrInvalidTimecode: true
-01:61      => error: parseTimecode: seconds 61 out of range [0,59]: invalid timecode
-           is ErrInvalidTimecode: true
+Rectangle:
+Area:      12.0000
+Perimeter: 14.0000
+Circle:
+Area:      78.5398
+Perimeter: 31.4159
 ```
 
-**Key design decisions explained:**
-
-- `ErrInvalidTimecode` is a package-level sentinel declared with `errors.New`.
-Exporting it (capital `E`) lets callers in other packages use `errors.Is` to distinguish timecode errors from other error kinds.
-
-- Every error path uses `fmt.Errorf("...: %w", ErrInvalidTimecode)` to wrap the sentinel.
-This means the returned error has a human-readable message that includes the context (the bad input, the specific reason) **and** a chain that `errors.Is` can walk to find `ErrInvalidTimecode`.
-
-- The function returns four values: `(int, int, int, error)`.
-The three `int` values are zero on error, consistent with the Go convention of returning zero values alongside a non-nil error.
-
-- `strings.Split(s, ":")` with a check on `len(parts) != 2` is the idiomatic way to parse a two-part format.
-Using `fmt.Sscanf` or a regex are also valid; `strings.Split` is the most readable for this simple case.
+Both `Rectangle` and `Circle` satisfy `Shape` implicitly --- no declaration required.
+`printShapeInfo` accepts any `Shape`, so adding a new shape (say, `Triangle`) requires only implementing `Area()` and `Perimeter()` on it; `printShapeInfo` does not change.
+This is the open/closed principle, Go style.

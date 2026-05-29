@@ -1,285 +1,259 @@
-# Chapter 17: Testing --- Answers
+# Chapter 18: Generics --- Answers
 
-**Exercise 1** (Think about it): JUnit 5's `@ParameterizedTest` with `@CsvSource` and Go's table-driven tests with `t.Run` both let you run the same logic against many inputs.
-Describe two concrete advantages that Go's table-driven approach gives you over `@CsvSource`.
-Then explain the key behavioral difference between `t.Fatal` and `t.Error` inside a subtest, and describe a scenario where you would deliberately choose `t.Error` over `t.Fatal`.
+**Exercise 1** (Think about it): Java generics use **type erasure**: at runtime, `List<String>` and `List<Integer>` are both just `List`.
+Generic type information is only available at compile time.
+Go generics use **monomorphization** (or a shared pointer-shaped representation): the compiler may generate distinct code for each instantiation.
+Describe one concrete advantage and one concrete disadvantage of each approach.
+How does type erasure affect what you can do with a Java generic type at runtime (e.g., `instanceof List<String>`)? Does Go have the same limitation?
 
-**Table-driven tests vs `@CsvSource` --- two concrete advantages:**
+**Type erasure (Java):**
 
-1. **Structured, type-safe test cases.**
-   With `@CsvSource`, each row is a comma-separated string; numeric values must be parsed at runtime and type errors surface only when the test runs.
-   A Go table is a slice of structs --- the compiler checks every field at compile time.
-   If you rename a field or change its type, the build breaks immediately.
-   There is no equivalent compile-time safety in `@CsvSource`.
+*Advantage:* A single compiled class file handles all instantiations.
+`ArrayList<String>` and `ArrayList<Integer>` share bytecode, which keeps the compiled output compact and means that libraries compiled against an older JDK are forward-compatible with new generic code without recompilation.
 
-2. **Arbitrary Go values in each case.**
-   `@CsvSource` can only express types that JUnit knows how to convert from strings: primitives, strings, enums.
-   A Go table can hold any value --- a function, an `error`, a struct, a slice --- as a field in the test case struct.
-   This lets you express cases like "given this pre-built request object, expect this error" without any serialization or custom converter.
+*Disadvantage:* The generic type argument is gone at runtime.
+You cannot write `obj instanceof List<String>` --- the JVM sees only `List`.
+Creating a generic array (`new T[]`) is illegal because the runtime cannot know the element type.
+Working around these limitations requires unchecked casts and `@SuppressWarnings("unchecked")`, which reintroduces the `ClassCastException` risk that generics were designed to prevent.
 
-**`t.Fatal` vs `t.Error` inside a subtest:**
+**Monomorphization (Go):**
 
-Inside a `t.Run` subtest, `t.Fatal` stops only that subtest's goroutine --- it calls `runtime.Goexit()` on the subtest's goroutine.
-The outer test loop continues and the next subtest runs normally.
-`t.Error` also affects only the subtest: it marks it as failed but the subtest continues executing.
+*Advantage:* The compiler generates type-specific code, so operations on value types like `int` or `float64` are never boxed.
+A `Stack[int]` stores plain `int` values directly in the backing slice --- no `Integer` wrapper objects, no extra allocations, no GC pressure.
+There is no unchecked cast at runtime; type safety is total.
 
-A scenario where you would choose `t.Error` over `t.Fatal`: when you are validating multiple independent fields of a response struct and you want to see all failures at once.
-For example, if you call an HTTP handler and want to check both the status code and the response body, use `t.Error` for each.
-If you used `t.Fatal` on the status code check, a wrong status code would hide a potentially wrong body --- you would have to fix and re-run to see the body error.
-With `t.Error`, one failing run shows you everything that is wrong.
+*Disadvantage:* The compiler may produce multiple instantiations of the same function, increasing binary size.
+For large programs with many instantiation combinations, compile times can grow.
+(In practice, Go mitigates this by using a GC-shape-based approach that shares code for pointer-shaped types, but the tradeoff is still present for value types.)
 
----
+**Runtime reflection:**
 
-**Exercise 2** (What does this print?): Trace the output when this test is run with `go test -v`.
+In Java, because of erasure, `List<String>.class` does not exist; you can only get `List.class`.
+`instanceof List<String>` is a compile-time warning and a runtime check against `List`, not `List<String>`.
+Accessing the actual type argument at runtime requires passing a `Class<T>` token explicitly.
 
-```go
-package music_test
-
-import "testing"
-
-func checkPositive(t *testing.T, n int) {
-    if n <= 0 {
-        t.Errorf("expected positive, got %d", n)
-    }
-}
-
-func TestGolden(t *testing.T) {
-    checkPositive(t, 1)
-    t.Log("checked 1")
-    checkPositive(t, -1)
-    t.Log("checked -1")
-    checkPositive(t, 2)
-    t.Log("checked 2")
-}
-```
-
-Output (with `go test -v`):
-
-```
-=== RUN   TestGolden
-    music_test.go:7: expected positive, got -1
-    music_test.go:11: checked 1
-    music_test.go:13: checked -1
-    music_test.go:15: checked 2
---- FAIL: TestGolden (0.00s)
-FAIL
-```
-
-**Key points to trace:**
-
-- `checkPositive(t, 1)`: `1 > 0`, so no error is recorded.
-- `t.Log("checked 1")`: message is queued.
-- `checkPositive(t, -1)`: `-1 <= 0`, so `t.Errorf` is called.
-  `t.Errorf` is `t.Error` with formatting --- it records a failure message and marks the test failed, but **does not stop execution**.
-  The test keeps running.
-- `t.Log("checked -1")`: message is queued.
-- `checkPositive(t, 2)`: `2 > 0`, no error.
-- `t.Log("checked 2")`: message is queued.
-- Because the test is marked failed, all `t.Log` output is printed (with `-v`, log output is always printed regardless of pass/fail).
-
-The test finishes with `--- FAIL`.
-Execution continues past the failing check because `t.Errorf` is used, not `t.Fatalf`.
-
-**Note on `t.Helper()` absence:**
-`checkPositive` does not call `t.Helper()`.
-As a result, the failure line reported is inside `checkPositive` (the `t.Errorf` call), not in `TestGolden` where `checkPositive(-1)` was called.
-Adding `t.Helper()` as the first line of `checkPositive` would make the reported line point to `checkPositive(t, -1)` in `TestGolden` instead.
+In Go, you can use `reflect.TypeOf` to inspect the concrete type of a value, and since Go does not erase type information the way Java does, the concrete type is always available.
+However, Go reflection operates on concrete values, not on type parameters themselves --- you cannot query "what was `T`?" from inside a generic function without passing the type explicitly.
+Both languages have some limitations here, but the flavor of the limitation differs.
 
 ---
 
-**Exercise 3** (Calculation): A benchmark function has the following structure:
+**Exercise 2** (What does this print?):
 
 ```go
-func BenchmarkWoman(b *testing.B) {
-    for range b.N {
-        _ = processTrack("Woman")
-    }
-}
-```
+package main
 
-On the first probe the framework sets `b.N = 1` and measures elapsed time.
-It then sets `b.N = 100`, then `b.N = 10_000`, then `b.N = 1_000_000`.
-The framework stops when the total elapsed time exceeds one second.
-If `processTrack` takes exactly 500 ns per call, at which value of `b.N` does the total elapsed time first exceed one second?
-What is the reported ns/op value?
+import "fmt"
 
-**Answer:**
-
-Total elapsed time = `b.N × 500 ns`.
-
-| b.N       | Total time             |
-|-----------|------------------------|
-| 1         | 500 ns                 |
-| 100       | 50,000 ns = 50 µs      |
-| 10,000    | 5,000,000 ns = 5 ms    |
-| 1,000,000 | 500,000,000 ns = 500 ms |
-
-None of those values exceeds one second.
-The framework continues increasing `b.N`.
-The next typical value after 1,000,000 is 2,000,000:
-
-| b.N       | Total time             |
-|-----------|------------------------|
-| 2,000,000 | 1,000,000,000 ns = 1 s |
-
-At `b.N = 2,000,000` the total time is exactly 1 second, which meets (ties) the threshold.
-
-**b.N = 2,000,000** is where the run stops (or the next step after, depending on exact rounding in the real framework).
-
-**Reported ns/op:**
-The framework reports `total_time / b.N = 1,000,000,000 ns / 2,000,000 = 500 ns/op`.
-
-This matches `processTrack`'s actual per-call cost --- the benchmark is accurate.
-
----
-
-**Exercise 4** (Where is the bug?): The following test helper is supposed to make failure output point to the call site in `TestAboutDamnTime`, but it does not.
-Identify the bug and show the fix.
-
-```go
-package music_test
-
-import "testing"
-
-func assertNormalized(t *testing.T, input, want string) {
-    got := normalize(input)
-    if got != want {
-        t.Fatalf("normalize(%q): got %q, want %q", input, got, want)
-    }
-}
-
-func TestAboutDamnTime(t *testing.T) {
-    assertNormalized(t, "about damn time", "About Damn Time")
-    assertNormalized(t, "good as hell",    "Good as Hell")
-}
-```
-
-**The bug:** `assertNormalized` does not call `t.Helper()`.
-
-When `t.Fatalf` fires inside `assertNormalized`, Go's test framework records the file and line number of the `t.Fatalf` call inside the helper.
-The reported failure location is something like:
-
-```
-music_test.go:8: normalize("about damn time"): got "about Damn Time", want "About Damn Time"
-```
-
-That points inside `assertNormalized`, not to the line in `TestAboutDamnTime` that triggered the failure.
-You have to manually trace back to find which call site is responsible.
-
-**The fix:** add `t.Helper()` as the first statement in `assertNormalized`:
-
-```go
-func assertNormalized(t *testing.T, input, want string) {
-    t.Helper()  // attribute failures to the caller, not this function
-    got := normalize(input)
-    if got != want {
-        t.Fatalf("normalize(%q): got %q, want %q", input, got, want)
-    }
-}
-```
-
-With `t.Helper()` present, the reported failure location becomes:
-
-```
-music_test.go:13: normalize("about damn time"): got "about Damn Time", want "About Damn Time"
-```
-
-That line number points directly to `assertNormalized(t, "about damn time", "About Damn Time")` in `TestAboutDamnTime`, which is exactly where the problematic call lives.
-
-**Secondary note:** `t.Fatalf` inside a helper is fine when subsequent checks in the same test function would be meaningless if this check fails.
-Here, if `normalize("about damn time")` returns a wrong value the second check can still run independently, so `t.Errorf` could be argued as a better choice --- but whether to use `Fatal` or `Error` is a judgment call; the `t.Helper()` omission is the clear bug.
-
----
-
-**Exercise 5** (Write a program): Write a table-driven test for `TitleCase`.
-Your test must include at least five cases covering normal input, empty string, all-caps input, and a multi-word title.
-Use `t.Run` for each case and `t.Helper` in any helper you write.
-
-```go
-package music_test
-
-import (
-    "strings"
-    "testing"
-    "unicode"
-)
-
-// TitleCase converts a string to title case.
-// Each word's first letter is uppercased; the rest are lowercased.
-// Words are separated by spaces.
-func TitleCase(s string) string {
-    words := strings.Fields(s)
-    for i, w := range words {
-        if len(w) == 0 {
-            continue
+func Filter[T any](s []T, keep func(T) bool) []T {
+    var out []T
+    for _, v := range s {
+        if keep(v) {
+            out = append(out, v)
         }
-        runes := []rune(w)
-        runes[0] = unicode.ToUpper(runes[0])
-        for j := 1; j < len(runes); j++ {
-            runes[j] = unicode.ToLower(runes[j])
+    }
+    return out
+}
+
+type BPM int
+
+func main() {
+    beats := []BPM{72, 128, 96, 140, 80}
+    fast := Filter(beats, func(b BPM) bool { return b >= 120 })
+    fmt.Println(fast)
+
+    words := []string{"greedy", "Heather", "Astronomy", "you broke me first"}
+    long := Filter(words, func(s string) bool { return len(s) > 7 })
+    fmt.Println(long)
+}
+```
+
+Output:
+```
+[128 140]
+[Astronomy you broke me first]
+```
+
+For the first call, `T` is inferred as `BPM`.
+The predicate keeps elements greater than or equal to 120.
+`72`, `96`, and `80` are below 120 and are excluded.
+`128` and `140` pass and are appended to `out`.
+
+For the second call, `T` is inferred as `string`.
+The predicate keeps strings longer than 7 characters.
+`"greedy"` has 6 characters (excluded), `"Heather"` has 7 (excluded, because 7 is not greater than 7), `"Astronomy"` has 9 (included), and `"you broke me first"` has 18 (included).
+
+---
+
+**Exercise 3** (Calculation): The function below has the signature `func Reduce[T, U any](s []T, init U, f func(U, T) U) U`.
+Trace the execution of `Reduce([]int{1, 2, 3, 4}, 0, func(acc, v int) int { return acc + v })`.
+What is the concrete type bound to `T`?
+What is the concrete type bound to `U`?
+What value does the function return, and what are the intermediate values of `acc` after each call to `f`?
+
+`T` is bound to `int` (the element type of `[]int{1, 2, 3, 4}`).
+`U` is also bound to `int` (the type of the initial accumulator `0` and the return type of `f`).
+
+The function body would be:
+
+```go
+func Reduce[T, U any](s []T, init U, f func(U, T) U) U {
+    acc := init
+    for _, v := range s {
+        acc = f(acc, v)
+    }
+    return acc
+}
+```
+
+Tracing each call to `f`:
+
+| Iteration | `acc` before | `v` | `acc` after (`acc + v`) |
+|-----------|-------------|-----|------------------------|
+| 1         | 0           | 1   | 1                      |
+| 2         | 1           | 2   | 3                      |
+| 3         | 3           | 3   | 6                      |
+| 4         | 6           | 4   | 10                     |
+
+The function returns **10**.
+
+---
+
+**Exercise 4** (Where is the bug?):
+
+```go
+package main
+
+import "fmt"
+
+type Playlist []string
+
+func Dedupe[T any](s []T) []T {
+    seen := make(map[T]bool)
+    var out []T
+    for _, v := range s {
+        if !seen[v] {
+            seen[v] = true
+            out = append(out, v)
         }
-        words[i] = string(runes)
     }
-    return strings.Join(words, " ")
+    return out
 }
 
-// assertEqual is a helper that reports mismatches at the caller's site.
-func assertEqual(t *testing.T, got, want, label string) {
-    t.Helper()
-    if got != want {
-        t.Errorf("%s: got %q, want %q", label, got, want)
-    }
-}
-
-func TestTitleCase(t *testing.T) {
-    cases := []struct {
-        name  string
-        input string
-        want  string
-    }{
-        {name: "empty",        input: "",                    want: ""},
-        {name: "single word",  input: "golden",              want: "Golden"},
-        {name: "multi-word",   input: "good as hell",        want: "Good As Hell"},
-        {name: "all caps",     input: "ABOUT DAMN TIME",     want: "About Damn Time"},
-        {name: "mixed case",   input: "wOmAn",               want: "Woman"},
-        {name: "already title", input: "Good As Hell",       want: "Good As Hell"},
-    }
-
-    for _, tc := range cases {
-        t.Run(tc.name, func(t *testing.T) {
-            got := TitleCase(tc.input)
-            assertEqual(t, got, tc.want, "TitleCase("+tc.input+")")
-        })
-    }
+func main() {
+    p := Playlist{"greedy", "Heather", "greedy", "Astronomy", "Heather"}
+    fmt.Println(Dedupe(p))
 }
 ```
 
-Running `go test -v` produces:
+**The bug:** `T` is constrained to `any`, but `map[T]bool` requires `T` to be `comparable`.
+The compiler rejects this with an error like:
 
 ```
-=== RUN   TestTitleCase
-=== RUN   TestTitleCase/empty
-=== RUN   TestTitleCase/single_word
-=== RUN   TestTitleCase/multi-word
-=== RUN   TestTitleCase/all_caps
-=== RUN   TestTitleCase/mixed_case
-=== RUN   TestTitleCase/already_title
---- PASS: TestTitleCase (0.00s)
-    --- PASS: TestTitleCase/empty (0.00s)
-    --- PASS: TestTitleCase/single_word (0.00s)
-    --- PASS: TestTitleCase/multi-word (0.00s)
-    --- PASS: TestTitleCase/all_caps (0.00s)
-    --- PASS: TestTitleCase/mixed_case (0.00s)
-    --- PASS: TestTitleCase/already_title (0.00s)
-PASS
+invalid map key type T (missing comparable constraint)
 ```
 
-**Notes on the solution:**
+Using a type as a map key requires that it support `==` and `!=`.
+`any` does not guarantee this.
 
-- The `name` field in each case struct is passed to `t.Run`, producing descriptive subtest names in the output.
-  A failing case shows up as `--- FAIL: TestTitleCase/all_caps` rather than just `--- FAIL: TestTitleCase`.
-- `assertEqual` calls `t.Helper()` so that any failure message points to the line inside the `t.Run` body that called `assertEqual`, not to the `t.Errorf` line inside `assertEqual` itself.
-- `t.Errorf` (not `t.Fatalf`) is used in the helper because each subtest has only one assertion; there is no reason to stop early.
-  If the helper checked multiple things, `t.Fatalf` could be appropriate for a critical precondition.
-- The six cases satisfy the problem requirements: empty string, single word (normal), multi-word, all-caps, and mixed case.
-  The "already title" case is a bonus regression check.
+**The fix:** Change the constraint from `any` to `comparable`:
+
+```go
+func Dedupe[T comparable](s []T) []T {
+    seen := make(map[T]bool)
+    var out []T
+    for _, v := range s {
+        if !seen[v] {
+            seen[v] = true
+            out = append(out, v)
+        }
+    }
+    return out
+}
+```
+
+`string` and `Playlist` (whose underlying type is `[]string`) --- wait: `Playlist` is `[]string`, and slices are **not** comparable.
+So even with `comparable`, passing `Playlist` would fail because `[]string` does not satisfy `comparable`.
+
+The call in `main` passes `p` (of type `Playlist`, underlying type `[]string`) directly.
+Slices are never comparable in Go.
+
+The correct fix is to change the call to pass the string slice elements rather than the slice type:
+
+```go
+func main() {
+    p := []string{"greedy", "Heather", "greedy", "Astronomy", "Heather"}
+    fmt.Println(Dedupe(p))
+}
+```
+
+With `T comparable` and `p` as `[]string`, the output is:
+
+```
+[greedy Heather Astronomy]
+```
+
+In summary, there are two bugs: the constraint must be `comparable`, and `Playlist` (a `[]string`) cannot be used as a map key because slices are not comparable.
+
+---
+
+**Exercise 5** (Write a program):
+
+```go
+package main
+
+import "fmt"
+
+// Set is a generic unordered collection of unique comparable values.
+type Set[T comparable] struct {
+    m map[T]struct{}
+}
+
+// Add inserts v into the set.
+func (s *Set[T]) Add(v T) {
+    if s.m == nil {
+        s.m = make(map[T]struct{})  // lazy initialization
+    }
+    s.m[v] = struct{}{}
+}
+
+// Contains reports whether v is in the set.
+func (s *Set[T]) Contains(v T) bool {
+    _, ok := s.m[v]
+    return ok
+}
+
+// Values returns all elements of the set as a slice in unspecified order.
+func (s *Set[T]) Values() []T {
+    out := make([]T, 0, len(s.m))
+    for v := range s.m {
+        out = append(out, v)  // iteration order is random
+    }
+    return out
+}
+
+func main() {
+    var songs Set[string]
+    songs.Add("greedy")
+    songs.Add("you broke me first")
+    songs.Add("Heather")
+    songs.Add("Astronomy")
+    songs.Add("Heather") // duplicate --- should be ignored
+
+    fmt.Println("length:", len(songs.Values()))          // 4
+    fmt.Println("contains Heather:", songs.Contains("Heather"))      // true
+    fmt.Println("contains Maniac:", songs.Contains("Maniac")) // false
+}
+```
+
+Output:
+```
+length: 4
+contains Heather: true
+contains Maniac: false
+```
+
+`map[T]struct{}` is the standard Go idiom for a set.
+An empty struct (`struct{}`) occupies zero bytes, so only the keys consume memory.
+The second `Add("Heather")` call is a no-op because the map key already exists --- map assignment is idempotent.
+`Values()` returns four strings because the duplicate was silently dropped, but their order will vary between runs since Go map iteration is randomized.

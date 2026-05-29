@@ -881,9 +881,261 @@ Key points in this solution:
 - The order of application matters: `pipeline(double, addTen)` and `pipeline(addTen, double)` produce different results for the same input.
 - An empty `pipeline()` call returns an identity function because the loop body never executes.
 
+
 ---
 
-# Chapter 6: Maps and Slices --- Answers
+# Chapter 6: Methods and Embedding --- Answers
+
+**Exercise 1** (Think about it): In Java, a class bundles data and behavior together and inheritance lets you share both across a type hierarchy.
+Go separates data (struct), behavior (methods), and code reuse (embedding) into three distinct mechanisms, and interfaces handle polymorphism independently of all three.
+What advantages does Go's separated approach offer over Java's unified class model?
+Can you think of a scenario where Java's approach is simpler or more convenient?
+
+**Advantages of Go's separated approach:**
+
+1. **You can attach methods to any type, not just classes.**
+   In Java, methods live inside class bodies and you cannot add methods to types defined in other packages.
+   In Go, you can define methods on any named type in the same package, including types imported from the standard library via type definitions (e.g., `type Seconds float64`).
+
+2. **Code reuse without coupling.**
+   Java inheritance forces an is-a relationship: `FeaturedTrack extends Track` means every `FeaturedTrack` is substitutable for a `Track`.
+   Go embedding is a has-a relationship with no substitutability.
+   You get promoted fields and methods without locking yourself into a hierarchy that may become wrong later.
+
+3. **Interfaces decouple behavior from data completely.**
+   A type satisfies a Go interface without knowing the interface exists.
+   This lets you define interfaces in the consumer package, not the producer package, making dependencies flow the right way.
+
+4. **No fragile base-class problem.**
+   Java's virtual dispatch means a change to a superclass method can silently alter the behavior of all subclasses.
+   Go's promoted methods are not virtual: calling a promoted method on an outer struct always calls the embedded type's method, unless the outer struct explicitly defines its own method with the same name.
+
+**Where Java's approach is simpler:**
+
+- When you genuinely want polymorphism through a type hierarchy (e.g., a UI widget tree), Java's `extends` gives you substitutability, virtual dispatch, and `instanceof` checks in one declaration.
+  In Go you need an interface plus embedding, and you must ensure both the outer and inner types implement the interface explicitly.
+- A `toString()` override in Java is automatic through the `Object` base class.
+  In Go, `fmt.Stringer` requires you to implement `String() string` on each type that wants custom formatting; there is no default.
+
+---
+
+**Exercise 2** (What does this print?):
+
+```go
+package main
+
+import "fmt"
+
+type Base struct {
+    ID int
+}
+
+func (b Base) Describe() string {
+    return fmt.Sprintf("Base ID=%d", b.ID)
+}
+
+type Widget struct {
+    Base
+    Color string
+}
+
+func main() {
+    w := Widget{
+        Base:  Base{ID: 42},
+        Color: "blue",
+    }
+    fmt.Println(w.ID)
+    fmt.Println(w.Color)
+    fmt.Println(w.Describe())
+    fmt.Println(w.Base.Describe())
+}
+```
+
+Output:
+```
+42
+blue
+Base ID=42
+Base ID=42
+```
+
+`w.ID` is promoted from `w.Base.ID` --- accessing `w.ID` and `w.Base.ID` reach the same field.
+`w.Color` is a direct field of `Widget`.
+`w.Describe()` calls the promoted `Base.Describe()` method, because `Widget` has no `Describe` method of its own.
+`w.Base.Describe()` calls the same method through the explicit path.
+Both calls produce identical output.
+
+---
+
+**Exercise 3** (Calculation): Trace the following program by hand.
+
+```go
+package main
+
+import "fmt"
+
+type Track struct {
+    Title  string
+    Artist string
+    BPM    int
+}
+
+func (t Track) String() string {
+    return fmt.Sprintf("%s by %s", t.Title, t.Artist)
+}
+
+type FeaturedTrack struct {
+    Track
+    Feature string
+}
+
+func (ft FeaturedTrack) String() string {
+    return ft.Track.String() + " ft. " + ft.Feature
+}
+
+func main() {
+    t := Track{Title: "Golden Hour", Artist: "JVKE", BPM: 97}
+    ft := FeaturedTrack{Track: t, Feature: "Rosalía"}
+
+    fmt.Println(t.String())
+    fmt.Println(ft.String())
+    fmt.Println(ft.Track.String())
+    fmt.Println(ft.BPM)
+}
+```
+
+Output:
+```
+Golden Hour by JVKE
+Golden Hour by JVKE ft. Rosalía
+Golden Hour by JVKE
+97
+```
+
+Step by step:
+
+- `t.String()`: calls `Track.String()` directly on `t`. Returns `"Golden Hour by JVKE"`.
+- `ft.String()`: `FeaturedTrack` has its own `String()` method, so the promoted `Track.String()` is shadowed.
+  `FeaturedTrack.String()` calls `ft.Track.String()` (returns `"Golden Hour by JVKE"`) and appends `" ft. "` and `ft.Feature`.
+  Returns `"Golden Hour by JVKE ft. Rosalía"`.
+- `ft.Track.String()`: calls `Track.String()` through the explicit embedded path, bypassing `FeaturedTrack.String()`.
+  Returns `"Golden Hour by JVKE"`.
+- `ft.BPM`: promoted from `ft.Track.BPM`. The value is `97`.
+
+The key insight: writing `ft.String()` calls `FeaturedTrack.String()` (the outer type's method), while `ft.Track.String()` bypasses the outer method and calls `Track.String()` directly.
+
+---
+
+**Exercise 4** (Where is the bug?):
+
+```go
+package main
+
+import "fmt"
+
+type Artist struct {
+    Name string
+}
+
+func (a Artist) Label() string {
+    return "Artist: " + a.Name
+}
+
+type Song struct {
+    *Artist
+    Title string
+}
+
+func main() {
+    s := Song{Title: "Chorizo Asado"}
+    fmt.Println(s.Title)
+    fmt.Println(s.Label()) // line A
+}
+```
+
+**The bug:** `Song` is initialized without setting the `*Artist` pointer, so `s.Artist` is `nil`.
+The first `fmt.Println(s.Title)` prints `"Chorizo Asado"` successfully.
+The second call `s.Label()` is promoted from the embedded `*Artist`.
+To call a method on the embedded type, Go dereferences the embedded pointer.
+Dereferencing a `nil` pointer causes a runtime panic:
+
+```
+panic: runtime error: invalid memory address or nil pointer dereference
+```
+
+**Fix:** initialize the embedded pointer before use:
+
+```go
+s := Song{
+    Artist: &Artist{Name: "Feid"},
+    Title:  "Chorizo Asado",
+}
+fmt.Println(s.Title)   // Chorizo Asado
+fmt.Println(s.Label()) // Artist: Feid
+```
+
+Alternatively, construct `Song` using `NewSong` to enforce initialization:
+
+```go
+func NewSong(title, artistName string) Song {
+    return Song{Artist: &Artist{Name: artistName}, Title: title}
+}
+```
+
+---
+
+**Exercise 5** (Write a program):
+
+```go
+package main
+
+import "fmt"
+
+type Counter struct {
+    Value int
+}
+
+func NewCounter(start int) *Counter {   // constructor: returns *Counter so callers can use pointer receivers
+    return &Counter{Value: start}
+}
+
+func (c *Counter) Increment() {         // pointer receiver: mutates Value
+    c.Value++
+}
+
+func (c *Counter) Reset() {             // pointer receiver: mutates Value
+    c.Value = 0
+}
+
+func (c *Counter) String() string {     // pointer receiver for consistency
+    return fmt.Sprintf("count: %d", c.Value)
+}
+
+func main() {
+    c := NewCounter(10)
+    c.Increment()
+    c.Increment()
+    c.Increment()
+    fmt.Println(c)  // count: 13
+    c.Reset()
+    fmt.Println(c)  // count: 0
+}
+```
+
+Output:
+```
+count: 13
+count: 0
+```
+
+Notes:
+- `NewCounter` returns `*Counter` so every method call works without taking an address at the call site.
+- All three methods use pointer receivers for consistency --- since `Increment` and `Reset` must mutate `c.Value`, all methods on `*Counter` use the pointer form.
+- `fmt.Println(c)` calls `c.String()` automatically because `*Counter` satisfies `fmt.Stringer` (which requires `String() string`).
+
+---
+
+# Chapter 7: Maps and Slices --- Answers
 
 **Exercise 1** (Think about it): In Java, `HashMap<K,V>` requires keys to implement `hashCode()` and `equals()`, and `ArrayList<E>` stores references to boxed objects on the heap.
 Go's `map[K]V` requires `K` to be comparable at the language level, and a `[]E` slice stores values directly in the backing array.
@@ -1072,7 +1324,7 @@ Key points: always initialise a map with `make` before writing; `maps.Keys` retu
 
 ---
 
-# Chapter 7: Interfaces --- Answers
+# Chapter 8: Interfaces --- Answers
 
 **Exercise 1** (Think about it): Go's structural typing means any package can retroactively make its types satisfy an interface defined in any other package.
 In Java, if you want your `Song` class to satisfy a new interface `Playable` defined in a library you do not control, you must modify `Song`'s source.
@@ -1278,7 +1530,7 @@ This is the open/closed principle, Go style.
 
 ---
 
-# Chapter 8: Error Handling --- Answers
+# Chapter 9: Error Handling --- Answers
 
 **Exercise 1** (Think about it): Java uses checked exceptions to force callers to handle failures.
 Go returns `error` values that the compiler does not require you to inspect.
@@ -1621,7 +1873,7 @@ Using `fmt.Sscanf` or a regex are also valid; `strings.Split` is the most readab
 
 ---
 
-# Chapter 9: Goroutines and Channels --- Answers
+# Chapter 10: Goroutines and Channels --- Answers
 
 **Exercise 1** (Think about it): Java's `Thread` and `Runnable` model requires you to think about thread pool sizing.
 Go's goroutine model mostly frees you from this.
@@ -1913,7 +2165,7 @@ That is a concern for Chapter 15; the `time.After` form is idiomatic for simple 
 
 ---
 
-# Chapter 10: Synchronization --- Answers
+# Chapter 11: Synchronization --- Answers
 
 **Exercise 1** (Think about it): Java's `synchronized` keyword locks an object's monitor, which is built into every Java object.
 Go has no per-object monitor; instead you declare explicit `sync.Mutex` fields.
@@ -2233,7 +2485,7 @@ Key points of the implementation:
 
 ---
 
-# Chapter 11: Context and Concurrency Patterns --- Answers
+# Chapter 12: Context and Concurrency Patterns --- Answers
 
 **Exercise 1** (Think about it): In Java, cancelling an in-flight operation typically means calling `Future.cancel(true)` or interrupting a thread via `Thread.interrupt()`.
 Describe how Go's `context.Context` model differs from Java's thread-interrupt approach.
@@ -2516,7 +2768,7 @@ error: context deadline exceeded
 
 ---
 
-# Chapter 12: Packages and Modules --- Answers
+# Chapter 13: Packages and Modules --- Answers
 
 **Exercise 1** (Think about it): Maven and Gradle resolve transitive dependencies automatically and let two artifacts declare conflicting version requirements for the same library.
 They use a strategy (nearest-wins in Maven, highest-requested in Gradle) to pick a single version at build time.
@@ -2800,7 +3052,7 @@ Northern Attitude by Noah Kahan
 
 ---
 
-# Chapter 13: Essential Standard Library --- Answers
+# Chapter 14: Essential Standard Library --- Answers
 
 **Exercise 1** (Think about it): In Java, `InputStream`, `OutputStream`, `Reader`, and `Writer` are four separate abstract class hierarchies.
 Go has two interfaces --- `io.Reader` and `io.Writer` --- and a set of composition functions.
@@ -3064,7 +3316,7 @@ Key points in the solution:
 
 ---
 
-# Chapter 14: JSON, HTTP, and the Web --- Answers
+# Chapter 15: JSON, HTTP, and the Web --- Answers
 
 **Exercise 1** (Think about it): In Java with Spring MVC or JAX-RS, you annotate a class method with `@GetMapping("/songs/{id}")` or `@GET @Path("/songs/{id}")` and the framework discovers handlers via reflection and classpath scanning.
 In Go, you call `mux.HandleFunc("GET /songs/{id}/", getSong)` explicitly in `main`.
@@ -3312,7 +3564,7 @@ Key points illustrated by this solution:
 
 ---
 
-# Chapter 15: Database Access --- Answers
+# Chapter 16: Database Access --- Answers
 
 **Exercise 1** (Think about it): JDBC requires explicit transaction management and connection pooling through a `DataSource`, usually provided by an application server or a library like HikariCP.
 Go's `database/sql` builds connection pooling directly into `sql.DB`.
@@ -3621,7 +3873,7 @@ Key points demonstrated:
 
 ---
 
-# Chapter 16: Generics --- Answers
+# Chapter 17: Generics --- Answers
 
 **Exercise 1** (Think about it): Java generics use **type erasure**: at runtime, `List<String>` and `List<Integer>` are both just `List`.
 Generic type information is only available at compile time.
@@ -3884,7 +4136,7 @@ The second `Add("Heather")` call is a no-op because the map key already exists -
 
 ---
 
-# Chapter 17: Testing --- Answers
+# Chapter 18: Testing --- Answers
 
 **Exercise 1** (Think about it): JUnit 5's `@ParameterizedTest` with `@CsvSource` and Go's table-driven tests with `t.Run` both let you run the same logic against many inputs.
 Describe two concrete advantages that Go's table-driven approach gives you over `@CsvSource`.
@@ -4173,7 +4425,7 @@ PASS
 
 ---
 
-# Chapter 18: Reflection --- Answers
+# Chapter 19: Reflection --- Answers
 
 **Exercise 1** (Think about it): Both Java's `java.lang.reflect` and Go's `reflect` package let you inspect types and values at runtime.
 Name two ways they are fundamentally similar and two ways they differ.

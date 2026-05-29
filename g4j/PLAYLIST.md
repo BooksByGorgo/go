@@ -48,7 +48,7 @@ Do not repeat any reference already listed here.
 - "hola, mundo!" --- Spanish greeting used in the middleware pattern example
 - "martes" / "jueves" --- Spanish day names used as map keys in the `init()` example
 
-## Chapter 6: Maps and Slices
+## Chapter 7: Maps and Slices
 
 - Glass Animals --- "Heat Waves" (used in slice aliasing example: `track` slice)
 - Harry Styles --- "As It Was" (used in slice aliasing example, addTrack function, slices.Sort example, and exercise 5 input)
@@ -64,7 +64,11 @@ Do not repeat any reference already listed here.
 - Olivia Rodrigo --- "good 4 u" (used in catalog map comma-ok example)
 - Bastille --- "As The World Caves In" (used in exercise 5 grouped-by-letter map input)
 
-## Chapter 7: Interfaces
+## Chapter 7: Methods and Embedding
+
+- Feid --- "Chorizo Asado" (used in exercise 4 nil embedded pointer bug: Song title)
+
+## Chapter 8: Interfaces
 
 - Lady Gaga & Bruno Mars --- "Die With A Smile" (used in Track struct Stringer example: title "Die With A Smile", 144 BPM)
 - "sabor a mí" --- Spanish song title used in any/interface{} variable example
@@ -73,14 +77,14 @@ Do not repeat any reference already listed here.
 - Benson Boone --- "Beautiful Things" (used in sort.Interface ByTitle example)
 - Gracie Abrams --- "That's So True" (used in sort.Interface ByTitle example)
 
-## Chapter 13: Essential Standard Library
+## Chapter 14: Essential Standard Library
 
 - Ariana Grande --- "positions" (used in Track struct %v/%+v/%#v example: title "positions", BPM 114; and exercise 4 titles list)
 - Ariana Grande --- "thank u, next" (used in io.Pipe goroutine example: string written to pipe; and exercise 4 titles list)
 - Dua Lipa --- "Physical" (used in slog.Info example: title "Physical", BPM 130; and exercise 2 scanner input; exercise 4 titles list; exercise 5 sample run)
 - Dua Lipa --- "Don't Start Now" (used in bufio.NewWriter Flush example: string written to buffer; exercise 2 scanner input; exercise 4 titles list; exercise 5 sample run)
 
-## Chapter 11: Context and Concurrency Patterns
+## Chapter 12: Context and Concurrency Patterns
 
 - Laufey --- "From The Start" (used in fetchLyrics timeout example and fanOutFetch exercise)
 - Laufey --- "Bewitched" (used in errgroup fan-out example and exercise 2)
@@ -90,7 +94,7 @@ Do not repeat any reference already listed here.
 - Hozier --- "Cherry Wine" (used in worker pool track list and rate limiter example)
 - Hozier --- "Someone New" (used in rate limiter example)
 
-## Chapter 12: Packages and Modules
+## Chapter 13: Packages and Modules
 
 - Zach Bryan --- "Something in the Orange" (used in module path and import path examples, and exercise 2 lyrics output)
 - Zach Bryan --- "I Remember Everything" (used as module name reference in go.mod example: remembereverything)
@@ -98,7 +102,7 @@ Do not repeat any reference already listed here.
 - Noah Kahan --- "Northern Attitude" (used in exercise 4 module name and exercise 5 catalog track)
 - Noah Kahan --- "Northern Attitude" (track in exercise 5 Catalog slice)
 
-## Chapter 8: Error Handling
+## Chapter 9: Error Handling
 
 - Bad Bunny --- "Un Verano Sin Ti" (used in errors.Join / validateAlbum example: album title)
 - Bad Bunny --- "Tití Me Preguntó" (used in PlaybackError / custom error type example: track name; and exercise 2 lookup call)
@@ -106,14 +110,14 @@ Do not repeat any reference already listed here.
 - Karol G --- "Provenza" (used in io.EOF sentinel read loop example: track title; and safePlay example)
 - Karol G --- "Mi Ex Tenía Razón" (used in io.EOF sentinel read loop example: track title)
 
-## Chapter 9: Goroutines and Channels
+## Chapter 10: Goroutines and Channels
 
 - Tyler, The Creator --- "Earfquake" (used in goroutine launch example and source goroutine in fan-in example)
 - Tyler, The Creator --- "Wilder World" (used in channel send example lyric, produce function, playlist slice, and exercise 5)
 - Post Malone --- "Circles" (used in playTrack example, buffered channel example, playlist slice, and exercise 5)
 - Post Malone --- "rockstar" (used in channel send example, playlist slice, and exercise 5)
 
-## Chapter 10: Synchronization
+## Chapter 11: Synchronization
 
 - NewJeans --- "Ditto" (used in Playlist.Add example, sync.Map store/range example, sync.Once catalog map, WaitGroup fan-out, sync.Pool formatSong example)
 - NewJeans --- "Hype Boy" (used in WaitGroup fan-out, sync.Map store example, sync.Pool formatSong example, race detector fix, exercise 4 key)
@@ -121,7 +125,7 @@ Do not repeat any reference already listed here.
 - BTS --- "Dynamite" (used in sync.Once catalog map, sync.Map store example, atomic play counter example, sync.Pool formatSong example)
 - BTS --- "Butter" (used in sync.Pool formatSong example, atomic play counter example, exercise 4 map key, exercise 5 rate limiter)
 
-## Chapter 14: JSON, HTTP, and the Web
+## Chapter 15: JSON, HTTP, and the Web
 
 - Rauw Alejandro --- "Todo De Ti" (used in json.Marshal/Unmarshal example: Song struct title, catalog map, exercise 5 pre-populated Song)
 - Rauw Alejandro --- "Lokera" (used in struct tag omitempty example and POST body example)
@@ -129,7 +133,7 @@ Do not repeat any reference already listed here.
 - Kali Uchis --- "I Wish You Roses" (used in songHandler streaming Encoder example and catalog map)
 - "Hola!" --- Spanish greeting used in minimal HTTP server handler example
 
-## Chapter 15: Database Access
+## Chapter 16: Database Access
 
 - Victoria Monét --- "On My Mama" (used in bulk insert example, complete music store example, and exercise 3 transaction trace)
 - Victoria Monét --- "Coastin'" (used in bulk insert example and complete music store example; album "JAGUAR II")
@@ -138,7 +142,7 @@ Do not repeat any reference already listed here.
 - Omar Apollo --- "Killing Me" (used in bulk insert example as NULL-album song; Exercise 2 sql.Null example)
 - Omar Apollo --- album "IVORY" (referenced as album value in Song struct inserts)
 
-## Chapter 16: Generics
+## Chapter 17: Generics
 
 - Tate McRae --- "greedy" (used in Map function example, Stack example, MapFromSlice example, ArtistTitles iterator, Filter exercise, Dedupe exercise, Set exercise)
 - Tate McRae --- "you broke me first" (used in Map function example, ArtistTitles iterator, Set exercise)
@@ -146,14 +150,14 @@ Do not repeat any reference already listed here.
 - Conan Gray --- "Astronomy" (used in Map function example, ArtistTitles iterator, Filter exercise, Dedupe exercise, Set exercise)
 - Conan Gray --- "Maniac" (used in Set exercise as a negative Contains test)
 
-## Chapter 17: Testing
+## Chapter 18: Testing
 
 - Lizzo --- "About Damn Time" (used in test function name `TestAboutDamnTime`, table case name, and exercise 4 `assertNormalized` call)
 - Lizzo --- "Good as Hell" (used in `TestGoodAsHell` table-driven test, `FuzzGoodAsHell` fuzz test, and exercise 1 discussion)
 - Cleo Sol --- "Golden" (used in `TestGolden` exercise 2 what-does-this-print question)
 - Cleo Sol --- "Woman" (used in `BenchmarkWoman` exercise 3 calculation question)
 
-## Chapter 18: Reflection
+## Chapter 19: Reflection
 
 - Morgan Wallen --- "Last Night" (used in TypeOf/ValueOf intro example as string value; and in exercise 3 SetString starting value)
 - Morgan Wallen --- "Thought You Should Know" (used in Elem() / struct example: Song.Title field value)

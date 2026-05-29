@@ -1,50 +1,25 @@
-# Chapter 10: Synchronization --- Answers
+# Chapter 11: Goroutines and Channels --- Answers
 
-**Exercise 1** (Think about it): Java's `synchronized` keyword locks an object's monitor, which is built into every Java object.
-Go has no per-object monitor; instead you declare explicit `sync.Mutex` fields.
-What are the practical advantages and disadvantages of each approach?
-Consider: what happens when you need to protect two independent fields in the same struct, and how would you do it with each language's mechanism?
+**Exercise 1** (Think about it): Java's `Thread` and `Runnable` model requires you to think about thread pool sizing.
+Go's goroutine model mostly frees you from this.
+Explain the runtime mechanism that makes goroutines cheap enough to use one per task.
+What cost, if any, do goroutines impose that Java threads do not, and when might you still want to limit the number of running goroutines?
 
-Java's per-object monitor is convenient for simple cases: every object already has a lock, so you can write `synchronized (this)` with no extra declarations.
-The downside is that the monitor is coarse-grained --- there is only one per object.
-If a struct (class in Java) has two independent fields that can be updated concurrently without affecting each other, locking the whole object monitor for either field creates unnecessary contention.
-Java programmers work around this with separate `java.util.concurrent.locks.Lock` objects or by using a dedicated inner lock object:
+The key mechanism is **M:N scheduling**: the Go runtime multiplexes M goroutines onto N OS threads, where N defaults to the number of CPU cores (`GOMAXPROCS`).
+The scheduler lives in user space, so switching between goroutines does not require a kernel mode transition --- it is many times faster than a Java thread context switch.
 
-```java
-private final Object tracksLock = new Object();
-private final Object playsLock  = new Object();
+Goroutines start with a ~2 KB stack that grows dynamically as needed (up to a configurable maximum, typically 1 GB).
+Java threads allocate their full stack (512 KB to 1 MB) up front, from virtual memory at minimum.
+This means creating a million goroutines consumes roughly 2 GB of initial stack memory; creating a million Java threads would require 500 GB to 1 TB.
+In practice, the OS would refuse long before that.
 
-synchronized (tracksLock) { tracks.add(track); }
-synchronized (playsLock)  { plays.increment(); }
-```
+**Costs goroutines impose:** Each goroutine is a heap allocation tracked by the scheduler.
+At very high goroutine counts (hundreds of thousands) the scheduler itself becomes a bottleneck, and GC pressure increases because goroutine stacks are heap-allocated.
+There is also some overhead per goroutine in the runtime's internal bookkeeping structures.
 
-Go's approach makes this natural: you simply declare two independent mutex fields.
-
-```go
-type Catalog struct {
-    tracksMu sync.Mutex
-    tracks   []string
-
-    playsMu sync.Mutex
-    plays   map[string]int
-}
-```
-
-Each mutex protects only the field it is paired with, and neither blocks the other.
-This is less magic but more explicit.
-
-The practical advantages of Go's approach:
-
-- **Granularity:** You can have as many independent mutexes as you need at zero structural cost.
-- **Clarity:** The pairing between a mutex and the data it protects is visible in the struct definition.
-- **No accidental sharing:** In Java, every synchronized method on the same object uses the same monitor, even if they protect unrelated state. In Go, each mutex is independent by default.
-
-The practical disadvantage:
-
-- **Verbosity:** You must declare, name, and document each mutex.
-  Java's implicit monitor requires no declaration.
-- **Copy hazard:** Go structs are value types. Copying a struct that contains a `sync.Mutex` is a bug; the struct must always be passed and stored by pointer.
-  Java objects are always references, so this hazard does not exist.
+**When to still limit goroutines:** Any time the goroutines are doing I/O-bound work that creates downstream resource pressure --- for example, goroutines that each open a database connection or a file descriptor.
+Even if the goroutines themselves are cheap, the external resources they consume (connections, file descriptors, memory for outbound HTTP requests) are not.
+The common Go idiom for bounding concurrency is a buffered channel used as a semaphore, or the worker-pool pattern covered in Chapter 13.
 
 ---
 
@@ -53,183 +28,114 @@ The practical disadvantage:
 ```go
 package main
 
-import (
-    "fmt"
-    "sync"
-)
+import "fmt"
 
 func main() {
-    var once sync.Once
-    var wg sync.WaitGroup
-    results := make([]string, 3)
+    ch := make(chan int, 3)
 
-    for i := 0; i < 3; i++ {
-        wg.Add(1)
-        go func(n int) {
-            defer wg.Done()
-            once.Do(func() {
-                results[n] = "loaded"
-            })
-            if results[n] == "" {
-                results[n] = "skipped"
-            }
-        }(i)
+    ch <- 7
+    ch <- 13
+    ch <- 21
+    close(ch)
+
+    for v := range ch {
+        fmt.Println(v)
     }
 
-    wg.Wait()
-    loaded := 0
-    skipped := 0
-    for _, r := range results {
-        if r == "loaded" {
-            loaded++
-        } else if r == "skipped" {
-            skipped++
-        }
-    }
-    fmt.Printf("loaded=%d skipped=%d\n", loaded, skipped)
+    v, ok := <-ch
+    fmt.Println(v, ok)
 }
 ```
 
-The output is:
-
+Output:
 ```
-loaded=1 skipped=2
+7
+13
+21
+0 false
 ```
 
-Here is why.
+**Why:**
 
-`sync.Once` guarantees that the function passed to `Do` runs **exactly once** across all goroutines.
-One of the three goroutines (say goroutine with `n=0`, `n=1`, or `n=2` --- the scheduler decides which wins) will execute `results[n] = "loaded"`, setting one slot of the `results` slice.
+The channel has capacity 3, so all three sends succeed without blocking --- no goroutine is needed.
+`close(ch)` marks the channel closed; the three buffered values are still available to receive.
 
-The other two goroutines call `once.Do` as well, but their function bodies are silently dropped because the once is already done.
-They proceed past `once.Do` and check `results[n] == ""` for their own slot `n`.
-Because the winning goroutine wrote to a **different** index than these two, their slots are still empty, so they set `results[n] = "skipped"`.
+`range ch` drains the channel in FIFO order, printing `7`, `13`, and `21`.
+When the buffer is empty and the channel is closed, `range` terminates.
 
-The final tally is always exactly one `"loaded"` and two `"skipped"`, regardless of which goroutine wins the `once.Do` race.
+After the loop, `<-ch` receives from a channel that is both closed and empty.
+The comma-ok idiom returns the **zero value** of the element type (`0` for `int`) and `false` for `ok`, because the channel is exhausted.
+`fmt.Println(v, ok)` prints `0 false`.
 
-Note: even though goroutines access different indices of `results` concurrently, this specific program is **not** a data race because each goroutine always writes to its own `results[n]` (where `n` is passed by value), and no two goroutines write to the same index.
+This demonstrates two important rules: buffered values survive a `close`, and receiving from an empty closed channel always returns `(zero, false)` rather than blocking or panicking.
 
 ---
 
-**Exercise 3** (Calculation):
+**Exercise 3** (Calculation): Consider the following program.
+Trace its execution and determine the exact output.
+How many goroutines are alive (other than `main`) when the final `fmt.Println` in `main` runs?
 
 ```go
-var counter atomic.Int64
-var wg sync.WaitGroup
+package main
 
-for i := 0; i < 4; i++ {
-    wg.Add(1)
-    go func() {
-        defer wg.Done()
-        counter.Add(10)
-    }()
+import "fmt"
+
+func double(in <-chan int, out chan<- int) {
+    for v := range in {
+        out <- v * 2
+    }
+    close(out)
 }
-wg.Wait()
-fmt.Println(counter.Load())
+
+func main() {
+    src := make(chan int, 3)
+    dst := make(chan int, 3)
+
+    src <- 3
+    src <- 5
+    src <- 8
+    close(src)
+
+    go double(src, dst)
+
+    for result := range dst {
+        fmt.Println(result)
+    }
+    fmt.Println("done")
+}
 ```
 
-**(a)** `counter.Load()` always prints `40`.
-
-`atomic.Int64.Add` is an atomic read-modify-write operation.
-No matter what order the four goroutines execute, each `Add(10)` is applied to the current value atomically, and all four additions will complete before `wg.Wait()` returns.
-The final value is always 4 × 10 = 40.
-This would **not** be true with a plain `int` counter and no synchronization --- that would be a data race with unpredictable results.
-
-**(b)** Replacing `counter.Add(10)` with `counter.Add(int64(i))` introduces a **closure capture bug**.
-
-The goroutine closure captures the **variable** `i`, not its value at the moment the goroutine was launched.
-By the time the goroutines run, the loop may have already incremented `i` past the value it had when `go func()` was called.
-In the worst case, all four goroutines see `i == 4` (the value after the loop ends) and print `4 * 4 = 16`.
-In the best case, they each capture a different value (0, 1, 2, 3) and print 0 + 1 + 2 + 3 = 6.
-Any value between 0 and 16 is possible, and the result is non-deterministic.
-
-The fix is the same as described in Chapter 2 (closures): pass `i` as a parameter to the goroutine function.
-
-```go
-go func(n int) {
-    defer wg.Done()
-    counter.Add(int64(n))
-}(i) // pass i by value here
+Output:
+```
+6
+10
+16
+done
 ```
 
-With this fix the result is always 0 + 1 + 2 + 3 = 6.
+**Trace:**
+
+1. `src` is a buffered channel with capacity 3.
+   The three sends (`3`, `5`, `8`) all succeed immediately without blocking.
+   `src` is then closed.
+
+2. `go double(src, dst)` launches `double` as a goroutine.
+   `double` reads from `src` using `range`, which drains the buffered values `3`, `5`, `8` in order and then exits when `src` is empty and closed.
+   For each value, it sends the doubled result to `dst` (also buffered with capacity 3, so no blocking occurs).
+   After the loop, `double` calls `close(dst)`.
+
+3. Back in `main`, `for result := range dst` drains `dst`.
+   The values arrive in order: `6`, `10`, `16`.
+   When `dst` is closed and empty, the loop ends.
+
+4. `fmt.Println("done")` runs last.
+
+**Goroutines alive when `fmt.Println("done")` runs:** Zero (other than `main`).
+The `double` goroutine has already returned --- it finished draining `src`, called `close(dst)`, and exited before `main`'s `range dst` loop could finish (since `close(dst)` is what caused the loop to terminate).
 
 ---
 
 **Exercise 4** (Where is the bug?):
-
-```go
-type SafeMap struct {
-    mu sync.Mutex
-    m  map[string]int
-}
-
-func NewSafeMap() SafeMap {
-    return SafeMap{m: make(map[string]int)}
-}
-
-func (s SafeMap) Inc(key string) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    s.m[key]++
-}
-
-func (s SafeMap) Get(key string) int {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    return s.m[key]
-}
-```
-
-The bug is that `Inc` and `Get` have **value receivers** (`s SafeMap`), not pointer receivers (`s *SafeMap`).
-
-When a method has a value receiver, Go passes a **copy** of the struct.
-Each call to `Inc` locks the mutex in its own private copy --- a different mutex instance than the one in `sm` in `main`.
-The lock is acquired and released on a throwaway copy, providing no mutual exclusion on the real `sm`.
-One hundred goroutines therefore write to `sm.m["Butter"]` concurrently without any synchronization, which is a data race.
-
-The map itself (`sm.m`) is a reference type, so the map operations do land on the shared map --- but they are completely unprotected, and concurrent writes to a Go map without synchronization is undefined behavior (the runtime will panic with a "concurrent map writes" message).
-
-The fix is to use pointer receivers throughout:
-
-```go
-func (s *SafeMap) Inc(key string) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    s.m[key]++
-}
-
-func (s *SafeMap) Get(key string) int {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    return s.m[key]
-}
-```
-
-And in `main`, take the address of `sm` (or change `NewSafeMap` to return `*SafeMap`):
-
-```go
-func NewSafeMap() *SafeMap {
-    return &SafeMap{m: make(map[string]int)}
-}
-
-func main() {
-    sm := NewSafeMap() // *SafeMap; no copy needed
-    ...
-    sm.Inc("Butter")
-    ...
-    fmt.Println(sm.Get("Butter")) // 100
-}
-```
-
-With pointer receivers and a pointer variable, every call to `Inc` and `Get` locks the **same** mutex, and the output is reliably `100`.
-
----
-
-**Exercise 5** (Write a program): Implement a concurrent-safe `RateLimiter` struct that uses a `sync.Mutex` to protect a counter and a `time.Time` field tracking when the window resets.
-The struct should have a method `Allow(n int) bool` that returns `true` if `n` tokens are available in the current one-second window, deducting them if so, and `false` otherwise (without deducting).
-Write a `main` function that launches 10 goroutines, each calling `Allow(1)` in a loop 5 times, and prints how many calls were allowed versus denied across all goroutines combined.
-Use `sync.WaitGroup` to wait for all goroutines to finish.
 
 ```go
 package main
@@ -237,80 +143,146 @@ package main
 import (
     "fmt"
     "sync"
-    "sync/atomic"
-    "time"
 )
 
-// RateLimiter allows at most Limit tokens per one-second window.
-type RateLimiter struct {
-    mu      sync.Mutex
-    limit   int
-    used    int
-    resetAt time.Time
-}
-
-func NewRateLimiter(limit int) *RateLimiter {
-    return &RateLimiter{
-        limit:   limit,
-        resetAt: time.Now().Add(time.Second),
-    }
-}
-
-// Allow returns true and deducts n tokens if they are available.
-// It returns false without deducting if the window is exhausted.
-func (r *RateLimiter) Allow(n int) bool {
-    r.mu.Lock()
-    defer r.mu.Unlock()
-
-    now := time.Now()
-    if now.After(r.resetAt) {
-        r.used = 0
-        r.resetAt = now.Add(time.Second)
-    }
-
-    if r.used+n > r.limit {
-        return false
-    }
-    r.used += n
-    return true
-}
-
 func main() {
-    limiter := NewRateLimiter(25) // allow 25 calls per second
     var wg sync.WaitGroup
-    var allowed, denied atomic.Int64
+    results := make(chan string, 3)
+    tracks := []string{"rockstar", "Circles", "Earfquake"}
 
-    for i := 0; i < 10; i++ {
+    for _, t := range tracks {
         wg.Add(1)
         go func() {
             defer wg.Done()
-            for j := 0; j < 5; j++ {
-                if limiter.Allow(1) {
-                    allowed.Add(1)
-                } else {
-                    denied.Add(1)
-                }
-            }
+            results <- "Playing: " + t
         }()
     }
 
     wg.Wait()
-    fmt.Printf("allowed=%d denied=%d total=%d\n",
-        allowed.Load(), denied.Load(), allowed.Load()+denied.Load())
+    close(results)
+
+    for r := range results {
+        fmt.Println(r)
+    }
 }
 ```
 
-Sample output (with a limit of 25 and 50 total calls):
+**The bug:** The goroutine closure captures the loop variable `t` by reference, not by value.
+By the time the goroutines run, the `for` loop has advanced `t` to the last value in the slice.
+All three goroutines read the same final value --- `"Earfquake"` --- and send it three times.
+The output is likely:
 
 ```
-allowed=25 denied=25 total=50
+Playing: Earfquake
+Playing: Earfquake
+Playing: Earfquake
 ```
 
-Key points of the implementation:
+This is the **loop-closure capture bug** described in Chapter 2.
 
-- The `sync.Mutex` in `RateLimiter` protects both `used` and `resetAt` together as a single invariant.
-  Neither field can be read or written outside the lock.
-- `Allow` checks the current time inside the lock so that the window reset and the token deduction are one atomic decision.
-  If the check and the deduction were in separate lock acquisitions, another goroutine could sneak in between them.
-- The `allowed` and `denied` counters in `main` use `atomic.Int64` rather than a mutex because they are independent single-variable updates --- a perfect atomic use case.
-- `wg.Add(1)` is called in the outer loop, before the goroutine is launched, not inside the goroutine --- following the `WaitGroup` rule from the chapter.
+**Why it happens:** In Go, the range variable `t` is a single variable whose value is updated on each iteration.
+All three goroutines close over the same `t` variable (a single memory address), not over a copy of its value at the time the goroutine was launched.
+Because the goroutines are scheduled after the loop completes, `t` holds the last assigned value when they execute.
+
+**The fix:** Capture the value at goroutine launch time by passing it as a parameter to the anonymous function, or by introducing a local copy:
+
+```go
+for _, t := range tracks {
+    t := t  // new variable scoped to this iteration
+    wg.Add(1)
+    go func() {
+        defer wg.Done()
+        results <- "Playing: " + t
+    }()
+}
+```
+
+Or equivalently, pass `t` as a function argument:
+
+```go
+for _, t := range tracks {
+    wg.Add(1)
+    go func(track string) {
+        defer wg.Done()
+        results <- "Playing: " + track
+    }(t)
+}
+```
+
+Both fixes capture the value of `t` at the point of goroutine creation so each goroutine gets its own independent copy.
+
+Note: In Go 1.22 and later, range variables are per-iteration by default, which eliminates this class of bug automatically.
+If you are on Go 1.22 or newer, the original code would work correctly.
+On earlier versions, the fix is required.
+
+---
+
+**Exercise 5** (Write a program):
+
+```go
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+func main() {
+    ch1 := make(chan string, 1)
+    ch2 := make(chan string, 1)
+    ch3 := make(chan string, 1)
+
+    go func() {
+        time.Sleep(10 * time.Millisecond)
+        ch1 <- "Post Malone: Circles"
+    }()
+    go func() {
+        time.Sleep(20 * time.Millisecond)
+        ch2 <- "Tyler: Wilder World"
+    }()
+    go func() {
+        time.Sleep(30 * time.Millisecond)
+        ch3 <- "Post Malone: rockstar"
+    }()
+
+    received := 0
+    total := 3
+    for received < total {
+        select {
+        case msg := <-ch1:
+            fmt.Println(msg)
+            received++
+        case msg := <-ch2:
+            fmt.Println(msg)
+            received++
+        case msg := <-ch3:
+            fmt.Println(msg)
+            received++
+        case <-time.After(100 * time.Millisecond):
+            fmt.Println("timeout")
+            received = total  // exit the loop
+        }
+    }
+}
+```
+
+Output (order reflects goroutine sleep durations):
+```
+Post Malone: Circles
+Tyler: Wilder World
+Post Malone: rockstar
+```
+
+**How it works:**
+
+Each goroutine sleeps for a different duration before sending on its dedicated channel.
+`main` loops using `select`, blocking until any of the four cases is ready.
+Because the goroutines sleep for 10 ms, 20 ms, and 30 ms, the messages arrive in that order.
+
+The `time.After(100 * time.Millisecond)` case provides a safety net.
+`time.After` returns a receive-only channel (`<-chan time.Time`) that the `time` package sends a value on after the specified duration.
+If no message arrives within 100 ms, that case fires, prints `"timeout"`, and sets `received = total` to exit the loop.
+
+A subtle point: `time.After` creates a new timer on every call to `select`, which is fine for correctness but slightly wasteful.
+In production code that needs tight control over timer lifetimes, you would create a `time.NewTimer` once and reuse it.
+That is a concern for Chapter 15; the `time.After` form is idiomatic for simple timeouts.

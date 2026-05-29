@@ -229,7 +229,7 @@ Fix the allocation pattern instead; `runtime.GC()` is a diagnostic tool, not a s
 
 \index{GOMAXPROCS}
 \index{GC!GOMAXPROCS}
-Chapter 11 introduced `GOMAXPROCS` as the number of OS threads the Go scheduler uses to run goroutines.
+Chapter 12 introduced `GOMAXPROCS` as the number of OS threads the Go scheduler uses to run goroutines.
 The default is `runtime.NumCPU()` --- the number of logical CPUs the process can see.
 For most programs this default is correct and you should leave it alone.
 
@@ -274,7 +274,7 @@ runtime.GOMAXPROCS(4)        // set to 4 OS threads
 
 \index{sync!Pool}
 \index{allocation pressure}
-Chapter 10 introduced `sync.Pool` as a way to reuse temporary objects.
+Chapter 11 introduced `sync.Pool` as a way to reuse temporary objects.
 Here we revisit it from the GC tuning perspective: `sync.Pool` is one of the most effective tools for reducing **allocation pressure** --- the rate at which new objects are added to the heap, forcing more frequent GC cycles.
 
 The pattern is most valuable when:

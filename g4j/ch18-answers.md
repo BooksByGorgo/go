@@ -1,316 +1,285 @@
-# Chapter 20: Reflection --- Answers
+# Chapter 19: Testing --- Answers
 
-**Exercise 1** (Think about it): Both Java's `java.lang.reflect` and Go's `reflect` package let you inspect types and values at runtime.
-Name two ways they are fundamentally similar and two ways they differ.
-In what situation would you reach for reflection in a Go program where a Java programmer might have reached for it as well, and in what situation would a Go programmer choose generics or interfaces instead?
+**Exercise 1** (Think about it): JUnit 5's `@ParameterizedTest` with `@CsvSource` and Go's table-driven tests with `t.Run` both let you run the same logic against many inputs.
+Describe two concrete advantages that Go's table-driven approach gives you over `@CsvSource`.
+Then explain the key behavioral difference between `t.Fatal` and `t.Error` inside a subtest, and describe a scenario where you would deliberately choose `t.Error` over `t.Fatal`.
 
-**Two similarities:**
+**Table-driven tests vs `@CsvSource` --- two concrete advantages:**
 
-1. Both let you inspect a type's fields and methods at runtime without knowing the concrete type at compile time.
-   Java's `Class.getDeclaredFields()` and Go's `reflect.Type.Field(i)` both return field descriptors you can iterate over.
-2. Both require a form of "boxing" or indirection.
-   Java reflection operates on `Object`; Go reflection operates on `interface{}` (`any`).
-   In both languages, passing a primitive or a concrete value into the reflection API involves some overhead.
+1. **Structured, type-safe test cases.**
+   With `@CsvSource`, each row is a comma-separated string; numeric values must be parsed at runtime and type errors surface only when the test runs.
+   A Go table is a slice of structs --- the compiler checks every field at compile time.
+   If you rename a field or change its type, the build breaks immediately.
+   There is no equivalent compile-time safety in `@CsvSource`.
 
-**Two differences:**
+2. **Arbitrary Go values in each case.**
+   `@CsvSource` can only express types that JUnit knows how to convert from strings: primitives, strings, enums.
+   A Go table can hold any value --- a function, an `error`, a struct, a slice --- as a field in the test case struct.
+   This lets you express cases like "given this pre-built request object, expect this error" without any serialization or custom converter.
 
-1. In Java, reflection can access private fields (with `setAccessible(true)`).
-   In Go, unexported fields are never accessible or settable through reflection --- `CanSet()` returns `false` and `Interface()` panics on unexported fields.
-   Go's encapsulation is enforced even through reflection.
-2. Java reflection is a well-worn idiom used even in cases where generics would work; the historical prevalence of Java reflection is partly because pre-Java-5 code had no generics at all, and even post-Java-5 generics suffer from type erasure.
-   Go was designed with generics from a later, cleaner standpoint, and Go generics have no erasure --- they work at compile time with full type information.
-   The need for reflection in Go is therefore narrower than in Java.
+**`t.Fatal` vs `t.Error` inside a subtest:**
 
-**When to reach for reflection in Go (as in Java):**
-Serialization and deserialization --- `encoding/json` walks struct fields and reads `json:"..."` tags to marshal and unmarshal arbitrary user types.
-This is the same pattern Java developers use with Jackson or Gson.
-The concrete struct type is unknown to the library at compile time, so reflection is the only option.
+Inside a `t.Run` subtest, `t.Fatal` stops only that subtest's goroutine --- it calls `runtime.Goexit()` on the subtest's goroutine.
+The outer test loop continues and the next subtest runs normally.
+`t.Error` also affects only the subtest: it marks it as failed but the subtest continues executing.
 
-**When to choose generics or interfaces instead:**
-If the set of types is bounded and known at compile time, use a generic function.
-A function like `func Max[T cmp.Ordered](a, b T) T` works for all ordered types with zero runtime overhead and no possibility of a runtime panic.
-A Java developer without generics might have reached for reflection or `Comparable` + casting; in Go the generic version is the correct tool.
-Similarly, if the required behavior can be expressed as a method, define an interface and let the compiler verify correctness at compile time.
+A scenario where you would choose `t.Error` over `t.Fatal`: when you are validating multiple independent fields of a response struct and you want to see all failures at once.
+For example, if you call an HTTP handler and want to check both the status code and the response body, use `t.Error` for each.
+If you used `t.Fatal` on the status code check, a wrong status code would hide a potentially wrong body --- you would have to fix and re-run to see the body error.
+With `t.Error`, one failing run shows you everything that is wrong.
 
 ---
 
-**Exercise 2** (What does this print?):
+**Exercise 2** (What does this print?): Trace the output when this test is run with `go test -v`.
 
 ```go
-package main
+package music_test
 
-import (
-    "fmt"
-    "reflect"
-)
+import "testing"
 
-type Album struct {
-    Title  string
-    Artist string
-    Tracks int
+func checkPositive(t *testing.T, n int) {
+    if n <= 0 {
+        t.Errorf("expected positive, got %d", n)
+    }
 }
 
-func main() {
-    a := Album{Title: "Jackman", Artist: "Jack Harlow", Tracks: 13}
-    t := reflect.TypeOf(a)
-    v := reflect.ValueOf(a)
+func TestGolden(t *testing.T) {
+    checkPositive(t, 1)
+    t.Log("checked 1")
+    checkPositive(t, -1)
+    t.Log("checked -1")
+    checkPositive(t, 2)
+    t.Log("checked 2")
+}
+```
 
-    for i := range t.NumField() {
-        f := t.Field(i)
-        fmt.Printf("%s (%s): %v\n", f.Name, f.Type.Kind(), v.Field(i))
+Output (with `go test -v`):
+
+```
+=== RUN   TestGolden
+    music_test.go:7: expected positive, got -1
+    music_test.go:11: checked 1
+    music_test.go:13: checked -1
+    music_test.go:15: checked 2
+--- FAIL: TestGolden (0.00s)
+FAIL
+```
+
+**Key points to trace:**
+
+- `checkPositive(t, 1)`: `1 > 0`, so no error is recorded.
+- `t.Log("checked 1")`: message is queued.
+- `checkPositive(t, -1)`: `-1 <= 0`, so `t.Errorf` is called.
+  `t.Errorf` is `t.Error` with formatting --- it records a failure message and marks the test failed, but **does not stop execution**.
+  The test keeps running.
+- `t.Log("checked -1")`: message is queued.
+- `checkPositive(t, 2)`: `2 > 0`, no error.
+- `t.Log("checked 2")`: message is queued.
+- Because the test is marked failed, all `t.Log` output is printed (with `-v`, log output is always printed regardless of pass/fail).
+
+The test finishes with `--- FAIL`.
+Execution continues past the failing check because `t.Errorf` is used, not `t.Fatalf`.
+
+**Note on `t.Helper()` absence:**
+`checkPositive` does not call `t.Helper()`.
+As a result, the failure line reported is inside `checkPositive` (the `t.Errorf` call), not in `TestGolden` where `checkPositive(-1)` was called.
+Adding `t.Helper()` as the first line of `checkPositive` would make the reported line point to `checkPositive(t, -1)` in `TestGolden` instead.
+
+---
+
+**Exercise 3** (Calculation): A benchmark function has the following structure:
+
+```go
+func BenchmarkWoman(b *testing.B) {
+    for range b.N {
+        _ = processTrack("Woman")
     }
 }
 ```
 
-Output:
+On the first probe the framework sets `b.N = 1` and measures elapsed time.
+It then sets `b.N = 100`, then `b.N = 10_000`, then `b.N = 1_000_000`.
+The framework stops when the total elapsed time exceeds one second.
+If `processTrack` takes exactly 500 ns per call, at which value of `b.N` does the total elapsed time first exceed one second?
+What is the reported ns/op value?
 
-```
-Title (string): Jackman
-Artist (string): Jack Harlow
-Tracks (int): 13
-```
+**Answer:**
 
-`reflect.TypeOf(a)` returns the `reflect.Type` for `Album`.
-`t.NumField()` returns `3` (the three exported fields).
-Each iteration retrieves `reflect.StructField` (with `Name` and `Type`) and the corresponding `reflect.Value` via `v.Field(i)`.
+Total elapsed time = `b.N × 500 ns`.
 
-`f.Type.Kind()` returns the underlying kind of the field's type.
-For `string` fields the kind is `string`; for the `int` field the kind is `int`.
-Because `string` and `int` are not user-defined types, `Type.Name()` and `Kind()` would return the same string in this example --- but for a user-defined type like `type BPM int`, `Type.Name()` would return `"BPM"` while `Kind()` would return `"int"`.
+| b.N       | Total time             |
+|-----------|------------------------|
+| 1         | 500 ns                 |
+| 100       | 50,000 ns = 50 µs      |
+| 10,000    | 5,000,000 ns = 5 ms    |
+| 1,000,000 | 500,000,000 ns = 500 ms |
 
----
+None of those values exceeds one second.
+The framework continues increasing `b.N`.
+The next typical value after 1,000,000 is 2,000,000:
 
-**Exercise 3** (Calculation): Trace through the following program step by step.
-What does it print?
+| b.N       | Total time             |
+|-----------|------------------------|
+| 2,000,000 | 1,000,000,000 ns = 1 s |
 
-```go
-package main
+At `b.N = 2,000,000` the total time is exactly 1 second, which meets (ties) the threshold.
 
-import (
-    "fmt"
-    "reflect"
-)
+**b.N = 2,000,000** is where the run stops (or the next step after, depending on exact rounding in the real framework).
 
-func main() {
-    n := 97
-    v := reflect.ValueOf(n)
-    fmt.Println(v.CanSet())
+**Reported ns/op:**
+The framework reports `total_time / b.N = 1,000,000,000 ns / 2,000,000 = 500 ns/op`.
 
-    p := reflect.ValueOf(&n).Elem()
-    fmt.Println(p.CanSet())
-
-    p.SetInt(99)
-    fmt.Println(n)
-
-    s := "Last Night"
-    sv := reflect.ValueOf(&s).Elem()
-    sv.SetString("First Class")
-    fmt.Println(s)
-}
-```
-
-Output:
-
-```
-false
-true
-99
-First Class
-```
-
-Step-by-step trace:
-
-1. `n := 97` --- `n` is an `int` with value `97`.
-2. `v := reflect.ValueOf(n)` --- `ValueOf` receives a copy of `n` boxed into an `interface{}`.
-   `v` describes that copy, not the original variable.
-3. `v.CanSet()` --- `false`.
-   The value was passed by value, so `v` does not refer to `n`'s address.
-   You cannot set it.
-4. `p := reflect.ValueOf(&n).Elem()` --- `&n` is a pointer to `n`.
-   `ValueOf(&n)` gives a `reflect.Value` of kind `Ptr`.
-   `.Elem()` dereferences the pointer, giving a `reflect.Value` that refers directly to `n`'s memory.
-5. `p.CanSet()` --- `true`.
-   `p` is addressable because it was obtained by dereferencing a pointer.
-6. `p.SetInt(99)` --- sets the memory at `n`'s address to `99`.
-7. `fmt.Println(n)` --- prints `99`.
-   The underlying `int` variable was mutated through reflection.
-8. `s := "Last Night"` --- `s` is a `string`.
-9. `sv := reflect.ValueOf(&s).Elem()` --- same pattern: pointer -> `Elem()` -> settable value.
-10. `sv.SetString("First Class")` --- replaces `s` with `"First Class"`.
-11. `fmt.Println(s)` --- prints `First Class`.
+This matches `processTrack`'s actual per-call cost --- the benchmark is accurate.
 
 ---
 
-**Exercise 4** (Where is the bug?): The following function is supposed to double every `int` field in a struct.
-It compiles and runs without panicking, but the original struct is never modified.
-Why?
+**Exercise 4** (Where is the bug?): The following test helper is supposed to make failure output point to the call site in `TestAboutDamnTime`, but it does not.
+Identify the bug and show the fix.
 
 ```go
-package main
+package music_test
 
-import (
-    "fmt"
-    "reflect"
-)
+import "testing"
 
-type Stats struct {
-    Plays int
-    Likes int
-}
-
-func doubleInts(s any) {
-    v := reflect.ValueOf(s)
-    t := v.Type()
-    for i := range t.NumField() {
-        f := v.Field(i)
-        if f.Kind() == reflect.Int && f.CanSet() {
-            f.SetInt(f.Int() * 2)
-        }
+func assertNormalized(t *testing.T, input, want string) {
+    got := normalize(input)
+    if got != want {
+        t.Fatalf("normalize(%q): got %q, want %q", input, got, want)
     }
 }
 
-func main() {
-    stats := Stats{Plays: 500_000, Likes: 12_000}
-    doubleInts(stats) // bug is here
-    fmt.Println(stats)
+func TestAboutDamnTime(t *testing.T) {
+    assertNormalized(t, "about damn time", "About Damn Time")
+    assertNormalized(t, "good as hell",    "Good as Hell")
 }
 ```
 
-**The bug:** `doubleInts(stats)` passes `stats` by value, not by pointer.
+**The bug:** `assertNormalized` does not call `t.Helper()`.
 
-When `stats` is passed to `doubleInts`, Go boxes it into an `interface{}` (the `any` parameter).
-Inside `doubleInts`, `reflect.ValueOf(s)` holds a copy of the struct --- not the original variable.
-The `CanSet()` check correctly returns `false` for every field on that copy, so the `if` body never executes and no values are set.
-The function exits without error, but without doing anything useful.
-`stats` in `main` is unchanged.
+When `t.Fatalf` fires inside `assertNormalized`, Go's test framework records the file and line number of the `t.Fatalf` call inside the helper.
+The reported failure location is something like:
 
-This is the silent-failure form of the "must pass a pointer" rule.
-Without the `CanSet()` guard, calling `SetInt` on a non-addressable field would panic instead of doing nothing.
-The guard makes the code safe but hides the problem: the caller gets no feedback that the operation was silently skipped.
+```
+music_test.go:8: normalize("about damn time"): got "about Damn Time", want "About Damn Time"
+```
 
-**The fix:** pass a pointer so `reflect.ValueOf(s)` holds an addressable value, then call `Elem()` to dereference it:
+That points inside `assertNormalized`, not to the line in `TestAboutDamnTime` that triggered the failure.
+You have to manually trace back to find which call site is responsible.
+
+**The fix:** add `t.Helper()` as the first statement in `assertNormalized`:
 
 ```go
-func doubleInts(s any) {
-    v := reflect.ValueOf(s)
-    if v.Kind() != reflect.Ptr || v.Elem().Kind() != reflect.Struct {
-        panic("doubleInts: argument must be a pointer to a struct")
+func assertNormalized(t *testing.T, input, want string) {
+    t.Helper()  // attribute failures to the caller, not this function
+    got := normalize(input)
+    if got != want {
+        t.Fatalf("normalize(%q): got %q, want %q", input, got, want)
     }
-    v = v.Elem()
-    t := v.Type()
-    for i := range t.NumField() {
-        f := v.Field(i)
-        if f.Kind() == reflect.Int && f.CanSet() {
-            f.SetInt(f.Int() * 2)
-        }
-    }
-}
-
-func main() {
-    stats := Stats{Plays: 500_000, Likes: 12_000}
-    doubleInts(&stats) // pass a pointer
-    fmt.Println(stats) // {1000000 24000}
 }
 ```
 
-With `&stats`, `reflect.ValueOf(s)` holds a `*Stats` (kind `Ptr`).
-`.Elem()` dereferences it to the underlying `Stats` value, which is addressable.
-`CanSet()` returns `true` for each field, and `SetInt` modifies the original struct through the pointer.
+With `t.Helper()` present, the reported failure location becomes:
+
+```
+music_test.go:13: normalize("about damn time"): got "about Damn Time", want "About Damn Time"
+```
+
+That line number points directly to `assertNormalized(t, "about damn time", "About Damn Time")` in `TestAboutDamnTime`, which is exactly where the problematic call lives.
+
+**Secondary note:** `t.Fatalf` inside a helper is fine when subsequent checks in the same test function would be meaningless if this check fails.
+Here, if `normalize("about damn time")` returns a wrong value the second check can still run independently, so `t.Errorf` could be argued as a better choice --- but whether to use `Fatal` or `Error` is a judgment call; the `t.Helper()` omission is the clear bug.
 
 ---
 
-**Exercise 5** (Write a program): Implement `StructToMap(s any) map[string]any` that converts exported struct fields to a map, using a `map:"key"` tag when present and the field name otherwise.
+**Exercise 5** (Write a program): Write a table-driven test for `TitleCase`.
+Your test must include at least five cases covering normal input, empty string, all-caps input, and a multi-word title.
+Use `t.Run` for each case and `t.Helper` in any helper you write.
 
 ```go
-package main
+package music_test
 
 import (
-    "fmt"
-    "reflect"
     "strings"
+    "testing"
+    "unicode"
 )
 
-// StructToMap converts the exported fields of a struct into a map[string]any.
-// If a field has a `map:"key"` tag, that key is used; otherwise the field name is used.
-// Unexported fields and fields tagged with `map:"-"` are skipped.
-func StructToMap(s any) map[string]any {
-    v := reflect.ValueOf(s)
-    t := reflect.TypeOf(s)
-
-    // Accept a pointer to a struct as well as a struct directly.
-    if t.Kind() == reflect.Ptr {
-        v = v.Elem()
-        t = t.Elem()
-    }
-    if t.Kind() != reflect.Struct {
-        panic("StructToMap: argument must be a struct or pointer to struct")
-    }
-
-    result := make(map[string]any, t.NumField())
-
-    for i := range t.NumField() {
-        field := t.Field(i)
-
-        // Skip unexported fields.
-        if !field.IsExported() {
+// TitleCase converts a string to title case.
+// Each word's first letter is uppercased; the rest are lowercased.
+// Words are separated by spaces.
+func TitleCase(s string) string {
+    words := strings.Fields(s)
+    for i, w := range words {
+        if len(w) == 0 {
             continue
         }
-
-        // Determine the map key from the tag or fall back to the field name.
-        key := field.Name
-        if raw, ok := field.Tag.Lookup("map"); ok {
-            name, _, _ := strings.Cut(raw, ",")
-            if name == "-" {
-                continue // explicitly excluded
-            }
-            if name != "" {
-                key = name
-            }
+        runes := []rune(w)
+        runes[0] = unicode.ToUpper(runes[0])
+        for j := 1; j < len(runes); j++ {
+            runes[j] = unicode.ToLower(runes[j])
         }
+        words[i] = string(runes)
+    }
+    return strings.Join(words, " ")
+}
 
-        result[key] = v.Field(i).Interface()
+// assertEqual is a helper that reports mismatches at the caller's site.
+func assertEqual(t *testing.T, got, want, label string) {
+    t.Helper()
+    if got != want {
+        t.Errorf("%s: got %q, want %q", label, got, want)
+    }
+}
+
+func TestTitleCase(t *testing.T) {
+    cases := []struct {
+        name  string
+        input string
+        want  string
+    }{
+        {name: "empty",        input: "",                    want: ""},
+        {name: "single word",  input: "golden",              want: "Golden"},
+        {name: "multi-word",   input: "good as hell",        want: "Good As Hell"},
+        {name: "all caps",     input: "ABOUT DAMN TIME",     want: "About Damn Time"},
+        {name: "mixed case",   input: "wOmAn",               want: "Woman"},
+        {name: "already title", input: "Good As Hell",       want: "Good As Hell"},
     }
 
-    return result
-}
-
-type Track struct {
-    Title    string `map:"title"`
-    Artist   string `map:"artist"`
-    BPM      int    `map:"bpm"`
-    internal string // unexported --- should be skipped
-}
-
-func main() {
-    tr := Track{
-        Title:    "First Class",
-        Artist:   "Jack Harlow",
-        BPM:      97,
-        internal: "hidden",
+    for _, tc := range cases {
+        t.Run(tc.name, func(t *testing.T) {
+            got := TitleCase(tc.input)
+            assertEqual(t, got, tc.want, "TitleCase("+tc.input+")")
+        })
     }
-
-    m := StructToMap(tr)
-    fmt.Println(m)
-    // map[artist:Jack Harlow bpm:97 title:First Class]
-
-    // Also works with a pointer.
-    m2 := StructToMap(&tr)
-    fmt.Println(m2)
-    // map[artist:Jack Harlow bpm:97 title:First Class]
 }
 ```
 
-Output:
+Running `go test -v` produces:
 
 ```
-map[artist:Jack Harlow bpm:97 title:First Class]
-map[artist:Jack Harlow bpm:97 title:First Class]
+=== RUN   TestTitleCase
+=== RUN   TestTitleCase/empty
+=== RUN   TestTitleCase/single_word
+=== RUN   TestTitleCase/multi-word
+=== RUN   TestTitleCase/all_caps
+=== RUN   TestTitleCase/mixed_case
+=== RUN   TestTitleCase/already_title
+--- PASS: TestTitleCase (0.00s)
+    --- PASS: TestTitleCase/empty (0.00s)
+    --- PASS: TestTitleCase/single_word (0.00s)
+    --- PASS: TestTitleCase/multi-word (0.00s)
+    --- PASS: TestTitleCase/all_caps (0.00s)
+    --- PASS: TestTitleCase/mixed_case (0.00s)
+    --- PASS: TestTitleCase/already_title (0.00s)
+PASS
 ```
 
-Key points about the solution:
+**Notes on the solution:**
 
-- `field.IsExported()` correctly skips `internal` --- no `CanInterface()` panic.
-- `strings.Cut(raw, ",")` cleanly separates the key name from any future comma-separated options (e.g., `map:"title,omitempty"`), which is the same pattern used by `encoding/json`.
-- `v.Field(i).Interface()` returns the field value as `any`; calling `Interface()` on an unexported field would panic, which is why the `IsExported()` check must come first.
-- Accepting both `struct` and `*struct` by checking `t.Kind() == reflect.Ptr` at the top is a common convenience that mirrors how `encoding/json.Marshal` behaves.
-- The `map:"-"` convention mirrors `json:"-"` for fields that should be explicitly excluded despite being exported.
+- The `name` field in each case struct is passed to `t.Run`, producing descriptive subtest names in the output.
+  A failing case shows up as `--- FAIL: TestTitleCase/all_caps` rather than just `--- FAIL: TestTitleCase`.
+- `assertEqual` calls `t.Helper()` so that any failure message points to the line inside the `t.Run` body that called `assertEqual`, not to the `t.Errorf` line inside `assertEqual` itself.
+- `t.Errorf` (not `t.Fatalf`) is used in the helper because each subtest has only one assertion; there is no reason to stop early.
+  If the helper checked multiple things, `t.Fatalf` could be appropriate for a critical precondition.
+- The six cases satisfy the problem requirements: empty string, single word (normal), multi-word, all-caps, and mixed case.
+  The "already title" case is a bonus regression check.
