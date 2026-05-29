@@ -58,7 +58,7 @@ This book covers all the topics that a good Go programmer uses in daily life in 
 - place `\index{term}` at the primary introduction/definition of a term, not inside code blocks
 - use `\index{parent!child}` for sub-entries (e.g., `\index{pointer!arithmetic}`)
 - in `\index{}`, escape double quotes by doubling them (e.g., `\index{extern ""C""}`)
-- `\printindex` goes only in appE.md (the last file built into the book) --- do not add it to other chapters or appendices
+- `\printindex` goes only in appF.md (the last file built into the book) --- do not add it to other chapters or appendices
 
 ## 2020s References
 

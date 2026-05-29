@@ -363,6 +363,3 @@ Is a cross-compiler available in your CI?
 
 If you can answer yes to the last four questions and no to the first, proceed --- but document why you made the choice, because the next person reading the code will not have your context.
 
-```{=latex}
-\printindex
-```
