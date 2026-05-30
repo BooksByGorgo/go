@@ -36,7 +36,7 @@ This book covers all the topics that a good Go programmer uses in daily life in 
     - `**Trap:**` for common mistakes
     - `**Wut:**` for unexpected or counterintuitive rules
 - Callouts are rendered as full-width `tcolorbox` boxes via `callout.lua` --- do not use `wrapfigure`
-- Keep the tone professional but light
+- Keep the tone professional but light --- occasional sarcasm, slang, and informal phrasing are welcome; don't strip them out or replace them with formal language
 - Preserve emojis and text emojis (e.g., `:'(`) in the text --- do not remove them
 - Refer to the reader as `you`
 - do not wrap sentences in the markdown. every sentence gets its own line
