@@ -19,7 +19,7 @@ i hope after reading this book, you will be motivated to learn Go thoroughly wit
 
 i've learned a lot about Go writing it -- Claude is fantastic at identifying concepts that need to be mentioned as well as checking text and code for errors.
 the first dozen chapters should give you a good start into using Go.
-many programmers may find the *Essential Standard Library* chapter to be all they need to continue with Go on their own.
+many programmers may find up to the *Essential Standard Library* chapter to be all they need to continue with Go on their own.
 
 i hope this book will help you get a new perspective of how to approach problems the go way and add another language to tackle problems with.
 
