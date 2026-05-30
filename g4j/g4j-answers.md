@@ -17,19 +17,33 @@ There are no exercises in Chapter 0.
 
 # Chapter 1: Hello, Go
 
-**Exercise 1** (Think about it): Go has no `protected` access modifier.
-Java uses `protected` to allow subclasses in other packages to access members.
-Go has no inheritance.
-What Go mechanism serves a similar purpose when you want controlled access across packages, and what are its limits compared to `protected`?
+**Exercise 1** (Think about it): Java has four visibility levels: `public`, `protected`, package-private (no keyword), and `private`.
+Go has two: exported (uppercase) and unexported (lowercase), with the package as the only boundary.
+What do you gain from Go's simpler model?
+What do you lose?
+Can you think of a Java visibility pattern that has no direct equivalent in Go?
 
-Go's closest substitute is the `internal` directory convention.
-Any package placed under an `internal/` directory can only be imported by code rooted at the parent of that `internal/` tree.
-For example, `github.com/myorg/myapp/internal/auth` is visible to `github.com/myorg/myapp` and its subpackages, but not to any external module.
+**What you gain:**
 
-The limits are real: `internal` is a coarse, directory-level gate, not a per-symbol toggle.
-You cannot mark a single exported function as "visible only to sibling packages" the way Java's `protected` marks a single method as "visible to subclasses in other packages."
-If you need a symbol visible to several packages in your module but hidden from the outside world, you put it in `internal/`; everything in that subtree shares the same level of access.
-There is also no concept of subclass access because Go has no subclasses --- embedding a struct gives you promoted methods, but embedding is not inheritance and carries no visibility privileges.
+- Simplicity --- one rule covers everything: uppercase = visible outside the package, lowercase = not.
+  There is no keyword to remember, no risk of accidentally using `protected` when you meant `private`, and no six-word modifier like `public static final`.
+- Consistency --- the rule applies uniformly to functions, types, variables, struct fields, and methods.
+  There is no special case for classes vs members.
+- Readability --- any identifier starting with a capital letter is part of the public API; the rest is implementation detail.
+  You can tell at a glance what is exported without an IDE.
+
+**What you lose:**
+
+- Granularity --- Java's four levels let you express "visible to subclasses in other packages" (`protected`) and "visible within the package only" (package-private) as distinct states.
+  Go collapses both into "unexported."
+- Per-symbol control within a package --- every unexported name in a package is equally visible to every other file in that package.
+  You cannot hide a helper from one file while exposing it to another in the same package.
+
+**A Java pattern with no direct Go equivalent:**
+
+`protected` members --- visible to subclasses anywhere but hidden from unrelated code in other packages.
+Go has no inheritance, so the concept of "subclass visibility" does not exist.
+The closest substitutes are the `internal/` directory convention (covered in Chapter 13) and interfaces, but neither maps exactly to `protected`.
 
 ---
 
