@@ -14,7 +14,9 @@ it's approach to objects are much simpler than C++ and even Java.
 Python programmers will enjoy the duck typing that Go uses.
 and it's compiled!
 
-this book is quite comprehensive.
+this is a mediocre Go book to get a Java programmer to the level of a mediocre Go programmer quickly.
+i hope after reading this book, you will be motivated to learn Go thoroughly other Go books and some nice war stories.
+
 i've learned a lot about Go writing it -- Claude is fantastic at identifying concepts that need to be mentioned as well as checking text and code for errors.
 the first dozen chapters should give you a good start into using Go.
 many programmers may find the *Essential Standard Library* chapter to be all they need to continue with Go on their own.
