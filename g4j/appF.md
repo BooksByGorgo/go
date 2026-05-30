@@ -49,8 +49,10 @@ Each rule is numbered **CR-N** with a **short-descriptive-name** so it can be ci
 
 \index{crypto/rand}
 
+\index{math/rand}
 **CR-12. crypto-rand-for-keys** Never use `math/rand` or `math/rand/v2` to generate keys, tokens, or other security-sensitive values; use `crypto/rand.Reader`.
 
+\index{encoding/base64}
 **CR-13. crypto-rand-for-text** For random text output use `crypto/rand.Text()` or encode `crypto/rand.Reader` bytes with `encoding/hex` or `encoding/base64`.
 
 ## Declaring Empty Slices
