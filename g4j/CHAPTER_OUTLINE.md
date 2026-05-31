@@ -309,26 +309,6 @@ Audience: Java programmers learning Go for industry use
 - Profile-guided optimization (PGO, Go 1.20): `default.pgo`; `go build -pgo=auto`; 2--14% speedup
 - `GODEBUG` --- runtime knobs: `gctrace=1`, `schedtrace`
 
-### Appendix D: GC and Runtime Tuning
-*Go's GC is concurrent and low-latency. A few knobs control the tradeoff.*
-
-- Escape analysis --- stack vs heap; `go build -gcflags=-m`; why it matters for allocations
-- `GOGC` --- default 100; raise to trade memory for less frequent GC
-- `GOMEMLIMIT` (Go 1.19) --- soft memory ceiling; essential for container deployments
-- `runtime/debug.SetGCPercent`, `SetMemoryLimit` --- programmatic equivalents
-- `GOMAXPROCS` --- revisited; tuning for CPU-bound workloads
-- `sync.Pool` revisited --- reducing allocation pressure
-
-### Appendix E: Unsafe and cgo
-*`unsafe` and `cgo` escape Go's safety guarantees. Handle with care.*
-
-- `unsafe.Pointer` --- type-safe pointer conversions; only for FFI and performance-critical ops
-- `unsafe.Sizeof`, `unsafe.Alignof`, `unsafe.Offsetof`
-- `cgo` --- calling C from Go; `import "C"` preamble
-- `C.CString` / `C.GoString` and the mandatory `defer C.free(unsafe.Pointer(cs))`
-- Cross-compilation limitations with cgo enabled
-- "cgo is not Go" --- maintenance and tooling costs; prefer a pure-Go alternative when one exists
-
 ---
 
 ## Index

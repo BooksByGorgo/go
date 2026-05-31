@@ -10,7 +10,7 @@ CHAPTERS := frontmatter.yaml author-intro.md \
 	ch05.md ch06.md ch07.md ch08.md ch09.md \
 	ch10.md ch11.md ch12.md ch13.md ch14.md \
 	ch15.md ch16.md ch17.md ch18.md ch19.md \
-	appA.md appB.md appC.md appD.md appE.md appF.md
+	appA.md appB.md appC.md appF.md
 
 CH_SRCS := $(filter ch%.md,$(CHAPTERS))
 CH_PDFS := $(CH_SRCS:.md=.pdf)
