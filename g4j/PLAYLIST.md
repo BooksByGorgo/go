@@ -14,6 +14,7 @@ Do not repeat any reference already listed here.
 
 - StreamingTier iota block (Free/Standard/Premium/Lossless) --- fictional streaming tier names, no specific artist
 - ChartPosition iota block --- fictional chart positions, no specific artist
+- Teddy Swims --- "Lose Control" (used in `:=` short declaration and multiple-assignment examples)
 - The Weeknd & Playboi Carti --- "Timeless" (used in named and positional struct literal examples)
 - The Weeknd --- "Save Your Tears" (used in anonymous struct example and exercise 5 Song slice)
 - Doja Cat --- "Agora Hills" (used in struct value-type copy example)
@@ -23,11 +24,13 @@ Do not repeat any reference already listed here.
 - The Weeknd --- "Starboy" (used in cmp.Compare / slices.SortFunc example)
 - JVKE --- "Golden Hour" (used in cmp.Compare / slices.SortFunc example and exercise 5 Song slice)
 - Stephen Sanchez & Em Beihold --- "Until I Found You" (used in cmp.Compare / slices.SortFunc example)
+- Harry Styles (name used as map key in clear() example)
 - Peso Pluma --- "La Bebé" (used in exercise 2)
 - Natanael Cano (used in exercise 2 as reassigned artist name)
 - Denzel Curry --- "Gasoline" (used in exercise 4 catalog map)
 - Lil Nas X & Jack Harlow --- "Industry Baby" (used in exercise 4 catalog map)
 - Linkin Park --- "Numb" (used in exercise 4 catalog map)
+- Billie Eilish --- "Bad Guy" (used in exercise 7 code snippet)
 - The Kid LAROI & Justin Bieber --- "Stay" (used in exercise 5 Song slice)
 - Sam Smith --- "Unholy" (used in exercise 5 Song slice)
 
@@ -35,18 +38,28 @@ Do not repeat any reference already listed here.
 
 - Miley Cyrus --- "Flowers" (used in strings.Contains/HasPrefix/HasSuffix/Count/Index example: "I can buy myself flowers")
 - Sabrina Carpenter --- "Espresso" (used in strings.Builder example)
+- Steve Lacy --- "Bad Habit" (used in strings.Trim example)
 - Doja Cat --- album "Scarlet" (used in raw string literal JSON example)
 - Beyoncé --- artist name with non-ASCII é (used in byte/rune calculation exercise)
 
 ## Chapter 4: Control Flow
 
-*(no song/lyric references; Spanish vocabulary used: manzana, naranja, uva, lunes, sábado, domingo, fiebre, cancion)*
+- Miley Cyrus --- "Flowers" (used in if-init-statement example: `if n := len("Flowers"); n > 6`)
+- *(Spanish vocabulary used elsewhere: manzana, naranja, uva, lunes, sábado, domingo, fiebre, cancion)*
 
 ## Chapter 5: Functions
 
+- Harry Styles --- "As It Was" (used in pointer mutation examples)
 - Billie Eilish --- "Birds of a Feather" (used in the first-class function / transformer example)
 - "hola, mundo!" --- Spanish greeting used in the middleware pattern example
 - "martes" / "jueves" --- Spanish day names used as map keys in the `init()` example
+
+## Chapter 6: Methods and Embedding
+
+- Lola Young --- "Messy" (used in receiver and methods examples)
+- Rosalía --- "MOTOMAMI" (used in Playlist embedding examples)
+- JVKE --- "Golden Hour" (used in embedding and constructor examples)
+- Feid --- "Chorizo Asado" (used in exercise 4 nil embedded pointer bug: Song title)
 
 ## Chapter 7: Maps and Slices
 
@@ -64,43 +77,14 @@ Do not repeat any reference already listed here.
 - Olivia Rodrigo --- "good 4 u" (used in catalog map comma-ok example)
 - Bastille --- "As The World Caves In" (used in exercise 5 grouped-by-letter map input)
 
-## Chapter 7: Methods and Embedding
-
-- Feid --- "Chorizo Asado" (used in exercise 4 nil embedded pointer bug: Song title)
-
 ## Chapter 8: Interfaces
 
 - Lady Gaga & Bruno Mars --- "Die With A Smile" (used in Track struct Stringer example: title "Die With A Smile", 144 BPM)
-- "sabor a mí" --- Spanish song title used in any/interface{} variable example
+- Bizarrap --- "bzrp music session" (used as string value in any/interface{} type assertion example)
 - "Bienvenidos!" --- Spanish greeting used in http.HandlerFunc example
 - Chappell Roan --- "Good Luck, Babe!" (used in sort.Interface ByTitle example)
 - Benson Boone --- "Beautiful Things" (used in sort.Interface ByTitle example)
 - Gracie Abrams --- "That's So True" (used in sort.Interface ByTitle example)
-
-## Chapter 14: Essential Standard Library
-
-- Ariana Grande --- "positions" (used in Track struct %v/%+v/%#v example: title "positions", BPM 114; and exercise 4 titles list)
-- Ariana Grande --- "thank u, next" (used in io.Pipe goroutine example: string written to pipe; and exercise 4 titles list)
-- Dua Lipa --- "Physical" (used in slog.Info example: title "Physical", BPM 130; and exercise 2 scanner input; exercise 4 titles list; exercise 5 sample run)
-- Dua Lipa --- "Don't Start Now" (used in bufio.NewWriter Flush example: string written to buffer; exercise 2 scanner input; exercise 4 titles list; exercise 5 sample run)
-
-## Chapter 12: Context and Concurrency Patterns
-
-- Laufey --- "From The Start" (used in fetchLyrics timeout example and fanOutFetch exercise)
-- Laufey --- "Bewitched" (used in errgroup fan-out example and exercise 2)
-- Laufey --- "Let You Break My Heart Again" (used in worker pool track list)
-- Hozier --- "Too Sweet" (used in errgroup fan-out example, worker pool track list, exercise 2, and fanOutFetch exercise)
-- Hozier --- "Work Song" (used in goroutine leak example, worker pool track list, and fanOutFetch exercise)
-- Hozier --- "Cherry Wine" (used in worker pool track list and rate limiter example)
-- Hozier --- "Someone New" (used in rate limiter example)
-
-## Chapter 13: Packages and Modules
-
-- Zach Bryan --- "Something in the Orange" (used in module path and import path examples, and exercise 2 lyrics output)
-- Zach Bryan --- "I Remember Everything" (used as module name reference in go.mod example: remembereverything)
-- Noah Kahan --- "Stick Season" (used as module name in exercise 5 multi-package project)
-- Noah Kahan --- "Northern Attitude" (used in exercise 4 module name and exercise 5 catalog track)
-- Noah Kahan --- "Northern Attitude" (track in exercise 5 Catalog slice)
 
 ## Chapter 9: Error Handling
 
@@ -119,11 +103,33 @@ Do not repeat any reference already listed here.
 
 ## Chapter 11: Synchronization
 
-- NewJeans --- "Ditto" (used in Playlist.Add example, sync.Map store/range example, sync.Once catalog map, WaitGroup fan-out, sync.Pool formatSong example)
-- NewJeans --- "Hype Boy" (used in WaitGroup fan-out, sync.Map store example, sync.Pool formatSong example, race detector fix, exercise 4 key)
-- NewJeans --- "ETA" (used in WaitGroup fan-out, sync.Map LoadOrStore example, sync.Pool formatSong example, atomic play counter example)
-- BTS --- "Dynamite" (used in sync.Once catalog map, sync.Map store example, atomic play counter example, sync.Pool formatSong example)
-- BTS --- "Butter" (used in sync.Pool formatSong example, atomic play counter example, exercise 4 map key, exercise 5 rate limiter)
+- NewJeans --- "Ditto" (used in Playlist.Add mutex example, sync.Once catalog map, WaitGroup fan-out, sync.Cond queue)
+- NewJeans --- "Hype Boy" (used in WaitGroup fan-out, atomic play counter, exercise 4 SafeMap key)
+- NewJeans --- "ETA" (used in WaitGroup fan-out, sync.Cond queue, atomic play counter)
+- BTS --- "Dynamite" (used in sync.Once catalog map, atomic play counter)
+- BTS --- "Butter" (used in atomic play counter, exercise 4 SafeMap key)
+
+## Chapter 12: Context and Concurrency Patterns
+
+- Laufey --- "From The Start" (used in fetchLyrics timeout example and errgroup fan-out example)
+- Laufey --- "Bewitched" (used in errgroup fan-out example and exercise 2)
+- Hozier --- "Too Sweet" (used in errgroup fan-out example and exercise 2)
+- Hozier --- "Work Song" (used in goroutine leak example)
+
+## Chapter 13: Packages and Modules
+
+- Zach Bryan --- "Something in the Orange" (used in module path and import path examples, and exercise 2 lyrics output)
+- Zach Bryan --- "I Remember Everything" (used as module name reference in go.mod example: remembereverything)
+- Noah Kahan --- "Stick Season" (used as module name in exercise 5 multi-package project)
+- Noah Kahan --- "Northern Attitude" (used in exercise 4 module name)
+
+## Chapter 14: Essential Standard Library
+
+- Ariana Grande --- "positions" (used in Track struct %v/%+v/%#v example: title "positions", BPM 114; and exercise 4 titles list)
+- Ariana Grande --- "thank u, next" (used in io.Pipe goroutine example: string written to pipe; and exercise 4 titles list)
+- Dua Lipa --- "Physical" (used in slog.Info example: title "Physical", BPM 130; and exercise 2 scanner input; exercise 4 titles list)
+- Dua Lipa --- "Don't Start Now" (used in bufio.NewWriter Flush example: string written to buffer; exercise 2 scanner input; exercise 4 titles list)
+- Zach Bryan --- "Something in the Orange" (used in encoding/base64 example and crypto/sha256 example)
 
 ## Chapter 15: JSON, HTTP, and the Web
 
