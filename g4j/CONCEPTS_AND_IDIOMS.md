@@ -149,6 +149,7 @@
 - `crypto/rand` --- cryptographically secure random bytes
 - `math/rand/v2` (Go 1.22+) --- non-cryptographic random numbers: `rand.N`, `rand.Float64`
 - `crypto/sha256`, `crypto/aes`, `crypto/cipher` --- SHA-256 hashing; AES-256-GCM authenticated encryption
+- `crypto/tls` --- TLS client and server configuration; `tls.Config`, `tls.Dial`
 
 ---
 
