@@ -146,7 +146,8 @@
 - `path/filepath` --- cross-platform path manipulation
 - `bytes` --- `Buffer`, `Contains`, `Split` (mirrors `strings` for `[]byte`)
 - `encoding/base64` --- `StdEncoding`, `URLEncoding`, `RawStdEncoding`, `RawURLEncoding`
-- `crypto/rand` --- cryptographically secure random bytes; `math/rand/v2` for non-cryptographic use
+- `crypto/rand` --- cryptographically secure random bytes
+- `math/rand/v2` (Go 1.22+) --- non-cryptographic random numbers: `rand.N`, `rand.Float64`
 - `crypto/sha256`, `crypto/aes`, `crypto/cipher` --- SHA-256 hashing; AES-256-GCM authenticated encryption
 
 ---
