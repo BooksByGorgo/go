@@ -26,11 +26,11 @@ Audience: Java programmers learning Go for industry use
 - Zero values --- every type has a meaningful zero; no null pointer surprises
 - `const` and `iota` --- typed and untyped constants, enumeration patterns
 - Type definitions vs type aliases (`type Celsius float64` vs `type = float64`)
-- `new` vs `make` --- `new(T)` returns a zeroed `*T`; `make` initializes slices, maps, channels
+- `new` --- `new(T)` returns a zeroed `*T`; `make` initializes slices, maps, and channels (covered in Chapters 7 and 10)
 - Integer literal prefixes: `0b`, `0o`, `0x`; `_` digit separator
 - `clear`, `min`, `max` built-ins (Go 1.21)
 - Blank identifier (`_`)
-- Structs --- struct literals, value semantics, methods, struct tags, embedding
+- Structs --- struct literals, value semantics, methods, embedding
 - `cmp` package (Go 1.21): `cmp.Compare`, `cmp.Ordered`
 - Pointers --- `&` (address-of), `*` (dereference); nil pointer; no pointer arithmetic
 
@@ -78,6 +78,7 @@ Audience: Java programmers learning Go for industry use
 *Go separates data, behavior, and code reuse. Methods are declared outside struct bodies; constructors are plain functions; embedding replaces inheritance.*
 
 - Receiver syntax --- value receivers and pointer receivers; method sets
+- File organization --- methods can be in any file in the package; one file per type is a common convention
 - `New*` constructor functions --- the Go convention replacing `new ClassName()`
 - Resource cleanup with `defer` instead of destructors
 - Embedding --- field and method promotion; embedded value vs embedded pointer
@@ -153,8 +154,6 @@ Audience: Java programmers learning Go for industry use
 - `sync.WaitGroup` --- fan-out/fan-in without a channel
 - `sync.Once` --- lazy initialization; replaces double-checked locking
 - `sync.Cond` --- condition variables; broadcast wakeup and state-change coordination
-- `sync.Map` --- concurrent-safe map for many-readers / infrequent-writes patterns
-- `sync.Pool` --- reusable object pool; reducing GC pressure on high-throughput allocations
 - `sync/atomic` --- typed atomics (Go 1.19+): `atomic.Int64`, `atomic.Pointer[T]`
 - Race detector: `go test -race`; run in CI always
 
@@ -166,8 +165,6 @@ Audience: Java programmers learning Go for industry use
 - `context.WithValue` --- use unexported key types to prevent collisions; anti-pattern of string keys
 - Context as first parameter convention: `func Foo(ctx context.Context, ...)`
 - `golang.org/x/sync/errgroup` --- fan-out with error collection and context cancellation
-- Worker pool pattern --- bounded goroutine fan-out via channel as semaphore
-- Rate limiting with `time.Ticker` --- token bucket using a channel
 - Goroutine leak detection --- every goroutine must have an exit path; `goleak` in tests
 - `GOMAXPROCS` --- OS thread count; defaults to CPU count
 
@@ -188,7 +185,6 @@ Audience: Java programmers learning Go for industry use
 - Major version suffixes --- `module github.com/foo/bar/v2`; import path includes `/v2`
 - Build tags / build constraints
 - `//go:embed` --- embed static files into the binary at compile time
-- `//go:generate` directive
 
 ### Chapter 14: Essential Standard Library
 *A tour of the packages every Go programmer reaches for daily.*
@@ -201,8 +197,11 @@ Audience: Java programmers learning Go for industry use
 - `flag` --- standard CLI flag parsing
 - `time` --- `Duration`, `Time`, `Now`, `Since`, `After`, `Ticker`, `Timer`
 - `path/filepath` --- cross-platform path manipulation
-- `log` / `log/slog` (Go 1.21) --- structured logging: `slog.Attr`, `slog.With`, `slog.Group`, custom `Handler`
+- `log/slog` (Go 1.21) --- structured logging: levels, `TextHandler`/`JSONHandler`, `LevelVar`, `SetDefault`, `slog.With`, `slog.Group`
 - `regexp` --- compile once, use many times
+- `encoding/base64` --- `StdEncoding`, `URLEncoding`, `RawStdEncoding`, `RawURLEncoding`
+- `crypto/rand` --- cryptographically secure random bytes; `math/rand/v2` for non-cryptographic use
+- `crypto/sha256`, `crypto/aes`, `crypto/cipher` --- SHA-256 hashing; AES-256-GCM authenticated encryption
 
 ### Chapter 15: JSON, HTTP, and the Web
 *`encoding/json` and `net/http` are the backbone of Go web services.*
@@ -226,6 +225,7 @@ Audience: Java programmers learning Go for industry use
 - Prepared statements --- `db.PrepareContext`
 - `sql.Null[T]` (Go 1.22) --- nullable column values
 - Driver registration --- `import _ "github.com/lib/pq"` side-effect import pattern
+- pgx (`github.com/jackc/pgx/v5`) --- idiomatic PostgreSQL driver; `pgxpool` for connection pooling
 
 ---
 
