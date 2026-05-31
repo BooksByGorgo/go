@@ -1,3 +1,5 @@
+\appendix
+
 # Go Proverbs
 
 \index{proverbs}
