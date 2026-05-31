@@ -55,10 +55,16 @@ build_book_pdfs() {
 }
 
 # Build a single self-contained HTML page for the whole book.
-# Uses --embed-resources so the file works without external assets.
+#
+# Each callout icon kind (tip/trap/wut) is base64-encoded exactly once into a
+# <style> block injected via --include-in-header.  callout.lua emits a CSS
+# class span instead of an <img> when --metadata single-page-callouts=true is
+# set, so the data URI never repeats no matter how many callout boxes exist.
+# book.css is also inlined in the same <style> block; no --embed-resources
+# needed.
 build_single_page() {
     local src_dir="$1" dest_subdir="$2"
-    local html_dst="$DOCS/$dest_subdir/book.html"
+    local html_dst="$DOCS/$dest_subdir/g4j-book.html"
     local abs_dst
     abs_dst="$(pwd)/$html_dst"
 
@@ -70,9 +76,28 @@ build_single_page() {
     for md in "$src_dir"/ch[0-9][0-9].md; do srcs+=("$(basename "$md")"); done
     for md in "$src_dir"/app*.md;         do srcs+=("$(basename "$md")"); done
 
-    local filter_opt="" css_opt=""
+    local filter_opt=""
     [ -f "$src_dir/callout.lua" ] && filter_opt="--lua-filter=callout.lua"
-    [ -f "$src_dir/book.css"    ] && css_opt="--css=book.css"
+
+    # Build the injected <style> block: book.css + one data URI per icon kind.
+    local header_file
+    header_file=$(mktemp /tmp/g4j-book-header-XXXXXX.html)
+    {
+        printf '<style>\n'
+        [ -f "$src_dir/book.css" ] && cat "$src_dir/book.css" && printf '\n'
+        printf '.callout-icon {\n'
+        printf '  display: inline-block; flex-shrink: 0;\n'
+        printf '  width: 48px; height: 48px;\n'
+        printf '  background-size: contain; background-repeat: no-repeat;\n'
+        printf '  background-position: center;\n'
+        printf '}\n'
+        for kind in tip trap wut; do
+            local img="$src_dir/../images/${kind}-callout.png"
+            [ -f "$img" ] && printf '.callout-%s{background-image:url("data:image/png;base64,%s")}\n' \
+                "$kind" "$(base64 -w0 "$img")"
+        done
+        printf '</style>\n'
+    } > "$header_file"
 
     if ! (cd "$src_dir" && pandoc "${srcs[@]}" \
             -f markdown -t html5 \
@@ -80,17 +105,18 @@ build_single_page() {
             --citeproc \
             --bibliography=references.bib \
             --standalone \
-            --embed-resources \
             --toc \
             --toc-depth=2 \
             --highlight-style=pygments \
             --wrap=none \
             --email-obfuscation=none \
             --metadata title="Gorgo Go for Java Programmers" \
-            $css_opt \
+            --metadata single-page-callouts=true \
+            --include-in-header="$header_file" \
             -o "$abs_dst"); then
         echo "warning: single-page HTML build failed for $dest_subdir" >&2
     fi
+    rm -f "$header_file"
 }
 
 # Copy a PDF into the docs tree if it exists.
@@ -129,7 +155,7 @@ build_book() {
     local full_pdf_dst="$DOCS/$dest_subdir/${dest_subdir}.pdf"
     local answers_pdf_src="$src_dir/${book_slug}-answers.pdf"
     local answers_pdf_dst="$DOCS/$dest_subdir/${dest_subdir}-answers.pdf"
-    local single_html_dst="$DOCS/$dest_subdir/book.html"
+    local single_html_dst="$DOCS/$dest_subdir/g4j-book.html"
     copy_pdf "$full_pdf_src" "$full_pdf_dst"
     copy_pdf "$answers_pdf_src" "$answers_pdf_dst"
 
@@ -148,7 +174,7 @@ build_book() {
                     "$dest_subdir" "$dest_subdir" "$PDF_ICON_SVG"
             fi
             if [ -f "$single_html_dst" ]; then
-                printf "  <a class=\"book-pdf-link\" href=\"{{ '/%s/book.html' | relative_url }}\">%s Read as single page</a>\n" \
+                printf "  <a class=\"book-pdf-link\" href=\"{{ '/%s/g4j-book.html' | relative_url }}\">%s Read as single page</a>\n" \
                     "$dest_subdir" "$SINGLE_PAGE_ICON_SVG"
             fi
             printf '</p>\n'
