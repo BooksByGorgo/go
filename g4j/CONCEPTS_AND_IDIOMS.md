@@ -132,6 +132,7 @@
 - `database/sql` --- `sql.DB` connection pool, `Query`/`QueryRow`/`Exec`, `Rows.Scan`, `sql.Tx`, context-aware cancellation, `sql.Null[T]` (Go 1.22)
 - `net/http` --- `ListenAndServe`, `Handler`, `HandleFunc`, `Client`, `Request`; Go 1.22 `ServeMux` method routing and path wildcards
 - `net/http` middleware chaining --- wrapping `http.Handler` to add logging, auth, metrics
+- `net/http/pprof` --- import for side-effect to expose profiling endpoints on a live HTTP server
 - `net` --- `net.Dial`, `net.Listen`, TCP/UDP below the HTTP layer
 - `time` --- `Duration`, `Time`, `Now`, `Since`, `After`, `Ticker`, `Timer`
 - `sort` --- `Slice`, `SliceStable`, `Search`, `Sort` interface; and `sort.Interface` (`Len`, `Less`, `Swap`)
