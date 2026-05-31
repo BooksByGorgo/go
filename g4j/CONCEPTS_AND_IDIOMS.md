@@ -35,7 +35,9 @@
 - Multidimensional slices
 
 ### Control Flow
+- `for` is the only loop --- C-style, range, while-style, infinite
 - `switch` does not fall through by default; use `fallthrough` to explicitly transfer to next case body
+- `range` over slices, maps, strings, channels, integers (Go 1.22), iterators (Go 1.23)
 - Labeled `break` / `continue` --- the Go substitute for Java's labeled loops
 - `goto` --- exists but niche
 
@@ -45,7 +47,7 @@
 - `any` (`interface{}`) and type assertions (`x.(T)`)
 - Type switches (`switch v := i.(type)`)
 - Small interfaces: `io.Reader`, `io.Writer`, `fmt.Stringer`, `sort.Interface`
-- "Accept interfaces, return structs" idiom
+- "Accept interfaces, return concrete types" idiom
 - Interface nil traps (typed nil vs untyped nil)
 
 ### Functions
@@ -73,6 +75,7 @@
 - Sentinel errors (e.g., `io.EOF`)
 - Custom error types
 - `panic` / `recover` --- reserved for truly unrecoverable state, not normal control flow
+- `must` idiom --- helper that panics on error; used at program startup for things that must not fail
 
 ---
 
@@ -89,23 +92,20 @@
 - `sync.WaitGroup`
 - `sync.Once`
 - `sync.Cond` --- condition variables for broadcast wakeup and state-change coordination
-- `sync.Map` --- concurrent-safe map for many-readers / infrequent-writes patterns
-- `sync.Pool` --- reusable object pool to reduce GC pressure on high-throughput allocations
 
 ### Atomic Operations
 - `sync/atomic` --- typed atomics in Go 1.19+: `atomic.Int64`, `atomic.Pointer[T]` (prefer over function-based API)
 
 ### Context and Cancellation
 - `context.Context` --- cancellation, deadlines, value propagation
+- `context.WithCancel`, `context.WithTimeout`, `context.WithDeadline` --- derive cancellable contexts
 - `context.WithValue` and unexported key types --- avoid string keys to prevent collisions
 
 ### Patterns and Pitfalls
 - "Don't communicate by sharing memory; share memory by communicating"
 - `golang.org/x/sync/errgroup` --- fan-out with automatic error collection and context cancellation
-- Worker pool pattern --- bounded goroutine fan-out via a fixed channel or semaphore
-- Rate limiting with `time.Ticker` --- token bucket pattern using a channel
 - Goroutine leak detection --- goroutines that block forever; use `context` to bound lifetime; `goleak` in tests
-- `GOMAXPROCS` --- number of OS threads running Go code; defaults to CPU count
+- `GOMAXPROCS` --- number of OS threads running Go code; defaults to CPU count; use `go.uber.org/automaxprocs` in containers
 
 ### Memory Model
 - Go memory model and happens-before --- visibility across goroutines requires synchronization
@@ -123,8 +123,8 @@
 - `strconv` --- `Itoa`, `Atoi`, `ParseFloat`, `FormatFloat`
 - `io` --- `Reader`, `Writer`, `ReadAll`, `Copy`, `MultiReader`, `MultiWriter`, `TeeReader`, `LimitReader`, `Pipe`
 - `bufio` --- `Scanner`, `NewReader`, `NewWriter`
-- `os` --- `Open`, `Create`, `ReadFile`, `WriteFile`, `Args`, `Stdin/Stdout/Stderr`
-- `os/exec` --- spawning subprocesses: `exec.Command`, `Cmd.Output`, `Cmd.Run`
+- `os` --- `Open`, `Create`, `ReadFile`, `WriteFile`, `Args`, `Stdin/Stdout/Stderr`, `Getenv`
+- `os/exec` --- spawning subprocesses: `exec.Command`, `Cmd.Output`, `Cmd.Run`; piping stdio
 - `flag` --- standard command-line flag parsing
 - `embed` --- `//go:embed` directive embeds static files into the binary at compile time
 - `encoding/json` --- `Marshal`, `Unmarshal`, `Encoder`, `Decoder`, struct tags
@@ -132,7 +132,6 @@
 - `database/sql` --- `sql.DB` connection pool, `Query`/`QueryRow`/`Exec`, `Rows.Scan`, `sql.Tx`, context-aware cancellation, `sql.Null[T]` (Go 1.22)
 - `net/http` --- `ListenAndServe`, `Handler`, `HandleFunc`, `Client`, `Request`; Go 1.22 `ServeMux` method routing and path wildcards
 - `net/http` middleware chaining --- wrapping `http.Handler` to add logging, auth, metrics
-- `net/http/pprof` --- import for side-effect to expose profiling endpoints on a live HTTP server
 - `net` --- `net.Dial`, `net.Listen`, TCP/UDP below the HTTP layer
 - `time` --- `Duration`, `Time`, `Now`, `Since`, `After`, `Ticker`, `Timer`
 - `sort` --- `Slice`, `SliceStable`, `Search`, `Sort` interface; and `sort.Interface` (`Len`, `Less`, `Swap`)
@@ -141,12 +140,13 @@
 - `cmp` (Go 1.21) --- `cmp.Compare`, `cmp.Ordered` constraint; used with `slices.SortFunc`
 - `iter` (Go 1.23) --- `iter.Seq[V]`, `iter.Seq2[K,V]`; range-over-func for custom iterators with `yield` callbacks
 - `unique` (Go 1.23) --- value interning via `unique.Make`; returns a `Handle[T]` comparable by pointer
-- `math/rand/v2` (Go 1.22+) --- `N`, `Float64`
-- `log` / `log/slog` (Go 1.21+) --- structured logging: `slog.Attr`, `slog.With`, `slog.Group`, custom `Handler`, `slog.SetDefault`
+- `log/slog` (Go 1.21+) --- structured logging: `slog.Attr`, `slog.With`, `slog.Group`, `LevelVar`, custom `Handler`, `slog.SetDefault`
 - `regexp` --- compiled patterns with `Compile`
 - `path/filepath` --- cross-platform path manipulation
 - `bytes` --- `Buffer`, `Contains`, `Split` (mirrors `strings` for `[]byte`)
-- `crypto/tls`, `crypto/sha256`, `crypto/hmac` --- Go has a comprehensive crypto stdlib; prefer it over third-party
+- `encoding/base64` --- `StdEncoding`, `URLEncoding`, `RawStdEncoding`, `RawURLEncoding`
+- `crypto/rand` --- cryptographically secure random bytes; `math/rand/v2` for non-cryptographic use
+- `crypto/sha256`, `crypto/aes`, `crypto/cipher` --- SHA-256 hashing; AES-256-GCM authenticated encryption
 
 ---
 
@@ -159,7 +159,6 @@
 - Go workspaces (`go work`) --- `go.work` file for multi-module local development without `replace` directives
 - Major version suffixes --- `module github.com/foo/bar/v2`; import path must include `/v2`
 - Build tags / build constraints
-- `//go:generate` directive
 - `//go:embed` directive
 
 ---
@@ -169,6 +168,7 @@
 - **Functional options** --- `func(cfg *Config)` variadic options pattern
 - **Comma-ok idiom** --- maps, type assertions, channel receives
 - **Defer for cleanup** --- file closes, mutex unlocks, span ends
+- `runtime.SetFinalizer` --- rarely correct; prefer `defer` for resource cleanup
 - **Wrapping errors with context** --- `fmt.Errorf("parsing config: %w", err)`
 - **Constructor functions** --- `NewFoo() *Foo`
 - **Interface mocking in tests** --- small interfaces make mocks trivial
@@ -180,10 +180,19 @@
 
 ### Go Proverbs (design philosophy)
 - "Don't communicate by sharing memory; share memory by communicating"
+- "Concurrency is not parallelism"
+- "The bigger the interface, the weaker the abstraction"
+- "Accept interfaces, return concrete types"
+- "Make the zero value useful"
+- "The empty interface says nothing"
+- "Errors are values"
+- "Don't just check errors, handle them gracefully"
 - "A little copying is better than a little dependency"
 - "Clear is better than clever"
-- "The bigger the interface, the weaker the abstraction"
-- "Errors are values"
+- "gofmt's style is no one's favorite, yet gofmt is everyone's favorite"
+- "Cgo is not Go"
+- "With the unsafe package there are no guarantees"
+- "Reflection is never clear"
 
 ---
 
@@ -195,14 +204,21 @@
 - `go doc` / `godoc`
 - `gopls` --- official Go language server powering IDE support
 - Delve (`dlv`) --- standard Go debugger; `dlv debug`, `dlv test`, goroutine inspection
-- Fuzzing (`go test -fuzz`, Go 1.18+) --- `FuzzXxx(*testing.F)`, `f.Add(seed)`, coverage-guided; runs until failure
-- Benchmarks (`func BenchmarkFoo(b *testing.B)`)
-- `pprof` --- CPU and memory profiling; `go tool pprof -http` for flame graphs
-- `net/http/pprof` --- always-on production profiling endpoint
-- Block profile (`runtime.SetBlockProfileRate`) and mutex profile (`runtime.SetMutexProfileFraction`) --- off by default
-- `go tool trace` --- goroutine and scheduler tracing
-- Profile-guided optimization (PGO, Go 1.20+) --- `default.pgo` in main package; `go build -pgo=auto`; 2--14% speedup
-- `GODEBUG` --- runtime knobs: `gctrace=1`, `schedtrace`, `asyncpreemptoff`
+- `go build -gcflags=-m` --- shows escape analysis decisions (stack vs heap allocation)
+
+---
+
+## Testing
+- `testing.T` --- `t.Error`, `t.Fatal`, `t.Log`; test function naming (`TestFoo`)
+- Table-driven tests --- slice of structs; `t.Run` subtests
+- `t.Helper()` --- attributes failure output to the call site, not the helper function
+- `TestMain(m *testing.M)` --- package-level setup/teardown; Go's `@BeforeAll` equivalent
+- Benchmarks: `func BenchmarkFoo(b *testing.B)`; `b.N`, `b.ResetTimer`
+- Fuzzing: `func FuzzFoo(f *testing.F)`; `f.Add` seed corpus; coverage-guided; runs until failure
+- Race detector: `go test -race`; run in CI always
+- Goroutine leak detection: `goleak.VerifyTestMain(m)` in `TestMain`
+- Integration tests --- build tags to separate unit and integration test binaries
+- `go test ./...`, `-count=1` (disable caching), `-timeout`, `-run`, `-bench`
 
 ---
 
@@ -218,15 +234,6 @@
 
 ---
 
-## GC and Runtime Tuning
-- `GOGC` --- default 100 (trigger GC when heap doubles); raise to trade memory for CPU
-- `GOMEMLIMIT` (Go 1.19) --- soft memory ceiling; essential for container deployments
-- `runtime/debug.SetGCPercent` and `SetMemoryLimit` --- programmatic equivalents
-- Escape analysis --- `go build -gcflags=-m` shows what escapes to the heap
-- `GOMAXPROCS` --- OS thread count; defaults to CPU count
-
----
-
 ## Reflection (use sparingly)
 - `reflect.TypeOf`, `reflect.ValueOf`
 - `reflect.Value.Kind()` vs `Type()` distinction
@@ -234,11 +241,11 @@
 - `reflect.Value.CanSet()` --- mutation requires a pointer
 - Struct field iteration and `reflect.StructField.Tag` for custom tag parsing
 - The three laws of reflection as a conceptual framework
-- When reflection is warranted (serialization, DI frameworks)
+- Performance cost --- reflection boxes values into `interface{}`, allocates; avoid in hot paths
+- When reflection is warranted (serialization, DI frameworks); prefer generics or interfaces when types are known at compile time
 
 ---
 
 ## Unsafe and cgo (use sparingly)
-- `unsafe.Pointer` --- only for FFI and performance-critical ops
-- `cgo` --- C library integration; cross-compilation limitations; "cgo is not Go"
-- `C.CString` / `C.GoString` and the mandatory `defer C.free(unsafe.Pointer(cs))`
+- `unsafe.Pointer` --- escape hatch for C interop and pointer arithmetic; no type-safety guarantees across Go versions
+- `cgo` --- "cgo is not Go"; mentioned in proverbs; avoid in application code
