@@ -298,17 +298,6 @@ Audience: Java programmers learning Go for industry use
 - Delve (`dlv`) --- the standard Go debugger; `dlv debug`, `dlv test`, goroutine inspection
 - `go tool compile -gcflags=-m` --- see escape analysis decisions
 
-### Appendix C: Profiling and Performance
-*Go ships a world-class profiler. Use it before optimizing anything.*
-
-- `pprof` --- CPU profile, memory profile, goroutine profile
-- `net/http/pprof` --- import for side-effect to expose `/debug/pprof` on a live server
-- Block profile (`runtime.SetBlockProfileRate`) and mutex profile (`runtime.SetMutexProfileFraction`)
-- `go tool pprof -http` --- flame graphs in the browser
-- `go tool trace` --- goroutine and scheduler tracing
-- Profile-guided optimization (PGO, Go 1.20): `default.pgo`; `go build -pgo=auto`; 2--14% speedup
-- `GODEBUG` --- runtime knobs: `gctrace=1`, `schedtrace`
-
 ---
 
 ## Index
