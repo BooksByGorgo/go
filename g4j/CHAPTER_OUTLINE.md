@@ -259,17 +259,6 @@ Audience: Java programmers learning Go for industry use
 - Integration tests --- build tags to separate unit and integration tests
 - `go test ./...`, `-count=1` (disable caching), `-timeout`
 
-### Chapter 19: Reflection
-*Reflection is powerful and slow. Use it only when the type is truly unknown at compile time.*
-
-- The three laws of reflection --- value, type, and settability
-- `reflect.TypeOf`, `reflect.ValueOf`; `reflect.Value.Kind()` vs `Type()`
-- `reflect.Value.Elem()` --- dereferencing pointers and unwrapping interfaces
-- `reflect.Value.CanSet()` --- mutation requires a pointer
-- Struct field iteration; `reflect.StructField.Tag`; custom tag parsing
-- When reflection is warranted --- serialization libraries, dependency injection frameworks
-- Performance cost of reflection; prefer generics or interfaces where possible
-
 ---
 
 ## Appendices
