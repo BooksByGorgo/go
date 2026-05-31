@@ -7,7 +7,7 @@ nav_order: 2
 
 {% raw %}
 <h1 data-number="2" id="types-and-variables"><span class="header-section-number">2</span> Types and Variables</h1>
-<p>Go’s type system will feel familiar to a Java programmer but has several sharp edges: every variable has a meaningful zero value from birth, numeric types never coerce implicitly, and the capitalization of one letter can change a type from private to public. This chapter covers the basic types, how to declare variables, constants, and the handful of built-in functions that round out the type system.</p>
+<p>Go’s type system will feel familiar to a Java programmer but has several sharp edges: every variable has a meaningful zero value from birth, numeric types never coerce implicitly, and the capitalization of one letter can change a type from private to public. This chapter covers the basic types, how to declare variables, constants, the handful of built-in functions that round out the type system, and structs — Go’s primary mechanism for grouping data, attaching behavior, and composing types.</p>
 <h2 data-number="2.1" id="basic-types"><span class="header-section-number">2.1</span> Basic Types</h2>
 <p></p>
 <p>Go’s primitive types map roughly to Java’s, with a few differences worth noting.</p>
@@ -92,6 +92,10 @@ nav_order: 2
 <div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>artist <span class="op">:=</span> <span class="st">&quot;Teddy Swims&quot;</span></span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>streams <span class="op">:=</span> <span class="dv">4_200_000</span></span></code></pre></div>
 <p>The compiler infers the type from the right-hand side. <code>:=</code> is the idiomatic choice inside functions; <code>var</code> is preferred for package-level variables and when you want to declare a variable without an initial value.</p>
+<p>Multiple variables can appear on the left side, which is how Go handles functions that return more than one value:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>title<span class="op">,</span> artist <span class="op">:=</span> <span class="st">&quot;Lose Control&quot;</span><span class="op">,</span> <span class="st">&quot;Teddy Swims&quot;</span>  <span class="co">// two new string variables</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> err <span class="op">:=</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;hello&quot;</span><span class="op">)</span>                   <span class="co">// int and error from one call</span></span></code></pre></div>
+<p>Each variable on the left gets the corresponding value from the right. You will see this form constantly when calling functions that return a result alongside an error.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
@@ -101,9 +105,9 @@ nav_order: 2
 <p>Use <code>:=</code> when you have an initializer and you are inside a function — it is shorter and more readable. Use <code>var</code> when you want to declare a variable at its zero value, when you need a package-level variable, or when the explicit type improves clarity.</p>
 <h3 data-number="2.2.4" id="redeclaration-with"><span class="header-section-number">2.2.4</span> Redeclaration with <code>:=</code></h3>
 <p><code>:=</code> can appear on the left side with variables that already exist in the current scope, <strong>as long as at least one variable on the left is new</strong>. The following example shows how you can reuse <code>err</code> across a chain of calls:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> err <span class="op">:=</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;first&quot;</span><span class="op">)</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>m<span class="op">,</span> err <span class="op">:=</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;second&quot;</span><span class="op">)</span>  <span class="co">// err already declared; m is new --- OK</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> err <span class="op">:=</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;third&quot;</span><span class="op">)</span>   <span class="co">// error because n and err are already declared</span></span></code></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> err <span class="op">:=</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;first&quot;</span><span class="op">)</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>m<span class="op">,</span> err <span class="op">:=</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;second&quot;</span><span class="op">)</span>  <span class="co">// err already declared; m is new --- OK</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> err <span class="op">:=</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;third&quot;</span><span class="op">)</span>   <span class="co">// error because n and err are already declared</span></span></code></pre></div>
 <p>If every variable on the left already exists in scope, <code>:=</code> is a compile error.</p>
 <h2 data-number="2.3" id="zero-values"><span class="header-section-number">2.3</span> Zero Values</h2>
 <p></p>
@@ -142,19 +146,16 @@ nav_order: 2
 </tr>
 </tbody>
 </table>
-<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> count <span class="dt">int</span>       <span class="co">// 0</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> name <span class="dt">string</span>     <span class="co">// &quot;&quot;</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> active <span class="dt">bool</span>     <span class="co">// false</span></span></code></pre></div>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> count <span class="dt">int</span>       <span class="co">// 0</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> name <span class="dt">string</span>     <span class="co">// &quot;&quot;</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> active <span class="dt">bool</span>     <span class="co">// false</span></span></code></pre></div>
 <p>Zero values make it safe to use a variable before assigning to it. Structs are zero-valued field by field.</p>
 <h3 data-number="2.3.1" id="nil"><span class="header-section-number">2.3.1</span> nil</h3>
-<p> <code>nil</code> is the zero value for the six reference-like type categories listed above. It is Go’s counterpart to Java’s <code>null</code>, but with two important differences.</p>
-<p>First, <code>nil</code> only applies to those six types. Trying to assign <code>nil</code> to an <code>int</code> or <code>bool</code> is a compile error — those types have their own zero values.</p>
-<p>Second, <code>nil</code> is often safe and useful rather than a source of panic. A nil slice has length zero and works correctly with <code>len</code>, <code>range</code>, and <code>append</code>. A nil map can be read from (the result is always the zero value for the value type). These behaviors are covered in detail when slices (Chapter 7) and maps (Chapter 8) are introduced.</p>
+<p> <code>nil</code> is the zero value for the six reference-like type categories listed above. It is Go’s counterpart to Java’s <code>null</code>, but with one important difference: <code>nil</code> is often safe and useful rather than a source of panic. A nil slice has length zero and works correctly with <code>len</code>, <code>range</code>, and <code>append</code>. <strong><em>[nil-slice-preferred]</em></strong> A nil map can be read from (the result is always the zero value for the value type). These behaviors are covered in detail when slices and maps (both Chapter 7) are introduced.</p>
 <p>The one nil that always panics is a <strong>nil pointer dereference</strong> — the same as Java’s <code>NullPointerException</code>:</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> p <span class="op">*</span><span class="dt">int</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>p<span class="op">)</span>  <span class="co">// &lt;nil&gt;</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(*</span>p<span class="op">)</span> <span class="co">// panic: runtime error: nil pointer dereference</span></span></code></pre></div>
-<p>Pointer nil is covered fully in Chapter 6.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> p <span class="op">*</span><span class="dt">int</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>p<span class="op">)</span>  <span class="co">// &lt;nil&gt;</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(*</span>p<span class="op">)</span> <span class="co">// panic: runtime error: nil pointer dereference</span></span></code></pre></div>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
@@ -168,10 +169,10 @@ nav_order: 2
 <h2 data-number="2.4" id="integer-literal-prefixes-and-the-digit-separator"><span class="header-section-number">2.4</span> Integer Literal Prefixes and the Digit Separator</h2>
 <p> </p>
 <p>Go supports the same literal prefix syntax you may know from modern Java:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>bin  <span class="op">:=</span> <span class="bn">0b1010_1100</span>   <span class="co">// binary, underscores allowed</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>oct  <span class="op">:=</span> <span class="bn">0o755</span>         <span class="co">// octal (always 0o, never plain 0)</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>hex  <span class="op">:=</span> <span class="bn">0xDEAD_BEEF</span>   <span class="co">// hexadecimal</span></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>big  <span class="op">:=</span> <span class="dv">1_000_000</span>     <span class="co">// one million, easier to read</span></span></code></pre></div>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>bin  <span class="op">:=</span> <span class="bn">0b1010_1100</span>   <span class="co">// binary, underscores allowed</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>oct  <span class="op">:=</span> <span class="bn">0o755</span>         <span class="co">// octal (always 0o, never plain 0)</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>hex  <span class="op">:=</span> <span class="bn">0xDEAD_BEEF</span>   <span class="co">// hexadecimal</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>big  <span class="op">:=</span> <span class="dv">1_000_000</span>     <span class="co">// one million, easier to read</span></span></code></pre></div>
 <p>The underscore <code>_</code> is a digit separator — it is ignored by the compiler and exists only for readability. You can place it anywhere inside a numeric literal, but not at the start or end.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
@@ -181,58 +182,58 @@ nav_order: 2
 <h2 data-number="2.5" id="constants"><span class="header-section-number">2.5</span> Constants</h2>
 <p></p>
 <p>Constants in Go are declared with <code>const</code>. They can be typed or untyped:</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> Pi <span class="dt">float64</span> <span class="op">=</span> <span class="fl">3.14159</span>   <span class="co">// typed constant</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> E  <span class="op">=</span> <span class="fl">2.71828</span>           <span class="co">// untyped floating-point constant</span></span></code></pre></div>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> Pi <span class="dt">float64</span> <span class="op">=</span> <span class="fl">3.14159</span>   <span class="co">// typed constant</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> E  <span class="op">=</span> <span class="fl">2.71828</span>           <span class="co">// untyped floating-point constant</span></span></code></pre></div>
 <p>Untyped constants are precise and flexible — the compiler treats them as arbitrary-precision numbers and assigns a concrete type at the point of use.</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> Streams <span class="op">=</span> <span class="dv">1_200_000_000</span>  <span class="co">// untyped integer constant</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> plays32 <span class="dt">int32</span>   <span class="op">=</span> Streams  <span class="co">// concrete type: int32</span></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> plays64 <span class="dt">int64</span>   <span class="op">=</span> Streams  <span class="co">// same constant, now int64</span></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> ratio   <span class="dt">float64</span> <span class="op">=</span> Streams  <span class="co">// same constant, now float64</span></span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> Streams <span class="op">=</span> <span class="dv">1_200_000_000</span>  <span class="co">// untyped integer constant</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> plays32 <span class="dt">int32</span>   <span class="op">=</span> Streams  <span class="co">// concrete type: int32</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> plays64 <span class="dt">int64</span>   <span class="op">=</span> Streams  <span class="co">// same constant, now int64</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> ratio   <span class="dt">float64</span> <span class="op">=</span> Streams  <span class="co">// same constant, now float64</span></span></code></pre></div>
 <p>A typed constant like <code>Pi float64</code> can only be used where <code>float64</code> is expected. <code>Streams</code> works as any numeric type that can represent its value.</p>
 <h3 data-number="2.5.1" id="iota-and-const-blocks"><span class="header-section-number">2.5.1</span> <code>iota</code> and const blocks</h3>
 <p></p>
 <p>Constants can also be declared in a block. For example</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> <span class="op">(</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    Rock <span class="op">=</span> <span class="dv">1</span></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    Pop <span class="op">=</span> <span class="dv">2</span></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    HipHop <span class="op">=</span> <span class="dv">3</span></span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    Regeton <span class="op">=</span> <span class="dv">4</span></span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
-<p>but what about this code?</p>
 <div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> <span class="op">(</span></span>
 <span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    Rock <span class="op">=</span> <span class="dv">1</span></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    Pop</span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    HipHop</span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    Regeton</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    Pop <span class="op">=</span> <span class="dv">2</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    HipHop <span class="op">=</span> <span class="dv">3</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    Regeton <span class="op">=</span> <span class="dv">4</span></span>
 <span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
+<p>but what about this code?</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> <span class="op">(</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    Rock <span class="op">=</span> <span class="dv">1</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    Pop</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    HipHop</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    Regeton</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
 <p>You would think this would be a syntax error or the constants would be set to the same values as the previous example. It turns out that there is a third option. The Go Language spec states that if the initialization expression is missing for a constant in a const block, the expression used will be “equivalent to the textual substitution of the first preceding non-empty expression list and its type if any” <span class="citation" data-cites="gospec">[@gospec, sec. "Constant declarations"]</span>. That means the following code will print all ones.</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%v %v %v %v&quot;</span><span class="op">,</span> Rock<span class="op">,</span> Pop<span class="op">,</span> HipHop<span class="op">,</span> Regeton<span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%v %v %v %v&quot;</span><span class="op">,</span> Rock<span class="op">,</span> Pop<span class="op">,</span> HipHop<span class="op">,</span> Regeton<span class="op">)</span></span></code></pre></div>
 <p>So, why the <code>textual substitution</code>? Why give one iota about that rule? Read on!</p>
 <p></p>
 <p><code>iota</code> is an untyped integer constant whose value is the position of a constant specification within a <code>const</code> block, starting at zero.</p>
 <p>It is Go’s idiomatic way to define enumerations.</p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> <span class="op">(</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    Free     <span class="op">=</span> <span class="ot">iota</span>  <span class="co">// 0</span></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    Standard <span class="op">=</span> <span class="ot">iota</span>  <span class="co">// 1</span></span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    Premium  <span class="op">=</span> <span class="ot">iota</span>  <span class="co">// 2</span></span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    Lossless <span class="op">=</span> <span class="ot">iota</span>  <span class="co">// 3</span></span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
-<p>We can take advantage of the textual substitution rule to simplify the preceding example:</p>
 <div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> <span class="op">(</span></span>
 <span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    Free     <span class="op">=</span> <span class="ot">iota</span>  <span class="co">// 0</span></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    Standard         <span class="co">// 1</span></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    Premium          <span class="co">// 2</span></span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    Lossless         <span class="co">// 3</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    Standard <span class="op">=</span> <span class="ot">iota</span>  <span class="co">// 1</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    Premium  <span class="op">=</span> <span class="ot">iota</span>  <span class="co">// 2</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    Lossless <span class="op">=</span> <span class="ot">iota</span>  <span class="co">// 3</span></span>
 <span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
+<p>We can take advantage of the textual substitution rule to simplify the preceding example:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> <span class="op">(</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    Free     <span class="op">=</span> <span class="ot">iota</span>  <span class="co">// 0</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    Standard         <span class="co">// 1</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    Premium          <span class="co">// 2</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    Lossless         <span class="co">// 3</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
 <p>The <code>iota</code> will be implicitly copied to <code>Standard</code>, <code>Premium</code>, and <code>Lossless</code>.</p>
 <p></p>
 <p>You can use <code>iota</code> in expressions to offset the starting value:</p>
-<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> <span class="op">(</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    Debut     <span class="op">=</span> <span class="ot">iota</span> <span class="op">+</span> <span class="dv">1</span>  <span class="co">// 1</span></span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    Sophomore             <span class="co">// 2</span></span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    Certified             <span class="co">// 3</span></span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> <span class="op">(</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    Debut     <span class="op">=</span> <span class="ot">iota</span> <span class="op">+</span> <span class="dv">1</span>  <span class="co">// 1</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    Sophomore             <span class="co">// 2</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    Certified             <span class="co">// 3</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
 <p><code>iota</code> resets to zero at each new <code>const</code> block.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
@@ -244,17 +245,45 @@ nav_order: 2
 <div style="flex: 1; min-width: 0;">
 <p><strong>Wut:</strong> You can also have comma separated const identifiers with corresponding comma separated initializers. They are not common because they mess with formatting, and <code>iota</code> doesn’t increment between comma separated identifiers.</p>
 </div></div>
+<h3 data-number="2.5.2" id="type-casts"><span class="header-section-number">2.5.2</span> Type Casts</h3>
+<p>  Go has no implicit numeric widening. In Java, assigning an <code>int</code> to a <code>long</code> variable just works; in Go, every conversion between different types must use a cast. Java casts look like <code>int i = (int)long</code>, but Go uses a functional form of the case using the <code>T(value)</code> syntax.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> i <span class="dt">int</span>     <span class="op">=</span> <span class="dv">42</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> f <span class="dt">float64</span> <span class="op">=</span> <span class="dt">float64</span><span class="op">(</span>i<span class="op">)</span>   <span class="co">// required: int → float64</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> u <span class="dt">uint</span>    <span class="op">=</span> <span class="dt">uint</span><span class="op">(</span>f<span class="op">)</span>      <span class="co">// required: float64 → uint</span></span></code></pre></div>
+<p>This applies to all numeric types — <code>int32</code> to <code>int64</code>, <code>float32</code> to <code>float64</code>, <code>int</code> to <code>byte</code>, and so on. The compiler rejects any assignment that silently changes the representation.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Java widens automatically: <code>long x = someInt</code> compiles without complaint. Go requires <code>int64(someInt)</code> — every time, with no exceptions. The upside: you can always tell from reading the code exactly what conversions are happening.</p>
+</div></div>
+<p><strong>When you need a cast:</strong></p>
+<ul>
+<li>Any numeric type to any other numeric type: <code>float64(n)</code>, <code>int32(x)</code>, <code>byte(r)</code></li>
+<li><code>string</code> to <code>[]byte</code> or <code>[]rune</code>, and back: <code>[]byte(s)</code>, <code>string(b)</code></li>
+<li>Between a named type and its underlying type (covered in Type Definitions below): <code>float64(c)</code></li>
+</ul>
+<p><strong>When you do not need a cast:</strong></p>
+<ul>
+<li>Assigning an untyped constant to any compatible type — <code>var x float64 = 42</code> works because <code>42</code> is an untyped constant that fits <code>float64</code></li>
+<li>Passing a value to an interface parameter — any type that satisfies the interface is accepted automatically, no cast required</li>
+<li>Between a type and its alias (covered in Type Aliases below)</li>
+</ul>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Narrowing conversions are silent. <code>int(3.9)</code> truncates to <code>3</code>, and <code>byte(300)</code> wraps to <code>44</code> — no panic, no error. Go trusts you to know what you are doing when you write an explicit conversion.</p>
+</div></div>
 <p></p>
-<h3 data-number="2.5.2" id="type-definitions"><span class="header-section-number">2.5.2</span> Type Definitions</h3>
-<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Celsius <span class="dt">float64</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Fahrenheit <span class="dt">float64</span></span></code></pre></div>
-<p><code>type Celsius float64</code> creates a <strong>new, distinct type</strong>. Even though both <code>Celsius</code> and <code>float64</code> have the same underlying representation, they are different types. Assignment between them requires an explicit conversion:</p>
-<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> c Celsius    <span class="op">=</span> <span class="fl">100.0</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> f <span class="dt">float64</span>    <span class="op">=</span> <span class="dt">float64</span><span class="op">(</span>c<span class="op">)</span>   <span class="co">// explicit conversion required</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> g <span class="dt">float64</span>    <span class="op">=</span> c            <span class="co">// compile error: cannot use c (Celsius) as float64</span></span></code></pre></div>
+<h3 data-number="2.5.3" id="type-definitions"><span class="header-section-number">2.5.3</span> Type Definitions</h3>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Celsius <span class="dt">float64</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Fahrenheit <span class="dt">float64</span></span></code></pre></div>
+<p><code>type Celsius float64</code> creates a <strong>new, distinct type</strong>.  Even though both <code>Celsius</code> and <code>float64</code> have the same underlying representation, they are different types. Assignment between them requires an explicit conversion:</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> c Celsius    <span class="op">=</span> <span class="fl">100.0</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> f <span class="dt">float64</span>    <span class="op">=</span> <span class="dt">float64</span><span class="op">(</span>c<span class="op">)</span>   <span class="co">// explicit conversion required</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> g <span class="dt">float64</span>    <span class="op">=</span> c            <span class="co">// compile error: cannot use c (Celsius) as float64</span></span></code></pre></div>
 <p>This is intentional. You cannot accidentally pass a temperature in Fahrenheit where the function expects Celsius.</p>
-<h3 data-number="2.5.3" id="type-aliases"><span class="header-section-number">2.5.3</span> Type Aliases</h3>
-<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Seconds <span class="op">=</span> <span class="dt">float64</span>  <span class="co">// alias, not a new type</span></span></code></pre></div>
+<h3 data-number="2.5.4" id="type-aliases"><span class="header-section-number">2.5.4</span> Type Aliases</h3>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Seconds <span class="op">=</span> <span class="dt">float64</span>  <span class="co">// alias, not a new type</span></span></code></pre></div>
 <p>An alias introduces a new name for the same type. <code>Seconds</code> and <code>float64</code> are interchangeable — there is no conversion needed. Aliases are most useful in large-scale refactoring or when bridging packages.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
@@ -266,17 +295,17 @@ nav_order: 2
 <p>Go has two allocation built-ins. They serve different purposes.</p>
 <h3 data-number="2.6.1" id="new"><span class="header-section-number">2.6.1</span> <code>new</code></h3>
 <p><code>new(T)</code> allocates memory for a value of type <code>T</code>, initializes it to the zero value, and returns a <code>*T</code>. Conceptually, the memory is allocated on the heap — a region of memory that lives on even after the local scope (block of code) finishes. In reality, Go does <em>escape analysis</em> to see if there is a chance the allocation will be used outside of the local scope. If not, the memory will be allocated on the stack and will be deallocated once the scope — usually the function or block of code — finishes. If reference will be used outside of the local scope — it was passed to another function or added to a collection object — the compiler will allocate the memory on the heap where it will live until there are no more references to it.</p>
-<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>p <span class="op">:=</span> <span class="bu">new</span><span class="op">(</span><span class="dt">int</span><span class="op">)</span>    <span class="co">// *int pointing to 0</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="op">*</span>p <span class="op">=</span> <span class="dv">42</span></span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(*</span>p<span class="op">)</span>  <span class="co">// 42</span></span></code></pre></div>
+<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>p <span class="op">:=</span> <span class="bu">new</span><span class="op">(</span><span class="dt">int</span><span class="op">)</span>    <span class="co">// *int pointing to 0</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="op">*</span>p <span class="op">=</span> <span class="dv">42</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(*</span>p<span class="op">)</span>  <span class="co">// 42</span></span></code></pre></div>
 <p>You will see <code>new</code> occasionally, but struct literals with <code>&amp;</code> are more common in practice:</p>
-<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Point <span class="kw">struct</span><span class="op">{</span> X<span class="op">,</span> Y <span class="dt">int</span> <span class="op">}</span></span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>pt <span class="op">:=</span> <span class="op">&amp;</span>Point<span class="op">{</span>X<span class="op">:</span> <span class="dv">3</span><span class="op">,</span> Y<span class="op">:</span> <span class="dv">4</span><span class="op">}</span>  <span class="co">// same idea; more idiomatic for structs</span></span></code></pre></div>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Point <span class="kw">struct</span><span class="op">{</span> X<span class="op">,</span> Y <span class="dt">int</span> <span class="op">}</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>pt <span class="op">:=</span> <span class="op">&amp;</span>Point<span class="op">{</span>X<span class="op">:</span> <span class="dv">3</span><span class="op">,</span> Y<span class="op">:</span> <span class="dv">4</span><span class="op">}</span>  <span class="co">// same idea; more idiomatic for structs</span></span></code></pre></div>
 <p>If you’ve worked in other languages like C or C++, you will see that as a potential for a dangling pointer.</p>
-<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> GenPoint<span class="op">()</span> <span class="op">*</span>Point <span class="op">{</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    p <span class="op">:=</span> Point<span class="op">{</span>X<span class="op">:</span> <span class="dv">3</span><span class="op">,</span> Y<span class="op">:</span> <span class="dv">4</span><span class="op">}</span></span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>p</span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> GenPoint<span class="op">()</span> <span class="op">*</span>Point <span class="op">{</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>    p <span class="op">:=</span> Point<span class="op">{</span>X<span class="op">:</span> <span class="dv">3</span><span class="op">,</span> Y<span class="op">:</span> <span class="dv">4</span><span class="op">}</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>p</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <p>However, with escape analysis, Go is able to see that p needs to survive past the return of the function and allocates p on the heap.</p>
 <p>You cannot use <code>new</code> to create a ready-to-use map or channel — <code>new(map[string]int)</code> gives you a pointer to a nil map.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
@@ -284,129 +313,229 @@ nav_order: 2
 <div style="flex: 1; min-width: 0;">
 <p><strong>Tip:</strong> <code>new</code> is for scalar types when you need a pointer. <code>make</code> is for slices, maps, and channels.</p>
 </div></div>
-<h3 data-number="2.6.2" id="make"><span class="header-section-number">2.6.2</span> <code>make</code></h3>
-<p><code>make</code> initializes <strong>slices, maps, and channels</strong> — the three built-in reference types that need internal setup before use.</p>
-<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>m <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">int</span><span class="op">)</span>    <span class="co">// empty map, ready to use</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">int</span><span class="op">,</span> <span class="dv">5</span><span class="op">)</span>          <span class="co">// slice of length 5, capacity 5</span></span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>ch <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">,</span> <span class="dv">10</span><span class="op">)</span>   <span class="co">// buffered channel, capacity 10</span></span></code></pre></div>
-<p>We are going to save the discussion about make with channels for later, when we talk about channels. For now we will focus on <code>map</code> and slices.</p>
-<h3 data-number="2.6.3" id="make-with-map"><span class="header-section-number">2.6.3</span> <code>make</code> with <code>map</code></h3>
-<p>In the following code <code>mm</code> and <code>dm</code> are the same:</p>
-<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>mm <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">int</span><span class="op">)</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>dm <span class="op">:=</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">int</span> <span class="op">{}</span></span></code></pre></div>
-<p>So when do we use <code>make</code> and when do we use the <code>map</code> literal? In this example, there is literally (see what I did there :) ) no difference between the two. But, there is something that we can do with <code>make</code> that we can’t do with literals: hint at the size of the map. <code>make</code> can take the expected size as the second parameter. This is a hint that Go can use when allocating memory for the map to avoid future reallocations if the initial size is to small.</p>
-<p>Great! So why would you ever use a map literal? You can initialize a literal with values! Here is an example of a <code>map</code> of <code>map</code>s.</p>
-<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>dm <span class="op">:=</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">int</span> <span class="op">{</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;CMPE 30&quot;</span><span class="op">:</span> <span class="op">{</span></span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;Ben&quot;</span> <span class="op">:</span> <span class="dv">22</span><span class="op">,</span></span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;Amy&quot;</span> <span class="op">:</span> <span class="dv">88</span><span class="op">,</span></span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;Fred&quot;</span> <span class="op">:</span><span class="dv">32</span><span class="op">,</span></span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">},</span></span>
-<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;CMPE 50&quot;</span><span class="op">:</span> <span class="op">{</span></span>
-<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;Qi&quot;</span> <span class="op">:</span> <span class="dv">90</span><span class="op">,</span></span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;Cal&quot;</span> <span class="op">:</span> <span class="dv">102</span><span class="op">,</span></span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">},</span></span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<h3 data-number="2.6.4" id="make-with-slices"><span class="header-section-number">2.6.4</span> <code>make</code> with slices</h3>
-<p>Conceptually, a slice is like an array that can grow and shrink. Just like with map, you can declare a slice with <code>make</code> or a literal.</p>
-<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>ms <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">int</span><span class="op">,</span> <span class="dv">5</span><span class="op">)</span>      <span class="co">// length 5, all zeros</span></span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>ls <span class="op">:=</span> <span class="op">[]</span><span class="dt">int</span><span class="op">{</span><span class="dv">1</span><span class="op">,</span> <span class="dv">2</span><span class="op">,</span> <span class="dv">3</span><span class="op">}</span>      <span class="co">// literal, initialized with 1, 2, 3</span></span></code></pre></div>
-<p><code>make</code> for slices takes up to three arguments: the type, the length, and an optional capacity.</p>
-<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">int</span><span class="op">,</span> <span class="dv">3</span><span class="op">,</span> <span class="dv">10</span><span class="op">)</span>  <span class="co">// length 3, capacity 10</span></span></code></pre></div>
-<p><strong>Length</strong> is the number of elements the slice currently holds — they will be initialized with zero. <strong>Capacity</strong> is the size of the underlying array — how many elements it can hold before a new allocation is needed.</p>
-<p>This mirrors Java’s <code>new ArrayList&lt;&gt;(initialCapacity)</code>: you are not filling the slice, you are pre-allocating room so that <code>append</code> calls don’t trigger repeated reallocations.</p>
-<div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">int</span><span class="op">,</span> <span class="dv">0</span><span class="op">,</span> <span class="dv">100</span><span class="op">)</span>  <span class="co">// empty slice, room for 100 elements</span></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="op">:=</span> <span class="kw">range</span> <span class="dv">100</span> <span class="op">{</span></span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>    s <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>s<span class="op">,</span> i<span class="op">)</span>       <span class="co">// no reallocation needed</span></span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>Use a literal when you have initial values. Use <code>make</code> when you know the size up front and want to avoid reallocations, or when you need a zero-initialized slice of a specific length.</p>
-<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
-<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
-<div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> <code>make([]T, 0, n)</code> is the idiomatic way to pre-allocate a slice you will fill with <code>append</code>. <code>make([]T, n)</code> is for when you want <code>n</code> zero-valued elements you will assign by index.</p>
-</div></div>
-<p>Slices have a lot more to them — backing arrays, slicing expressions, the <code>copy</code> built-in — and get their own chapter.</p>
+<p><code>make</code> initializes slices, maps, and channels — the three built-in reference types that need internal setup before use. The details are covered alongside each type: maps and slices in Chapter 7, channels in Chapter 10.</p>
 <h2 data-number="2.7" id="built-in-min-max-and-clear-go-1.21"><span class="header-section-number">2.7</span> Built-in <code>min</code>, <code>max</code>, and <code>clear</code> (Go 1.21)</h2>
 <p></p>
 <p>Go 1.21 added three built-ins that Java programmers typically import from utility libraries.</p>
 <h3 data-number="2.7.1" id="min-and-max"><span class="header-section-number">2.7.1</span> <code>min</code> and <code>max</code></h3>
 <p><code>min</code> and <code>max</code> are type-safe and variadic — they work on any ordered type and accept any number of arguments:</p>
-<div class="sourceCode" id="cb29"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>smallest <span class="op">:=</span> min<span class="op">(</span><span class="dv">3</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">4</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">5</span><span class="op">)</span>   <span class="co">// 1</span></span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>largest  <span class="op">:=</span> max<span class="op">(</span><span class="dv">3</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">4</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">5</span><span class="op">)</span>   <span class="co">// 5</span></span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>lo       <span class="op">:=</span> min<span class="op">(</span>a<span class="op">,</span> b<span class="op">)</span>            <span class="co">// works for float64, string, etc.</span></span></code></pre></div>
+<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>smallest <span class="op">:=</span> min<span class="op">(</span><span class="dv">3</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">4</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">5</span><span class="op">)</span>   <span class="co">// 1</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>largest  <span class="op">:=</span> max<span class="op">(</span><span class="dv">3</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">4</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="dv">5</span><span class="op">)</span>   <span class="co">// 5</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>lo       <span class="op">:=</span> min<span class="op">(</span>a<span class="op">,</span> b<span class="op">)</span>            <span class="co">// works for float64, string, etc.</span></span></code></pre></div>
 <p>No <code>Math.min(a, b)</code> gymnastics.</p>
 <h3 data-number="2.7.2" id="clear"><span class="header-section-number">2.7.2</span> <code>clear</code></h3>
 <p><code>clear</code> zeroes the elements of a slice or deletes all entries from a map:</p>
-<div class="sourceCode" id="cb30"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>nums <span class="op">:=</span> <span class="op">[]</span><span class="dt">int</span><span class="op">{</span><span class="dv">1</span><span class="op">,</span> <span class="dv">2</span><span class="op">,</span> <span class="dv">3</span><span class="op">}</span></span>
-<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>clear<span class="op">(</span>nums<span class="op">)</span>        <span class="co">// nums is now [0, 0, 0], len unchanged</span></span>
-<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>scores <span class="op">:=</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">int</span><span class="op">{</span><span class="st">&quot;Harry Styles&quot;</span><span class="op">:</span> <span class="dv">99</span><span class="op">}</span></span>
-<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>clear<span class="op">(</span>scores<span class="op">)</span>      <span class="co">// scores is now an empty map</span></span></code></pre></div>
+<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>nums <span class="op">:=</span> <span class="op">[]</span><span class="dt">int</span><span class="op">{</span><span class="dv">1</span><span class="op">,</span> <span class="dv">2</span><span class="op">,</span> <span class="dv">3</span><span class="op">}</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>clear<span class="op">(</span>nums<span class="op">)</span>        <span class="co">// nums is now [0, 0, 0], len unchanged</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>scores <span class="op">:=</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">int</span><span class="op">{</span><span class="st">&quot;Harry Styles&quot;</span><span class="op">:</span> <span class="dv">99</span><span class="op">}</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>clear<span class="op">(</span>scores<span class="op">)</span>      <span class="co">// scores is now an empty map</span></span></code></pre></div>
 <p>For slices, <code>clear</code> zeroes elements but does not change the length. For maps, it removes all keys.</p>
 <h2 data-number="2.8" id="the-blank-identifier"><span class="header-section-number">2.8</span> The Blank Identifier</h2>
 <p></p>
 <p>The blank identifier <code>_</code> discards any value you do not need.</p>
-<div class="sourceCode" id="cb31"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> _ <span class="op">:=</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;Hola&quot;</span><span class="op">)</span>  <span class="co">// discard the byte count</span></span></code></pre></div>
+<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> _ <span class="op">:=</span> fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;Hola&quot;</span><span class="op">)</span>  <span class="co">// discard the byte count</span></span></code></pre></div>
 <p>Go requires you to use every declared variable, so <code>_</code> is your escape hatch when a function returns multiple values and you only need some of them. You can also use it in a <code>for range</code> loop to discard the index or value.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
 <p><strong>Tip:</strong> If you find yourself using <code>_</code> for every return value from a function, that is a signal you should reconsider whether you need to call the function at all.</p>
 </div></div>
-<h2 data-number="2.9" id="key-points"><span class="header-section-number">2.9</span> Key Points</h2>
+<h2 data-number="2.9" id="structs"><span class="header-section-number">2.9</span> Structs</h2>
+<p> A struct is a composite type that groups named fields together. In Java, you use a class; in Go, you use a struct. The critical difference is that structs are <strong>value types</strong> in Go — assigning a struct copies all its fields — whereas in Java every object variable is a reference.</p>
+<h3 data-number="2.9.1" id="struct-definition"><span class="header-section-number">2.9.1</span> Struct Definition</h3>
+<p> Define a struct type with <code>type T struct { ... }</code>:</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    Title    <span class="dt">string</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>    Artist   <span class="dt">string</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>    BPM      <span class="dt">int</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>    Duration <span class="dt">float64</span> <span class="co">// seconds</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The zero value of a <code>Track</code> has <code>Title = ""</code>, <code>Artist = ""</code>, <code>BPM = 0</code>, and <code>Duration = 0.0</code>. You can use a zero-value struct immediately; there is no constructor required.</p>
+<p>Fields can have the same type listed once, separated by commas:</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Point <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>    X<span class="op">,</span> Y <span class="dt">float64</span> <span class="co">// two fields, both float64</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 data-number="2.9.2" id="struct-literals"><span class="header-section-number">2.9.2</span> Struct Literals</h3>
+<p> There are two forms of struct literal.</p>
+<p><strong>Named form (preferred):</strong></p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>t <span class="op">:=</span> Track<span class="op">{</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>    Title<span class="op">:</span>    <span class="st">&quot;Timeless&quot;</span><span class="op">,</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>    Artist<span class="op">:</span>   <span class="st">&quot;The Weeknd &amp; Playboi Carti&quot;</span><span class="op">,</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>    BPM<span class="op">:</span>      <span class="dv">138</span><span class="op">,</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>    Duration<span class="op">:</span> <span class="fl">208.0</span><span class="op">,</span></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><strong>Positional form (fragile):</strong></p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>t <span class="op">:=</span> Track<span class="op">{</span><span class="st">&quot;Timeless&quot;</span><span class="op">,</span> <span class="st">&quot;The Weeknd &amp; Playboi Carti&quot;</span><span class="op">,</span> <span class="dv">138</span><span class="op">,</span> <span class="fl">208.0</span><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> The positional form breaks silently if you ever add, remove, or reorder fields. The named form is explicit and resilient to future changes. Use positional form only for tiny, stable types like <code>Point{1.0, 2.0}</code> where the meaning is immediately obvious.</p>
+</div></div>
+<p><strong>Anonymous structs</strong> are useful for one-off data shapes, especially in tests and temporary groupings:</p>
+<div class="sourceCode" id="cb32"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>entry <span class="op">:=</span> <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>    Plays  <span class="dt">int</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a><span class="op">}{</span><span class="st">&quot;Save Your Tears&quot;</span><span class="op">,</span> <span class="dv">1_800_000_000</span><span class="op">}</span></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>entry<span class="op">.</span>Title<span class="op">,</span> entry<span class="op">.</span>Plays<span class="op">)</span></span></code></pre></div>
+<h3 data-number="2.9.3" id="struct-as-a-value-type"><span class="header-section-number">2.9.3</span> Struct as a Value Type</h3>
+<p> Assigning a struct creates an independent copy:</p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>a <span class="op">:=</span> Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Agora Hills&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Doja Cat&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">126</span><span class="op">}</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>b <span class="op">:=</span> a           <span class="co">// b is a copy; a and b are independent</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>b<span class="op">.</span>BPM <span class="op">=</span> <span class="dv">130</span></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>a<span class="op">.</span>BPM<span class="op">)</span> <span class="co">// 126 --- a is unchanged</span></span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>b<span class="op">.</span>BPM<span class="op">)</span> <span class="co">// 130</span></span></code></pre></div>
+<p>In Java, <code>a = b</code> for an object would make both variables point to the same object. In Go, you get two distinct structs.</p>
+<p>When you want shared mutation — so that changes through one variable are visible through another — use a pointer:</p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>pa <span class="op">:=</span> <span class="op">&amp;</span>Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Agora Hills&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Doja Cat&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">126</span><span class="op">}</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>pb <span class="op">:=</span> pa           <span class="co">// both point to the same Track</span></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>pb<span class="op">.</span>BPM <span class="op">=</span> <span class="dv">130</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>pa<span class="op">.</span>BPM<span class="op">)</span> <span class="co">// 130 --- shared!</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Passing large structs to functions by value copies every field. For structs with many fields or large fields, pass a pointer (<code>*Track</code>) to avoid the copy cost and to allow the function to mutate the original. The rule of thumb from Chapter 5 applies: use pointer receivers when the struct is large or when mutation is required. <strong><em>[no-mixed-receivers]</em></strong> and <strong><em>[default-pointer-receiver]</em></strong></p>
+</div></div>
+<h2 data-number="2.10" id="pointers"><span class="header-section-number">2.10</span> Pointers</h2>
+<p> Java hides pointers — every object variable is secretly a reference to heap memory, but the language never lets you see or manipulate the raw address. Go makes pointers explicit: <code>&amp;</code> takes an address and <code>*</code> follows it. Understanding Go pointers helps you predict when a function can modify its caller’s data, and why some methods need a <code>*T</code> receiver rather than a plain <code>T</code> receiver.</p>
+<h3 data-number="2.10.1" id="and-address-of-and-dereference"><span class="header-section-number">2.10.1</span> <code>&amp;</code> and <code>*</code> — Address-Of and Dereference</h3>
+<p>   Two operators are all you need to work with Go pointers.</p>
+<div class="sourceCode" id="cb35"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="op">&amp;</span>expr   <span class="co">// address-of: produces a pointer to expr</span></span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a><span class="op">*</span>pExpr  <span class="co">// dereference: follows the pointer to reach the value</span></span></code></pre></div>
+<p>A <strong>pointer type</strong> names what the pointer points to, with a <code>*</code> prefix:</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> p <span class="op">*</span><span class="dt">int</span>      <span class="co">// p is a pointer to int; its zero value is nil</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> s <span class="op">*</span><span class="dt">string</span>   <span class="co">// s is a pointer to string; also nil</span></span></code></pre></div>
+<p>Here is the whole idea in one small program:</p>
+<div class="sourceCode" id="cb37"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a>    x <span class="op">:=</span> <span class="dv">42</span></span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a>    p <span class="op">:=</span> <span class="op">&amp;</span>x          <span class="co">// p holds the address of x</span></span>
+<span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>p<span class="op">)</span>   <span class="co">// something like 0xc0000b4008</span></span>
+<span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(*</span>p<span class="op">)</span>  <span class="co">// 42 --- dereference to get the value</span></span>
+<span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>p <span class="op">=</span> <span class="dv">99</span>          <span class="co">// write through the pointer</span></span>
+<span id="cb37-11"><a href="#cb37-11" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>x<span class="op">)</span>   <span class="co">// 99 --- x changed because *p and x are the same memory</span></span>
+<span id="cb37-12"><a href="#cb37-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p> The zero value of any pointer type is <code>nil</code>. Dereferencing a <code>nil</code> pointer causes a runtime panic — the same kind of <code>NullPointerException</code> you know from Java, just with a different name.</p>
+<div class="sourceCode" id="cb38"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> p <span class="op">*</span><span class="dt">int</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>p<span class="op">)</span>  <span class="co">// &lt;nil&gt;</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(*</span>p<span class="op">)</span> <span class="co">// panic: runtime error: invalid memory address or nil pointer dereference</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> In Java, every object variable is secretly a reference (pointer) to heap memory, but the language provides no syntax to get or store the raw address. In Go, pointers are explicit: you use <code>&amp;</code> to take an address and <code>*</code> to follow it. The Java “hidden pointer” and the Go pointer are the same idea — Go just shows you the machinery.</p>
+</div></div>
+<h3 data-number="2.10.2" id="pointers-to-basic-types"><span class="header-section-number">2.10.2</span> Pointers to Basic Types</h3>
+<p> Java programmers sometimes wonder why you would ever have a pointer to an <code>int</code>. In Java, primitive <code>int</code> is always a value, and you box it into <code>Integer</code> when you need reference semantics. In Go you use <code>*int</code> directly — no boxing, no wrapper class.</p>
+<div class="sourceCode" id="cb39"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> newInt<span class="op">(</span>n <span class="dt">int</span><span class="op">)</span> <span class="op">*</span><span class="dt">int</span> <span class="op">{</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>    v <span class="op">:=</span> n</span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>v   <span class="co">// safe: compiler moves v to the heap if needed (see Escape Analysis)</span></span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a>p <span class="op">:=</span> newInt<span class="op">(</span><span class="dv">7</span><span class="op">)</span></span>
+<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(*</span>p<span class="op">)</span> <span class="co">// 7</span></span></code></pre></div>
+<h3 data-number="2.10.3" id="no-pointer-arithmetic"><span class="header-section-number">2.10.3</span> No Pointer Arithmetic</h3>
+<p> In C and C++, you can write <code>ptr + 1</code> to advance a pointer to the next element in an array. Go forbids this entirely.</p>
+<div class="sourceCode" id="cb40"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>x <span class="op">:=</span> <span class="dv">42</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>p <span class="op">:=</span> <span class="op">&amp;</span>x</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>p<span class="op">++</span>      <span class="co">// compile error: invalid operation: p++ (non-numeric type *int)</span></span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>p <span class="op">+</span> <span class="dv">1</span>    <span class="co">// compile error: invalid operation: p + 1 (mismatched types *int and untyped int)</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> No pointer arithmetic means the compiler and garbage collector always know exactly what a pointer points to. It also eliminates an entire class of security vulnerabilities (buffer overruns, out-of-bounds reads) that plague C codebases. If you need to walk through elements, use a slice — slices carry length and capacity and support range iteration safely.</p>
+</div></div>
+<p>When you genuinely need unsafe pointer arithmetic (for C interop or performance-critical operations), the <code>unsafe</code> package exists, but it earns its name. That is an advanced topic far outside normal day-to-day Go.</p>
+<h2 data-number="2.11" id="key-points"><span class="header-section-number">2.11</span> Key Points</h2>
 <ul>
 <li>Go has sized integer types (<code>int8</code> through <code>int64</code>, unsigned variants); <code>int</code> is the idiomatic general-purpose integer and is platform-native width.</li>
 <li><code>byte</code> is an alias for <code>uint8</code>; <code>rune</code> is an alias for <code>int32</code>.</li>
 <li>Declare variables with <code>var</code> (anywhere) or <code>:=</code> (inside functions only).</li>
 <li>Every type has a zero value; Go never leaves a variable uninitialized.</li>
 <li>Integer literals support <code>0b</code> (binary), <code>0o</code> (octal), <code>0x</code> (hex), and <code>_</code> as a digit separator.</li>
-<li><code>const</code> and <code>iota</code> are Go’s enumeration mechanism; <code>iota</code> counts from zero per <code>const</code> block.</li>
+<li><code>const</code> and <code>iota</code> are Go’s enumeration mechanism; <code>iota</code> counts from zero per <code>const</code> block. </li>
 <li><code>type Celsius float64</code> creates a new distinct type; <code>type Celsius = float64</code> is a synonym.</li>
 <li><code>new(T)</code> returns a zeroed <code>*T</code>; <code>make</code> initializes slices, maps, and channels.</li>
 <li><code>min</code>, <code>max</code>, and <code>clear</code> are built-in since Go 1.21.</li>
 <li><code>_</code> discards values you do not need; every declared variable must otherwise be used.</li>
+<li>Structs are value types; assigning a struct copies it; use pointers for shared mutation.</li>
+<li>The <code>cmp</code> and <code>maps</code> packages (Go 1.21) provide sorting and map utilities; covered in Chapter 14.</li>
 </ul>
-<h2 data-number="2.10" id="exercises"><span class="header-section-number">2.10</span> Exercises</h2>
+<h2 data-number="2.12" id="exercises"><span class="header-section-number">2.12</span> Exercises</h2>
 <ol type="1">
 <li><p><strong>Think about it:</strong> Go’s zero values mean a declared-but-unassigned variable is always valid. Java requires local variables to be assigned before use. What are the practical benefits of Go’s approach? Can you think of a case where Go’s zero values might mask a bug instead of preventing one?</p></li>
 <li><p><strong>What does this print?</strong></p>
-<div class="sourceCode" id="cb32"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
-<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
-<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> StreamingTier <span class="dt">int</span></span>
-<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> <span class="op">(</span></span>
-<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>    Free     StreamingTier <span class="op">=</span> <span class="ot">iota</span></span>
-<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a>    Standard</span>
-<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a>    Premium</span>
-<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>    Lossless</span>
-<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
-<span id="cb32-13"><a href="#cb32-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb32-14"><a href="#cb32-14" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb32-15"><a href="#cb32-15" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>Free<span class="op">,</span> Standard<span class="op">,</span> Premium<span class="op">,</span> Lossless<span class="op">)</span></span>
-<span id="cb32-16"><a href="#cb32-16" aria-hidden="true" tabindex="-1"></a>    tier <span class="op">:=</span> Premium</span>
-<span id="cb32-17"><a href="#cb32-17" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;tier type: %T, value: %d</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> tier<span class="op">,</span> tier<span class="op">)</span></span>
-<span id="cb32-18"><a href="#cb32-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<div class="sourceCode" id="cb41"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> StreamingTier <span class="dt">int</span></span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> <span class="op">(</span></span>
+<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a>    Free     StreamingTier <span class="op">=</span> <span class="ot">iota</span></span>
+<span id="cb41-9"><a href="#cb41-9" aria-hidden="true" tabindex="-1"></a>    Standard</span>
+<span id="cb41-10"><a href="#cb41-10" aria-hidden="true" tabindex="-1"></a>    Premium</span>
+<span id="cb41-11"><a href="#cb41-11" aria-hidden="true" tabindex="-1"></a>    Lossless</span>
+<span id="cb41-12"><a href="#cb41-12" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb41-13"><a href="#cb41-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-14"><a href="#cb41-14" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb41-15"><a href="#cb41-15" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>Free<span class="op">,</span> Standard<span class="op">,</span> Premium<span class="op">,</span> Lossless<span class="op">)</span></span>
+<span id="cb41-16"><a href="#cb41-16" aria-hidden="true" tabindex="-1"></a>    tier <span class="op">:=</span> Premium</span>
+<span id="cb41-17"><a href="#cb41-17" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;tier type: %T, value: %d</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> tier<span class="op">,</span> tier<span class="op">)</span></span>
+<span id="cb41-18"><a href="#cb41-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
 <li><p><strong>Calculation:</strong> Given the following declarations, which assignments compile and which produce errors? Identify each line.</p>
-<div class="sourceCode" id="cb33"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Bpm <span class="dt">float64</span></span>
-<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> tempo Bpm    <span class="op">=</span> <span class="fl">120.0</span></span>
-<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> raw  <span class="dt">float64</span> <span class="op">=</span> tempo         <span class="co">// line A</span></span>
-<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> cvt  <span class="dt">float64</span> <span class="op">=</span> <span class="dt">float64</span><span class="op">(</span>tempo<span class="op">)</span> <span class="co">// line B</span></span>
-<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> same Bpm     <span class="op">=</span> cvt           <span class="co">// line C</span></span></code></pre></div></li>
+<div class="sourceCode" id="cb42"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Bpm <span class="dt">float64</span></span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> tempo Bpm    <span class="op">=</span> <span class="fl">120.0</span></span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> raw  <span class="dt">float64</span> <span class="op">=</span> tempo         <span class="co">// line A</span></span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> cvt  <span class="dt">float64</span> <span class="op">=</span> <span class="dt">float64</span><span class="op">(</span>tempo<span class="op">)</span> <span class="co">// line B</span></span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> same Bpm     <span class="op">=</span> cvt           <span class="co">// line C</span></span></code></pre></div></li>
 <li><p><strong>Where is the bug?</strong></p>
-<div class="sourceCode" id="cb34"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
-<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
-<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>    x <span class="op">:=</span> <span class="dv">10</span></span>
-<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>    y <span class="op">:=</span> <span class="dv">20</span></span>
-<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a>    x<span class="op">,</span> y <span class="op">:=</span> x <span class="op">+</span> y<span class="op">,</span> x  <span class="co">// reassign both</span></span>
-<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>x<span class="op">,</span> y<span class="op">)</span></span>
-<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<div class="sourceCode" id="cb43"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>    x <span class="op">:=</span> <span class="dv">10</span></span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a>    y <span class="op">:=</span> <span class="dv">20</span></span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a>    x<span class="op">,</span> y <span class="op">:=</span> x <span class="op">+</span> y<span class="op">,</span> x  <span class="co">// reassign both</span></span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>x<span class="op">,</span> y<span class="op">)</span></span>
+<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
 <li><p><strong>Write a program:</strong> Declare a <code>const</code> block using <code>iota</code> that represents five chart positions for your favorite genre: <code>Debut</code>, <code>Rising</code>, <code>Peak</code>, <code>Declining</code>, and <code>Legacy</code>, numbered 1 through 5 (use <code>iota + 1</code>). Print each constant’s name and value using <code>fmt.Printf</code> with <code>%d</code>. Then declare a variable of that type, assign it the <code>Peak</code> value, and print its Go type using <code>%T</code>.</p></li>
+<li><p><strong>What does this print?</strong></p>
+<div class="sourceCode" id="cb44"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-5"><a href="#cb44-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> double<span class="op">(</span>n <span class="op">*</span><span class="dt">int</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb44-6"><a href="#cb44-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>n <span class="op">*=</span> <span class="dv">2</span></span>
+<span id="cb44-7"><a href="#cb44-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb44-8"><a href="#cb44-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-9"><a href="#cb44-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb44-10"><a href="#cb44-10" aria-hidden="true" tabindex="-1"></a>    a <span class="op">:=</span> <span class="dv">5</span></span>
+<span id="cb44-11"><a href="#cb44-11" aria-hidden="true" tabindex="-1"></a>    b <span class="op">:=</span> <span class="op">&amp;</span>a</span>
+<span id="cb44-12"><a href="#cb44-12" aria-hidden="true" tabindex="-1"></a>    double<span class="op">(</span>b<span class="op">)</span></span>
+<span id="cb44-13"><a href="#cb44-13" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>a<span class="op">)</span></span>
+<span id="cb44-14"><a href="#cb44-14" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(*</span>b<span class="op">)</span></span>
+<span id="cb44-15"><a href="#cb44-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Where is the bug?</strong> The following code tries to append a suffix to a string through a pointer.</p>
+<div class="sourceCode" id="cb45"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> addExcitement<span class="op">(</span>s <span class="op">*</span><span class="dt">string</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a>    s <span class="op">+=</span> <span class="st">&quot;!&quot;</span></span>
+<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-9"><a href="#cb45-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb45-10"><a href="#cb45-10" aria-hidden="true" tabindex="-1"></a>    msg <span class="op">:=</span> <span class="st">&quot;Bad Guy&quot;</span></span>
+<span id="cb45-11"><a href="#cb45-11" aria-hidden="true" tabindex="-1"></a>    addExcitement<span class="op">(&amp;</span>msg<span class="op">)</span></span>
+<span id="cb45-12"><a href="#cb45-12" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>msg<span class="op">)</span></span>
+<span id="cb45-13"><a href="#cb45-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>(This code does not compile — what is the type error?)</p></li>
 </ol>
 
 {% endraw %}

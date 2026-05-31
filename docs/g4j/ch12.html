@@ -1,0 +1,346 @@
+---
+layout: default
+title: "12. Context and Concurrency Patterns"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 12
+---
+
+{% raw %}
+<h1 data-number="12" id="context-and-concurrency-patterns"><span class="header-section-number">12</span> Context and Concurrency Patterns</h1>
+<p>  Chapters 9 and 10 gave you goroutines, channels, and the <code>sync</code> primitives you need to coordinate them. This chapter adds the layer that sits on top of all of that: <code>context.Context</code>, the standard way to propagate cancellation and deadlines across goroutine boundaries. It also covers the patterns you will see in real Go services — worker pools, rate limiters, fan-out with error collection, and goroutine leak detection.</p>
+<h2 data-number="12.1" id="context.context"><span class="header-section-number">12.1</span> context.Context</h2>
+<p> Java has no direct equivalent to <code>context.Context</code>. The closest Java analog is a combination of <code>Future.cancel()</code>, <code>ExecutorService.shutdownNow()</code>, and a hand-rolled deadline field on a request object — all bolted together differently in every codebase. Go standardizes all of this in a single interface.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">// context.Context is defined in the standard library as:</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Context <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    Deadline<span class="op">()</span> <span class="op">(</span>deadline time<span class="op">.</span>Time<span class="op">,</span> ok <span class="dt">bool</span><span class="op">)</span> <span class="co">// returns the deadline, if any</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    Done<span class="op">()</span> <span class="op">&lt;-</span><span class="kw">chan</span> <span class="kw">struct</span><span class="op">{}</span>                    <span class="co">// closed when work should be cancelled</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    Err<span class="op">()</span> <span class="dt">error</span>                              <span class="co">// nil until Done is closed; then Canceled or DeadlineExceeded</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    Value<span class="op">(</span>key <span class="dt">any</span><span class="op">)</span> <span class="dt">any</span>                       <span class="co">// returns the value associated with key, or nil</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Every long-running or network-bound function in idiomatic Go accepts a <code>context.Context</code> as its first parameter. When the context is cancelled — because a deadline expired, a timeout elapsed, or the caller called a cancel function — <code>Done()</code> is closed and <code>Err()</code> returns a non-nil error. Your function is expected to notice this and return promptly.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> <code>context.Context</code> is not just for HTTP handlers. Use it everywhere work can be cancelled: database queries, RPC calls, file I/O, and long computations.</p>
+</div></div>
+<h3 data-number="12.1.1" id="the-root-contexts"><span class="header-section-number">12.1.1</span> The Root Contexts</h3>
+<p>  Every context tree starts with one of two roots:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>ctx <span class="op">:=</span> context<span class="op">.</span>Background<span class="op">()</span> <span class="co">// the default root; never cancelled, no deadline, no values</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>ctx <span class="op">:=</span> context<span class="op">.</span>TODO<span class="op">()</span>       <span class="co">// placeholder for &quot;I haven&#39;t wired up a context yet&quot;</span></span></code></pre></div>
+<p><code>context.Background()</code> is for <code>main</code>, top-level servers, and test helpers. <code>context.TODO()</code> is a compile-time signal that you know a context should be here but have not plumbed it through yet. Treat <code>context.TODO()</code> like a <code>// TODO</code> comment — it should not survive into production code.</p>
+<h2 data-number="12.2" id="cancellation-deadlines-and-timeouts"><span class="header-section-number">12.2</span> Cancellation, Deadlines, and Timeouts</h2>
+<p>   The three constructors that add cancellation to a context are <code>context.WithCancel</code>, <code>context.WithDeadline</code>, and <code>context.WithTimeout</code>. Each returns a derived context and a cancel function. <strong>Always call the cancel function</strong>, even if the operation finishes before the deadline. Failing to call cancel leaks the goroutine that the runtime uses to monitor the deadline.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">// WithCancel returns a copy of parent whose Done channel is closed when cancel is called.</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> WithCancel<span class="op">(</span>parent Context<span class="op">)</span> <span class="op">(</span>ctx Context<span class="op">,</span> cancel CancelFunc<span class="op">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co">// WithDeadline returns a copy of parent with a deadline set to d.</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> WithDeadline<span class="op">(</span>parent Context<span class="op">,</span> d time<span class="op">.</span>Time<span class="op">)</span> <span class="op">(</span>ctx Context<span class="op">,</span> cancel CancelFunc<span class="op">)</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="co">// WithTimeout returns WithDeadline(parent, time.Now().Add(timeout)).</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> WithTimeout<span class="op">(</span>parent Context<span class="op">,</span> timeout time<span class="op">.</span>Duration<span class="op">)</span> <span class="op">(</span>ctx Context<span class="op">,</span> cancel CancelFunc<span class="op">)</span></span></code></pre></div>
+<p>Here is a function that fetches a song’s lyrics from a slow API, with a two-second timeout:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;context&quot;</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;time&quot;</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="co">// fetchLyrics simulates a slow network call; it respects ctx cancellation.</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> fetchLyrics<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> song <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">string</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    done <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">,</span> <span class="dv">1</span><span class="op">)</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>        time<span class="op">.</span>Sleep<span class="op">(</span><span class="dv">3</span> <span class="op">*</span> time<span class="op">.</span>Second<span class="op">)</span> <span class="co">// simulate slow work</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>        done <span class="op">&lt;-</span> <span class="st">&quot;I can&#39;t keep loving you the way I do&quot;</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">}()</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">select</span> <span class="op">{</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> lyrics <span class="op">:=</span> <span class="op">&lt;-</span>done<span class="op">:</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> lyrics<span class="op">,</span> <span class="ot">nil</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="op">&lt;-</span>ctx<span class="op">.</span>Done<span class="op">():</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">&quot;&quot;</span><span class="op">,</span> ctx<span class="op">.</span>Err<span class="op">()</span> <span class="co">// context.DeadlineExceeded</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>    ctx<span class="op">,</span> cancel <span class="op">:=</span> context<span class="op">.</span>WithTimeout<span class="op">(</span>context<span class="op">.</span>Background<span class="op">(),</span> <span class="dv">2</span><span class="op">*</span>time<span class="op">.</span>Second<span class="op">)</span></span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> cancel<span class="op">()</span> <span class="co">// always call cancel</span></span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>    lyrics<span class="op">,</span> err <span class="op">:=</span> fetchLyrics<span class="op">(</span>ctx<span class="op">,</span> <span class="st">&quot;From The Start&quot;</span><span class="op">)</span></span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;timed out:&quot;</span><span class="op">,</span> err<span class="op">)</span> <span class="co">// timed out: context deadline exceeded</span></span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>lyrics<span class="op">)</span></span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>  When the timeout fires, <code>ctx.Done()</code> is closed and <code>ctx.Err()</code> returns <code>context.DeadlineExceeded</code>. If <code>cancel()</code> is called before the timeout, <code>ctx.Err()</code> returns <code>context.Canceled</code>. Your code can distinguish the two with <code>errors.Is</code>:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> errors<span class="op">.</span>Is<span class="op">(</span>ctx<span class="op">.</span>Err<span class="op">(),</span> context<span class="op">.</span>DeadlineExceeded<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;ran out of time&quot;</span><span class="op">)</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> errors<span class="op">.</span>Is<span class="op">(</span>ctx<span class="op">.</span>Err<span class="op">(),</span> context<span class="op">.</span>Canceled<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;caller gave up&quot;</span><span class="op">)</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Do not store the cancel function and call it lazily. Use <code>defer cancel()</code> immediately after the <code>WithTimeout</code> / <code>WithCancel</code> call. If you forget, the runtime cannot release resources associated with the context until the parent is cancelled or the program exits.</p>
+</div></div>
+<h3 data-number="12.2.1" id="checking-cancellation-inside-a-loop"><span class="header-section-number">12.2.1</span> Checking Cancellation Inside a Loop</h3>
+<p>Goroutines doing CPU-bound work need to poll the context rather than waiting on a channel:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> processTracks<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> tracks <span class="op">[]</span><span class="dt">string</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> t <span class="op">:=</span> <span class="kw">range</span> tracks <span class="op">{</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">select</span> <span class="op">{</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">case</span> <span class="op">&lt;-</span>ctx<span class="op">.</span>Done<span class="op">():</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> ctx<span class="op">.</span>Err<span class="op">()</span> <span class="co">// bail out early</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">default</span><span class="op">:</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>        <span class="co">// do real work with t</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;processing:&quot;</span><span class="op">,</span> t<span class="op">)</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ot">nil</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The <code>select</code> with a <code>default</code> branch is non-blocking: it drains <code>Done</code> if it is already closed but does not block if it is still open. Chapter 10 covered <code>select</code> in detail.</p>
+<h2 data-number="12.3" id="context.withvalue"><span class="header-section-number">12.3</span> context.WithValue</h2>
+<p>  <code>context.WithValue</code> attaches a key-value pair to a context that child goroutines can retrieve with <code>ctx.Value(key)</code>. This is intended for <strong>request-scoped metadata</strong> — things like a trace ID or an authenticated user — not for passing optional function parameters.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> WithValue<span class="op">(</span>parent Context<span class="op">,</span> key<span class="op">,</span> val <span class="dt">any</span><span class="op">)</span> Context</span></code></pre></div>
+<p>The value is retrieved by calling <code>Value(key)</code> on any derived context. If no value is found at the current level, Go walks up the context tree until it finds one or reaches the root.</p>
+<h3 data-number="12.3.1" id="use-unexported-key-types"><span class="header-section-number">12.3.1</span> Use Unexported Key Types</h3>
+<p> If you use a plain string as a key, any package in the call tree can accidentally overwrite your value by using the same string key. The idiomatic fix is to define a <strong>package-private type</strong> for your keys. Because the type is unexported, no other package can construct a value of that type, so collisions are impossible.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> requestmeta</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="co">// traceKey is unexported; no other package can create a value of this type.</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> traceKey <span class="kw">struct</span><span class="op">{}</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> WithTraceID<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> id <span class="dt">string</span><span class="op">)</span> context<span class="op">.</span>Context <span class="op">{</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> context<span class="op">.</span>WithValue<span class="op">(</span>ctx<span class="op">,</span> traceKey<span class="op">{},</span> id<span class="op">)</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TraceID<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">)</span> <span class="op">(</span><span class="dt">string</span><span class="op">,</span> <span class="dt">bool</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    id<span class="op">,</span> ok <span class="op">:=</span> ctx<span class="op">.</span>Value<span class="op">(</span>traceKey<span class="op">{}).(</span><span class="dt">string</span><span class="op">)</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> id<span class="op">,</span> ok</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Contrast this with the anti-pattern:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co">// ANTI-PATTERN: string keys can collide across packages</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>ctx <span class="op">=</span> context<span class="op">.</span>WithValue<span class="op">(</span>ctx<span class="op">,</span> <span class="st">&quot;traceID&quot;</span><span class="op">,</span> <span class="st">&quot;abc-123&quot;</span><span class="op">)</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>ctx <span class="op">=</span> context<span class="op">.</span>WithValue<span class="op">(</span>ctx<span class="op">,</span> <span class="st">&quot;traceID&quot;</span><span class="op">,</span> <span class="st">&quot;xyz-999&quot;</span><span class="op">)</span> <span class="co">// silently shadows the first one!</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Never use a built-in type (string, int, etc.) as a context key. The <code>go vet</code> tool will warn you: <code>should not use built-in type string as key for value</code>. Always define an unexported struct type for context keys.</p>
+</div></div>
+<h2 data-number="12.4" id="context-as-first-parameter"><span class="header-section-number">12.4</span> Context as First Parameter</h2>
+<p> Go has a universal convention: if a function accepts a context, it is <strong>always the first parameter</strong> and it is <strong>always named <code>ctx</code></strong>. <strong><em>[ctx-for-context]</em></strong></p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co">// idiomatic</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> SearchSongs<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> query <span class="dt">string</span><span class="op">)</span> <span class="op">([]</span>Song<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co">// wrong: context buried in the middle</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> SearchSongs<span class="op">(</span>query <span class="dt">string</span><span class="op">,</span> ctx context<span class="op">.</span>Context<span class="op">)</span> <span class="op">([]</span>Song<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
+<p>This convention applies throughout the standard library, all major frameworks, and community packages. Do not put a context inside a struct (except when constructing a long-lived object like an HTTP server); pass it explicitly on each call.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Do not store a <code>context.Context</code> in a struct field and use it later. Contexts are request-scoped. A stored context will be cancelled at unpredictable times. Pass the context explicitly to every function that needs it.</p>
+</div></div>
+<p>The convention is so consistent that when you see a function signature like <code>func Foo(ctx context.Context, ...)</code> you immediately know it can be cancelled, timed out, and carries request metadata. Java has no equivalent signal at the call site.</p>
+<h2 data-number="12.5" id="errgroup-fan-out-with-error-collection"><span class="header-section-number">12.5</span> errgroup — Fan-Out with Error Collection</h2>
+<p>  Chapter 11 showed <code>sync.WaitGroup</code> for fan-out. <code>WaitGroup</code> works, but it cannot collect errors from goroutines. The <code>golang.org/x/sync/errgroup</code> package solves both problems: it waits for a group of goroutines to finish <strong>and</strong> returns the first non-nil error any of them produced. If you pass it a context, it also cancels that context as soon as any goroutine returns an error.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;golang.org/x/sync/errgroup&quot;</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="co">// Group is created with errgroup.WithContext.</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co">// g.Go(f) launches f in a goroutine; g.Wait() blocks until all goroutines finish.</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="co">// g.Wait() returns the first non-nil error returned by any goroutine.</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> WithContext<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">)</span> <span class="op">(*</span>Group<span class="op">,</span> context<span class="op">.</span>Context<span class="op">)</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>g <span class="op">*</span>Group<span class="op">)</span> Go<span class="op">(</span>f <span class="kw">func</span><span class="op">()</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>g <span class="op">*</span>Group<span class="op">)</span> Wait<span class="op">()</span> <span class="dt">error</span></span></code></pre></div>
+<p>Here is a fan-out that fetches three song titles concurrently and cancels all of them if any fails:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;context&quot;</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;time&quot;</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;golang.org/x/sync/errgroup&quot;</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="co">// fetchTitle simulates fetching a song title; slow returns an error.</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> fetchTitle<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> id <span class="dt">int</span><span class="op">)</span> <span class="op">(</span><span class="dt">string</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>    titles <span class="op">:=</span> <span class="op">[]</span><span class="dt">string</span><span class="op">{</span><span class="st">&quot;From The Start&quot;</span><span class="op">,</span> <span class="st">&quot;Bewitched&quot;</span><span class="op">,</span> <span class="st">&quot;Too Sweet&quot;</span><span class="op">}</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">select</span> <span class="op">{</span></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="op">&lt;-</span>time<span class="op">.</span>After<span class="op">(</span>time<span class="op">.</span>Duration<span class="op">(</span>id<span class="op">+</span><span class="dv">1</span><span class="op">)</span> <span class="op">*</span> <span class="dv">100</span> <span class="op">*</span> time<span class="op">.</span>Millisecond<span class="op">):</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> titles<span class="op">[</span>id<span class="op">%</span><span class="bu">len</span><span class="op">(</span>titles<span class="op">)],</span> <span class="ot">nil</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="op">&lt;-</span>ctx<span class="op">.</span>Done<span class="op">():</span></span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">&quot;&quot;</span><span class="op">,</span> ctx<span class="op">.</span>Err<span class="op">()</span></span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>    ctx <span class="op">:=</span> context<span class="op">.</span>Background<span class="op">()</span></span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a>    g<span class="op">,</span> ctx <span class="op">:=</span> errgroup<span class="op">.</span>WithContext<span class="op">(</span>ctx<span class="op">)</span></span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>    results <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">string</span><span class="op">,</span> <span class="dv">3</span><span class="op">)</span></span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> <span class="dv">3</span><span class="op">;</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>        i <span class="op">:=</span> i <span class="co">// capture loop variable (Go &lt; 1.22)</span></span>
+<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a>        g<span class="op">.</span>Go<span class="op">(</span><span class="kw">func</span><span class="op">()</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb12-30"><a href="#cb12-30" aria-hidden="true" tabindex="-1"></a>            title<span class="op">,</span> err <span class="op">:=</span> fetchTitle<span class="op">(</span>ctx<span class="op">,</span> i<span class="op">)</span></span>
+<span id="cb12-31"><a href="#cb12-31" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb12-32"><a href="#cb12-32" aria-hidden="true" tabindex="-1"></a>                <span class="cf">return</span> err</span>
+<span id="cb12-33"><a href="#cb12-33" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span></span>
+<span id="cb12-34"><a href="#cb12-34" aria-hidden="true" tabindex="-1"></a>            results<span class="op">[</span>i<span class="op">]</span> <span class="op">=</span> title</span>
+<span id="cb12-35"><a href="#cb12-35" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="ot">nil</span></span>
+<span id="cb12-36"><a href="#cb12-36" aria-hidden="true" tabindex="-1"></a>        <span class="op">})</span></span>
+<span id="cb12-37"><a href="#cb12-37" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-38"><a href="#cb12-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-39"><a href="#cb12-39" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">:=</span> g<span class="op">.</span>Wait<span class="op">();</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb12-40"><a href="#cb12-40" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;error:&quot;</span><span class="op">,</span> err<span class="op">)</span></span>
+<span id="cb12-41"><a href="#cb12-41" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb12-42"><a href="#cb12-42" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-43"><a href="#cb12-43" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> t <span class="op">:=</span> <span class="kw">range</span> results <span class="op">{</span></span>
+<span id="cb12-44"><a href="#cb12-44" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">)</span></span>
+<span id="cb12-45"><a href="#cb12-45" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-46"><a href="#cb12-46" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p> When any goroutine in the group returns a non-nil error, <code>errgroup</code> cancels the shared context. Goroutines that are still running will see <code>ctx.Done()</code> closed and should return promptly. <code>g.Wait()</code> blocks until all goroutines have returned, then returns the first error.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> <code>errgroup</code> is the idiomatic replacement for <code>sync.WaitGroup</code> whenever goroutines can fail. If none of them can fail, <code>sync.WaitGroup</code> is fine.</p>
+</div></div>
+<h2 data-number="12.6" id="goroutine-leak-detection"><span class="header-section-number">12.6</span> Goroutine Leak Detection</h2>
+<p>  A goroutine leak is a goroutine that starts but never exits. Leaks accumulate over the lifetime of a server: each request might leave one goroutine behind, and after thousands of requests you have thousands of idle goroutines consuming memory and scheduler time. Each leaked goroutine also keeps every value it has closed over alive, preventing GC from reclaiming that memory. <strong><em>[leaked-goroutine-grows-memory]</em></strong></p>
+<p>The most common cause is a goroutine blocked on a channel send or receive with no path to exit:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co">// </span><span class="al">BUG</span><span class="co">: this goroutine leaks if the caller stops listening on results.</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> streamHits<span class="op">(</span>results <span class="kw">chan</span><span class="op">&lt;-</span> <span class="dt">string</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>        results <span class="op">&lt;-</span> <span class="st">&quot;Work Song&quot;</span> <span class="co">// blocks forever if nobody reads</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Every goroutine must have a clear exit path. <strong><em>[goroutine-must-exit]</em></strong> The idiomatic exits are: - the function returns naturally, - a <code>done</code> channel is closed, - the context passed in is cancelled.</p>
+<p>The <code>go.uber.org/goleak</code> package detects leaked goroutines in tests:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;testing&quot;</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;go.uber.org/goleak&quot;</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TestMain<span class="op">(</span>m <span class="op">*</span>testing<span class="op">.</span>M<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    goleak<span class="op">.</span>VerifyTestMain<span class="op">(</span>m<span class="op">)</span> <span class="co">// fails the test suite if any goroutine leaks</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TestNoLeak<span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> goleak<span class="op">.</span>VerifyNone<span class="op">(</span>t<span class="op">)</span> <span class="co">// fails this test if a goroutine leaks</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>    ctx<span class="op">,</span> cancel <span class="op">:=</span> context<span class="op">.</span>WithCancel<span class="op">(</span>context<span class="op">.</span>Background<span class="op">())</span></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> cancel<span class="op">()</span></span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>    done <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="kw">struct</span><span class="op">{})</span></span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">defer</span> <span class="bu">close</span><span class="op">(</span>done<span class="op">)</span></span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>        <span class="cf">select</span> <span class="op">{</span></span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>        <span class="cf">case</span> <span class="op">&lt;-</span>ctx<span class="op">.</span>Done<span class="op">():</span> <span class="co">// goroutine exits when context is cancelled</span></span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>    <span class="op">}()</span></span>
+<span id="cb14-23"><a href="#cb14-23" aria-hidden="true" tabindex="-1"></a>    <span class="op">&lt;-</span>done</span>
+<span id="cb14-24"><a href="#cb14-24" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>goleak.VerifyTestMain(m)</code> runs <code>m.Run()</code> internally and checks for leaked goroutines after the test suite completes. <code>goleak.VerifyNone(t)</code> checks for leaks at the end of a single test function.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Run <code>goleak.VerifyTestMain</code> in every package that uses goroutines. It is cheap, catches real bugs, and forces you to wire up context cancellation correctly.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> A goroutine that loops forever without a <code>ctx.Done()</code> or <code>done</code> channel check is always a potential leak. Even if your current tests do not expose it, a future caller that cancels the operation will leave it running. Keep goroutine lifetimes simple enough that the exit paths are obvious at a glance. <strong><em>[obvious-goroutine-lifetimes]</em></strong></p>
+</div></div>
+<h2 data-number="12.7" id="gomaxprocs"><span class="header-section-number">12.7</span> GOMAXPROCS</h2>
+<p>  Go’s scheduler multiplexes goroutines onto OS threads. <code>GOMAXPROCS</code> controls how many OS threads the scheduler uses simultaneously. By default it is set to the number of logical CPUs available to the process (i.e., <code>runtime.NumCPU()</code>).</p>
+<p>You can read or change it at runtime:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;runtime&quot;</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>n <span class="op">:=</span> runtime<span class="op">.</span>GOMAXPROCS<span class="op">(</span><span class="dv">0</span><span class="op">)</span> <span class="co">// 0 means &quot;don&#39;t change it; just return the current value&quot;</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;GOMAXPROCS:&quot;</span><span class="op">,</span> n<span class="op">)</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>runtime<span class="op">.</span>GOMAXPROCS<span class="op">(</span><span class="dv">4</span><span class="op">)</span> <span class="co">// limit to 4 OS threads</span></span></code></pre></div>
+<p>You can also set it via an environment variable before starting the process:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="va">GOMAXPROCS</span><span class="op">=</span>4 <span class="ex">./myserver</span></span></code></pre></div>
+<p> In container environments (Docker, Kubernetes), the default <code>GOMAXPROCS</code> reads the host CPU count, not the container CPU limit. A container with a limit of 2 vCPUs but a 32-core host will start with <code>GOMAXPROCS=32</code>, spawning far more OS threads than it needs. The <code>go.uber.org/automaxprocs</code> package reads the cgroup CPU quota and sets <code>GOMAXPROCS</code> correctly:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> _ <span class="st">&quot;go.uber.org/automaxprocs&quot;</span> <span class="co">// import for side effect; sets GOMAXPROCS from cgroup quota</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> For most Go services, the default <code>GOMAXPROCS</code> is correct on bare metal. In containers, use <code>automaxprocs</code> or set <code>GOMAXPROCS</code> explicitly in your deployment manifest.</p>
+</div></div>
+<h2 data-number="12.8" id="key-points"><span class="header-section-number">12.8</span> Key Points</h2>
+<ul>
+<li><code>context.Context</code> carries cancellation, deadlines, and request-scoped values across goroutine boundaries; Java has no direct equivalent.</li>
+<li>The three context constructors are <code>WithCancel</code> (manual cancel), <code>WithDeadline</code> (absolute time), and <code>WithTimeout</code> (relative duration); always <code>defer cancel()</code>.</li>
+<li>Use unexported struct types as context keys to prevent collisions; never use strings or other built-in types as keys.</li>
+<li>The universal convention is <code>func Foo(ctx context.Context, ...)</code> — context is always the first parameter, always named <code>ctx</code>, never stored in a struct.</li>
+<li><code>golang.org/x/sync/errgroup</code> is the idiomatic fan-out tool when goroutines can fail; it collects the first error and cancels the shared context.</li>
+<li>Every goroutine must have an exit path; use <code>go.uber.org/goleak</code> in tests to catch leaks automatically.</li>
+<li><code>GOMAXPROCS</code> defaults to the number of logical CPUs; set it correctly in container environments with <code>go.uber.org/automaxprocs</code>.</li>
+</ul>
+<h2 data-number="12.9" id="exercises"><span class="header-section-number">12.9</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> In Java, cancelling an in-flight operation typically means calling <code>Future.cancel(true)</code> or interrupting a thread via <code>Thread.interrupt()</code>. Describe how Go’s <code>context.Context</code> model differs from Java’s thread-interrupt approach. What are the advantages of passing a context explicitly rather than relying on a thread-level interrupt mechanism? Consider what happens when a Java thread is blocked in a third-party library that does not handle <code>InterruptedException</code>, compared to how a Go function using a context-aware library would behave.</p></li>
+<li><p><strong>What does this print?</strong></p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;context&quot;</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;time&quot;</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> work<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> label <span class="dt">string</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">select</span> <span class="op">{</span></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="op">&lt;-</span>time<span class="op">.</span>After<span class="op">(</span><span class="dv">500</span> <span class="op">*</span> time<span class="op">.</span>Millisecond<span class="op">):</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>label<span class="op">,</span> <span class="st">&quot;done&quot;</span><span class="op">)</span></span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="op">&lt;-</span>ctx<span class="op">.</span>Done<span class="op">():</span></span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>label<span class="op">,</span> <span class="st">&quot;cancelled:&quot;</span><span class="op">,</span> ctx<span class="op">.</span>Err<span class="op">())</span></span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>    ctx<span class="op">,</span> cancel <span class="op">:=</span> context<span class="op">.</span>WithTimeout<span class="op">(</span>context<span class="op">.</span>Background<span class="op">(),</span> <span class="dv">200</span><span class="op">*</span>time<span class="op">.</span>Millisecond<span class="op">)</span></span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> cancel<span class="op">()</span></span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> work<span class="op">(</span>ctx<span class="op">,</span> <span class="st">&quot;Bewitched&quot;</span><span class="op">)</span></span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> work<span class="op">(</span>ctx<span class="op">,</span> <span class="st">&quot;Too Sweet&quot;</span><span class="op">)</span></span>
+<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>    time<span class="op">.</span>Sleep<span class="op">(</span><span class="dv">400</span> <span class="op">*</span> time<span class="op">.</span>Millisecond<span class="op">)</span></span>
+<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;main done&quot;</span><span class="op">)</span></span>
+<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> You run a worker pool with <code>workers = 3</code> and feed it a slice of 7 tasks. Each task takes exactly 100 ms. Assuming no overhead and perfect parallelism, how many milliseconds does the pool take to complete all 7 tasks? Show your work: how many rounds of 3 concurrent workers are needed and what does each round contribute?</p></li>
+<li><p><strong>Where is the bug?</strong></p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;context&quot;</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;time&quot;</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> fetchData<span class="op">(</span>url <span class="dt">string</span><span class="op">)</span> <span class="op">&lt;-</span><span class="kw">chan</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>    ch <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">)</span></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>        time<span class="op">.</span>Sleep<span class="op">(</span><span class="dv">2</span> <span class="op">*</span> time<span class="op">.</span>Second<span class="op">)</span></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>        ch <span class="op">&lt;-</span> <span class="st">&quot;result for &quot;</span> <span class="op">+</span> url</span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>    <span class="op">}()</span></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ch</span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>    ctx<span class="op">,</span> cancel <span class="op">:=</span> context<span class="op">.</span>WithTimeout<span class="op">(</span>context<span class="op">.</span>Background<span class="op">(),</span> <span class="dv">500</span><span class="op">*</span>time<span class="op">.</span>Millisecond<span class="op">)</span></span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> cancel<span class="op">()</span></span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a>    ch <span class="op">:=</span> fetchData<span class="op">(</span><span class="st">&quot;https://example.com/songs&quot;</span><span class="op">)</span></span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">select</span> <span class="op">{</span></span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> result <span class="op">:=</span> <span class="op">&lt;-</span>ch<span class="op">:</span></span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>result<span class="op">)</span></span>
+<span id="cb19-26"><a href="#cb19-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="op">&lt;-</span>ctx<span class="op">.</span>Done<span class="op">():</span></span>
+<span id="cb19-27"><a href="#cb19-27" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;timed out&quot;</span><span class="op">)</span></span>
+<span id="cb19-28"><a href="#cb19-28" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-29"><a href="#cb19-29" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Implement a function <code>fanOutFetch(ctx context.Context, songs []string) ([]string, error)</code> that uses <code>errgroup</code> to fetch all song titles concurrently. Simulate each fetch with a <code>time.Sleep</code> of a random duration between 50 and 150 ms (use <code>math/rand</code>). If any fetch takes longer than 300 ms total (enforced by a timeout on the context passed to <code>fanOutFetch</code>), the entire operation should be cancelled and an error returned. Print either all results in order or the cancellation error.</p></li>
+</ol>
+
+{% endraw %}

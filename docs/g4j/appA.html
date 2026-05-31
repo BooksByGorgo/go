@@ -1,0 +1,360 @@
+---
+layout: default
+title: "Appendix A: Go Proverbs"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 100
+---
+
+{% raw %}
+<h1 id="go-proverbs">Go Proverbs</h1>
+<p></p>
+<p>Rob Pike delivered a talk called <em>Go Proverbs</em> at Gopherfest in November 2015. He listed a set of short, pithy sayings that capture the philosophy and idioms of Go — not language rules, but ways of thinking that experienced Go programmers internalize over time. If you search for “Rob Pike Go Proverbs” you will find the original talk and the companion site at <a href="https://go-proverbs.github.io">go-proverbs.github.io</a>.</p>
+<p>The proverbs are memorable precisely because they are terse. Each one encodes a design decision, a tradeoff, or a lesson learned from years of building large systems. For Java programmers, several of them describe habits you need to actively unlearn. This appendix states each proverb, unpacks what it means in practice, and connects it explicitly to the Java thinking it pushes back against.</p>
+<h2 id="dont-communicate-by-sharing-memory-share-memory-by-communicating">Don’t communicate by sharing memory; share memory by communicating</h2>
+<p>  </p>
+<p>This is the most famous Go proverb and the one that most directly contradicts the Java approach to concurrency.</p>
+<p>In Java, the default concurrency model is shared mutable state. Two threads access the same <code>ArrayList</code> or the same field, and you protect it with <code>synchronized</code>, <code>ReentrantLock</code>, or a <code>volatile</code> keyword. The data lives in one place; the threads fight to access it; the locks prevent corruption.</p>
+<p>Go’s preferred model flips this around. Instead of giving both goroutines a reference to the same piece of data and then locking it, you give the data to one goroutine and send it through a channel when another goroutine needs it. At any moment, only one goroutine owns the data — ownership transfers through communication, not through locking.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Java-style thinking in Go: don&#39;t do this</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> counter <span class="dt">int</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> mu sync<span class="op">.</span>Mutex</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> increment<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    mu<span class="op">.</span>Lock<span class="op">()</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    counter<span class="op">++</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    mu<span class="op">.</span>Unlock<span class="op">()</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="co">// Go-style thinking: send the work, not the shared state</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>jobs <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">int</span><span class="op">,</span> <span class="dv">100</span><span class="op">)</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    total <span class="op">:=</span> <span class="dv">0</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> n <span class="op">:=</span> <span class="kw">range</span> jobs <span class="op">{</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>        total <span class="op">+=</span> n</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>total<span class="op">)</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="op">}()</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> <span class="dv">100</span><span class="op">;</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    jobs <span class="op">&lt;-</span> i</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a><span class="bu">close</span><span class="op">(</span>jobs<span class="op">)</span></span></code></pre></div>
+<p>The second version has no lock, no shared variable visible to multiple goroutines, and no data race. The accumulator <code>total</code> is private to one goroutine; the channel is the communication mechanism.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> The Go memory model guarantees that a send on a channel <em>happens before</em> the corresponding receive. This means the channel itself acts as synchronization — you do not need a separate lock when you use channels correctly.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> This proverb does not mean “never use <code>sync.Mutex</code>.” Mutexes are the right tool when a small critical section protects a shared counter or cache. The proverb is about <em>default thinking</em>: reach for channels first when goroutines need to coordinate.</p>
+</div></div>
+<h2 id="concurrency-is-not-parallelism">Concurrency is not parallelism</h2>
+<p>  </p>
+<p>Java programmers often use “concurrent” and “parallel” as synonyms. Go draws a sharp distinction.</p>
+<p><strong>Concurrency</strong> is a property of program structure: you decompose a problem into independent pieces that <em>could</em> run simultaneously. <strong>Parallelism</strong> is a property of execution: those pieces <em>actually</em> run simultaneously on multiple CPU cores.</p>
+<p>A concurrent program written for a single-core machine will not run in parallel, but it is still concurrent — the pieces are structured to be independent. Conversely, you can run a non-concurrent program on many cores and get no benefit.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Rob Pike’s memorable formulation is: “Concurrency is about <em>dealing with</em> lots of things at once. Parallelism is about <em>doing</em> lots of things at once.” Write concurrent code first. The runtime decides how much parallelism you get based on <code>GOMAXPROCS</code>.</p>
+</div></div>
+<p>Goroutines give you concurrency cheaply. How much parallelism you get is controlled by <code>runtime.GOMAXPROCS</code>, which defaults to the number of CPU cores. You almost never set it manually — the default is right.</p>
+<p>The practical lesson for Java programmers: the goal of channels and goroutines is clean problem decomposition, not raw throughput. A pipeline of three goroutines connected by channels is concurrent design even if it runs on one core.</p>
+<h2 id="the-bigger-the-interface-the-weaker-the-abstraction">The bigger the interface, the weaker the abstraction</h2>
+<p> </p>
+<p>In Java, interfaces commonly carry dozens of methods. <code>java.util.List</code> has 25 methods; <code>java.util.Collection</code> has 15. Implementing them requires either a large amount of code or inheriting a skeletal implementation.</p>
+<p>Go’s standard library tells a different story. <code>io.Reader</code> has one method. <code>io.Writer</code> has one method. <code>fmt.Stringer</code> has one method. <code>error</code> has one method.</p>
+<p>A one-method interface describes exactly one capability. Anything that satisfies it — a file, a network connection, a byte buffer, a custom type — can be used wherever that interface is expected. The abstraction is maximally general.</p>
+<p>When an interface grows to ten methods, only a much narrower set of types can satisfy it. The interface describes a specific <em>kind of thing</em> rather than a specific <em>capability</em>. It has become less of an abstraction and more of a blueprint for a single concrete type.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Weak abstraction: only one type will ever implement this</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> DatabaseService <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    Connect<span class="op">(</span>dsn <span class="dt">string</span><span class="op">)</span> <span class="dt">error</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    Query<span class="op">(</span>sql <span class="dt">string</span><span class="op">,</span> args <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="op">(*</span>Rows<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    Exec<span class="op">(</span>sql <span class="dt">string</span><span class="op">,</span> args <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="op">(</span>Result<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    Begin<span class="op">()</span> <span class="op">(*</span>Tx<span class="op">,</span> <span class="dt">error</span><span class="op">)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    Rollback<span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    Commit<span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    Close<span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    Ping<span class="op">()</span> <span class="dt">error</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    Stats<span class="op">()</span> DBStats</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="co">// Strong abstraction: anything that can store a byte slice</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Storer <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    Store<span class="op">(</span>key <span class="dt">string</span><span class="op">,</span> value <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="dt">error</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> When designing a Go interface, ask: “What is the <em>minimum</em> set of methods a caller actually needs?” Often the answer is one or two. Define the small interface at the call site rather than defining a large interface in the package that owns the implementation.</p>
+</div></div>
+<h2 id="accept-interfaces-return-concrete-types">Accept interfaces, return concrete types</h2>
+<p> </p>
+<p>This proverb describes the idiomatic direction of abstraction in Go function signatures.</p>
+<p><strong>Accept interfaces</strong> because it makes your function flexible. A function that accepts <code>io.Reader</code> works with a file, a byte buffer, a network socket, a gzip stream, or a test mock — anything that implements <code>Read</code>. The caller is not locked into a specific type.</p>
+<p><strong>Return concrete types</strong> because it gives the caller maximum information. If your function returns <code>*os.File</code>, the caller can call <code>Stat</code>, <code>Seek</code>, <code>Sync</code>, and <code>Close</code>. If you return <code>io.ReadCloser</code>, the caller can only <code>Read</code> and <code>Close</code>. Returning an interface hides capability the caller might need.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Good: accepts interface (flexible), returns concrete type (informative)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewLoggedReader<span class="op">(</span>r io<span class="op">.</span>Reader<span class="op">)</span> <span class="op">*</span>LoggedReader <span class="op">{</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>LoggedReader<span class="op">{</span>r<span class="op">:</span> r<span class="op">,</span> count<span class="op">:</span> <span class="dv">0</span><span class="op">}</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Avoid: returning an interface when the concrete type is more useful</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewLoggedReader<span class="op">(</span>r io<span class="op">.</span>Reader<span class="op">)</span> io<span class="op">.</span>Reader <span class="op">{</span> <span class="co">// loses access to Count()</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>LoggedReader<span class="op">{</span>r<span class="op">:</span> r<span class="op">,</span> count<span class="op">:</span> <span class="dv">0</span><span class="op">}</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Java programmers coming from “program to an interface, not an implementation” often want to return interface types everywhere. In Go that habit hides the concrete type’s full API from callers. Return the concrete type; let the caller decide which interface to assign it to.</p>
+</div></div>
+<p>The exception is the <code>error</code> interface: always return <code>error</code>, not a concrete error type, so callers use <code>errors.Is</code> and <code>errors.As</code> instead of type-asserting against a specific struct.</p>
+<h2 id="make-the-zero-value-useful">Make the zero value useful</h2>
+<p> </p>
+<p>In Java, objects do not exist until you call a constructor. Using an uninitialized field (null) causes a <code>NullPointerException</code>. Java programmers habitually write defensive constructors and factory methods to ensure objects are always in a valid state.</p>
+<p>In Go, every type has a <strong>zero value</strong> — the value you get when you declare a variable without initializing it. Numeric types zero to <code>0</code>, booleans to <code>false</code>, pointers to <code>nil</code>, strings to <code>""</code>, and struct fields to their respective zero values.</p>
+<p>The proverb asks you to design your types so the zero value is <em>already useful</em>, not broken.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> b bytes<span class="op">.</span>Buffer        <span class="co">// zero value: empty buffer, ready to use</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>b<span class="op">.</span>WriteString<span class="op">(</span><span class="st">&quot;Espresso&quot;</span><span class="op">)</span> <span class="co">// no constructor needed</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> mu sync<span class="op">.</span>Mutex         <span class="co">// zero value: unlocked mutex, ready to use</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>mu<span class="op">.</span>Lock<span class="op">()</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> wg sync<span class="op">.</span>WaitGroup     <span class="co">// zero value: counter at zero, ready to use</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>wg<span class="op">.</span>Add<span class="op">(</span><span class="dv">1</span><span class="op">)</span></span></code></pre></div>
+<p>None of these required a constructor call. <code>bytes.Buffer</code>, <code>sync.Mutex</code>, and <code>sync.WaitGroup</code> are all designed so the zero value is fully operational.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> When designing a new type, ask: “Is the zero value of this struct a sensible default state?” If you can arrange for it to be, callers get a simpler API — no constructor required, and no possibility of an “uninitialized” state.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Pointers in Go zero to <code>nil</code>, just like Java references. Calling a method on a nil pointer panics. If your type relies on a pointer field being non-nil, either initialize it lazily on first use or document that the zero value is not usable and require a constructor.</p>
+</div></div>
+<h2 id="the-empty-interface-says-nothing">The empty interface says nothing</h2>
+<p>  </p>
+<p>In Go, <code>interface{}</code> (written <code>any</code> since Go 1.18) is an interface with no methods. Every type satisfies it. A function that accepts <code>any</code> can receive literally anything — an <code>int</code>, a <code>string</code>, a goroutine channel, a function value, a <code>nil</code>.</p>
+<p>This flexibility is a warning sign, not a feature. If you accept <code>any</code>, you have told the compiler nothing about what you intend to do with the value. You will need a type assertion or a type switch to extract something useful, and that work happens at runtime with no compile-time safety.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Loses type safety; requires runtime type assertions</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> PrintValue<span class="op">(</span>v <span class="dt">any</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">switch</span> x <span class="op">:=</span> v<span class="op">.(</span><span class="kw">type</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="dt">int</span><span class="op">:</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;int:&quot;</span><span class="op">,</span> x<span class="op">)</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="dt">string</span><span class="op">:</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;string:&quot;</span><span class="op">,</span> x<span class="op">)</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">default</span><span class="op">:</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;unknown: %T</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> v<span class="op">)</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="co">// Better: use a specific interface or generics (Go 1.18+)</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> PrintStringer<span class="op">(</span>v fmt<span class="op">.</span>Stringer<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>v<span class="op">.</span>String<span class="op">())</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Java programmers who are used to <code>Object</code> as the universal base class reach for <code>any</code> when they want “any type.” In Go that is rarely the right answer. Use a concrete type, a narrow interface, or a generic type parameter instead. Reserve <code>any</code> for truly generic infrastructure like JSON serialization or logging frameworks where the type is genuinely unknown.</p>
+</div></div>
+<h2 id="errors-are-values">Errors are values</h2>
+<p> </p>
+<p>In Java, error signaling means throwing an exception — an interruption of the normal control flow that unwinds the call stack. The exception is caught somewhere above and the normal path and the error path are syntactically separate (<code>try</code> vs <code>catch</code>).</p>
+<p>In Go, a function that can fail returns an <code>error</code> as an ordinary return value. There is no stack unwinding, no separate exception handling syntax, and no checked-versus-unchecked distinction. The error is just a value you assign to a variable and inspect with <code>if err != nil</code>.</p>
+<p>Because errors are values, you can do everything with them that you can do with any other Go value: store them in a slice, pass them to a function, wrap them, compare them, build pipelines around them.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Errors as values enable this pattern: chain calls, accumulate the first error</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Writer <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    w   io<span class="op">.</span>Writer</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    err <span class="dt">error</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>ew <span class="op">*</span>Writer<span class="op">)</span> write<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> ew<span class="op">.</span>err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    _<span class="op">,</span> ew<span class="op">.</span>err <span class="op">=</span> ew<span class="op">.</span>w<span class="op">.</span>Write<span class="op">(</span>p<span class="op">)</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a><span class="co">// Callers write without checking each time; check once at the end</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>ew <span class="op">:=</span> <span class="op">&amp;</span>Writer<span class="op">{</span>w<span class="op">:</span> os<span class="op">.</span>Stdout<span class="op">}</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>ew<span class="op">.</span>write<span class="op">(</span>header<span class="op">)</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>ew<span class="op">.</span>write<span class="op">(</span>body<span class="op">)</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>ew<span class="op">.</span>write<span class="op">(</span>footer<span class="op">)</span></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> ew<span class="op">.</span>err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>ew<span class="op">.</span>err<span class="op">)</span></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> The Go blog post “Errors are Values” by Rob Pike (2015) shows this pattern in detail and demonstrates that “if err != nil” repetition is not inherent — it is a consequence of how you structure the code.</p>
+</div></div>
+<h2 id="dont-just-check-errors-handle-them-gracefully">Don’t just check errors, handle them gracefully</h2>
+<p> </p>
+<p>This proverb follows directly from the previous one. Because errors are values, you are responsible for deciding what to do with them.</p>
+<p>Java programmers sometimes carry over two habits that do not translate well to Go:</p>
+<ol type="1">
+<li>Catching an exception and logging it before re-throwing, which adds noise without adding information.</li>
+<li>Swallowing an error silently (catching <code>Exception</code> and doing nothing).</li>
+</ol>
+<p>In Go, “handle gracefully” means: add context, decide whether to retry or abort, clean up resources, and propagate with enough information for the caller to make a decision.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Bad: ignore the error</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>data<span class="op">,</span> _ <span class="op">:=</span> os<span class="op">.</span>ReadFile<span class="op">(</span><span class="st">&quot;config.json&quot;</span><span class="op">)</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Bad: check but do nothing useful</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>data<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>ReadFile<span class="op">(</span><span class="st">&quot;config.json&quot;</span><span class="op">)</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>err<span class="op">)</span> <span class="co">// log and fall through; data is nil</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="co">// Good: add context, propagate clearly</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>data<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>ReadFile<span class="op">(</span><span class="st">&quot;config.json&quot;</span><span class="op">)</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;loading config: %w&quot;</span><span class="op">,</span> err<span class="op">)</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Wrapping with <code>%w</code> preserves the original error so callers can use <code>errors.Is</code> or <code>errors.As</code> to inspect it. Each layer adds its own context to the chain without hiding what happened.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Do not log an error <em>and</em> return it. That causes the same error to be logged multiple times at different layers. Either handle the error fully at one level (log it and stop propagating) or wrap and return it for the caller to handle.</p>
+</div></div>
+<h2 id="a-little-copying-is-better-than-a-little-dependency">A little copying is better than a little dependency</h2>
+<p> </p>
+<p>In the Java ecosystem, adding a Maven or Gradle dependency is almost zero-friction. The build system downloads transitive dependencies automatically, and the culture encourages reuse at the package level. The result is dependency trees hundreds of packages deep for trivial utilities.</p>
+<p>Go takes a more cautious position. The module system (<code>go.mod</code>) makes dependencies explicit, and the community norm is to pull in a dependency only when the benefit clearly outweighs the cost of tracking it, auditing it for security, and waiting for it to update.</p>
+<p>When you need ten lines of utility code from a package, consider copying those ten lines instead of adding the whole package as a dependency. The copied code is stable, auditable, and has no surprise transitive dependencies.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Instead of importing a string utilities package for one function,</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="co">// copy the five-line helper you actually need:</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="co">// containsAny reports whether s contains any Unicode code point in chars.</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> containsAny<span class="op">(</span>s<span class="op">,</span> chars <span class="dt">string</span><span class="op">)</span> <span class="dt">bool</span> <span class="op">{</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> c <span class="op">:=</span> <span class="kw">range</span> chars <span class="op">{</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> strings<span class="op">.</span>ContainsRune<span class="op">(</span>s<span class="op">,</span> c<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="ot">true</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ot">false</span></span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> The Go standard library is intentionally rich so that most common tasks do not require third-party dependencies. Before adding a dependency, scan <code>strings</code>, <code>bytes</code>, <code>slices</code>, <code>maps</code>, <code>sort</code>, <code>strconv</code>, and <code>unicode</code> — the answer is often already there.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> This proverb applies to <em>small</em> utilities. For a full TLS implementation, a database driver, or an HTTP client framework, copying is obviously not the answer. The proverb targets the temptation to add a 50-package dependency to get one helper function.</p>
+</div></div>
+<h2 id="clear-is-better-than-clever">Clear is better than clever</h2>
+<p> </p>
+<p>Go was designed for large teams and long-lived codebases. The person who reads your code in two years might be you after you have forgotten what it does, or a colleague who joined the project last week.</p>
+<p>“Clever” code — one-liners that pack multiple side effects into a single expression, or intricate use of the type system to eliminate a few lines of boilerplate — imposes a cognitive tax on every future reader. “Clear” code says what it does, even if it takes a few extra lines.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Clever: hard to see that this initializes and conditionally overwrites</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">:=</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">int</span><span class="op">{</span><span class="st">&quot;a&quot;</span><span class="op">:</span> <span class="dv">1</span><span class="op">,</span> <span class="st">&quot;b&quot;</span><span class="op">:</span> <span class="dv">2</span><span class="op">}[</span><span class="st">&quot;b&quot;</span><span class="op">]</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Clear: two lines, obvious intent</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>m <span class="op">:=</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">int</span><span class="op">{</span><span class="st">&quot;a&quot;</span><span class="op">:</span> <span class="dv">1</span><span class="op">,</span> <span class="st">&quot;b&quot;</span><span class="op">:</span> <span class="dv">2</span><span class="op">}</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>x <span class="op">:=</span> m<span class="op">[</span><span class="st">&quot;b&quot;</span><span class="op">]</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Go’s <code>gofmt</code> enforces a uniform style so that no one spends mental energy on formatting. The remaining style decisions — naming, structure, abstraction level — should all favor the reader. If you find yourself writing a comment to explain what a line of code does, consider rewriting the code so the comment is unnecessary.</p>
+</div></div>
+<p>Java programmers who have spent time with lambda chains, streams, and optional-chaining sometimes find Go’s explicit loops and <code>if err != nil</code> checks verbose. Over time most find the verbosity pays for itself in debuggability and readability.</p>
+<h2 id="gofmts-style-is-no-ones-favorite-yet-gofmt-is-everyones-favorite">gofmt’s style is no one’s favorite, yet gofmt is everyone’s favorite</h2>
+<p> </p>
+<p><code>gofmt</code> is Go’s canonical formatter. It rewrites your source code to match the one true style: tab indentation, specific brace placement, aligned spacing, consistent blank lines. You have no configuration options.</p>
+<p>No one gets exactly the style they would choose if left to their own preferences — that is the point. Because the style is universal and non-negotiable, no one argues about it. Code review time is not spent on formatting. Merge conflicts over whitespace disappear. Every Go file in every repository in the world looks structurally the same.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co">// You write:</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> add<span class="op">(</span>a <span class="dt">int</span><span class="op">,</span>b <span class="dt">int</span><span class="op">)</span><span class="dt">int</span><span class="op">{</span><span class="cf">return</span> a<span class="op">+</span>b<span class="op">}</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co">// gofmt produces:</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> add<span class="op">(</span>a <span class="dt">int</span><span class="op">,</span> b <span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span> <span class="cf">return</span> a<span class="op">+</span>b <span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Run <code>gofmt -w .</code> before committing, or configure your editor to run it on save. Most Go projects enforce <code>gofmt</code> compliance in CI and reject code that is not formatted. The <code>goimports</code> tool does everything <code>gofmt</code> does and also manages import blocks.</p>
+</div></div>
+<p>Java programmers accustomed to negotiating Checkstyle or Google Java Format rules with their team will appreciate that in Go the negotiation never happens.</p>
+<h2 id="cgo-is-not-go">Cgo is not Go</h2>
+<p> </p>
+<p>Cgo is the mechanism that lets Go code call C libraries. It is powerful and sometimes necessary — for system-level APIs or existing C codebases — but it comes with a significant cost.</p>
+<p>Code that uses Cgo does not compile with the same toolchain as pure Go code. Cross-compilation becomes complicated. Build times increase. The garbage collector and the C memory allocator coexist awkwardly. Goroutine stacks cannot grow through Cgo frames. Debugging is harder.</p>
+<p>The proverb is a reminder that reaching for Cgo means stepping outside the Go ecosystem and accepting all of its constraints. For most application code, a pure Go alternative exists.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Java programmers are familiar with JNI, which carries similar complexity costs. The Go community’s attitude toward Cgo mirrors the Java community’s attitude toward JNI: use it when you must, avoid it when you can.</p>
+</div></div>
+<h2 id="cgo-must-always-be-guarded-with-build-constraints">Cgo must always be guarded with build constraints</h2>
+<p> </p>
+<p>When you do use Cgo, you must tell the Go build system which platforms your C code supports. Without build constraints, your package will fail to compile on any platform where the C toolchain is absent or where the C code does not compile.</p>
+<p>Build constraints live at the top of the file:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co">//go:build linux &amp;&amp; amd64</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> mypackage</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="co">// #include &lt;sys/mman.h&gt;</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;C&quot;</span></span></code></pre></div>
+<p>This constraint restricts the file to Linux on AMD64. The rest of your package can still be compiled everywhere; only this file is gated.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Use <code>//go:build</code> (the modern syntax, Go 1.17+) rather than the older <code>// +build</code> comment. Run <code>go build ./...</code> for a representative set of target platforms in CI to catch constraint gaps early.</p>
+</div></div>
+<h2 id="syscall-must-always-be-guarded-with-build-constraints">Syscall must always be guarded with build constraints</h2>
+<p>  </p>
+<p>The <code>syscall</code> package exposes operating-system system calls directly. System calls are platform-specific: the numbers, arguments, and available calls differ between Linux, macOS, Windows, and other platforms.</p>
+<p>A file that calls <code>syscall.Mmap</code> or <code>syscall.SIGTERM</code> will fail to compile on a platform where that call does not exist or has a different signature. Build constraints ensure the file is only compiled on the platforms it supports.</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co">//go:build linux || darwin</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> fileutil</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;syscall&quot;</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> lockFile<span class="op">(</span>fd <span class="dt">uintptr</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> syscall<span class="op">.</span>Flock<span class="op">(</span><span class="dt">int</span><span class="op">(</span>fd<span class="op">),</span> syscall<span class="op">.</span>LOCK_EX<span class="op">)</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Java programmers are used to the JVM abstracting away platform differences. In Go, once you use <code>syscall</code> or <code>golang.org/x/sys</code>, you own the platform compatibility problem. Prefer higher-level standard library packages (<code>os</code>, <code>net</code>, <code>io</code>) that handle platform differences internally.</p>
+</div></div>
+<h2 id="with-the-unsafe-package-there-are-no-guarantees">With the unsafe package there are no guarantees</h2>
+<p> </p>
+<p>The <code>unsafe</code> package lets you escape Go’s type system: convert between pointer types, read the size of a value, perform pointer arithmetic. Using it bypasses the memory safety guarantees that make Go programs reliable.</p>
+<p>There is no specification for what <code>unsafe</code> code will do across Go versions, architectures, or runtime implementations. Code that works today may break on the next Go release, on a different OS, or with a different garbage collector.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;unsafe&quot;</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="co">// This compiles, but violates Go&#39;s memory model.</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="co">// The garbage collector may move objects; this pointer may become invalid.</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>p <span class="op">:=</span> <span class="op">(*</span><span class="dt">int</span><span class="op">)(</span>unsafe<span class="op">.</span>Pointer<span class="op">(</span><span class="dt">uintptr</span><span class="op">(</span>unsafe<span class="op">.</span>Pointer<span class="op">(&amp;</span>x<span class="op">))</span> <span class="op">+</span> unsafe<span class="op">.</span>Sizeof<span class="op">(</span>x<span class="op">)))</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Java programmers who have used <code>sun.misc.Unsafe</code> know this territory. The pattern is the same: you get power, you lose guarantees, and you own all the consequences. In Go, <code>unsafe</code> is almost never needed in application code. The standard library and well-maintained packages handle the rare cases — binary serialization, memory-mapped I/O — where direct memory access is genuinely required.</p>
+</div></div>
+<h2 id="reflection-is-never-clear">Reflection is never clear</h2>
+<p>  </p>
+<p>The <code>reflect</code> package lets you inspect and manipulate values at runtime without knowing their types at compile time. It powers <code>encoding/json</code>, <code>fmt</code>, and <code>text/template</code>. It is essential infrastructure. It is also notoriously difficult to read and debug.</p>
+<p>Reflection code trades compile-time type checking for runtime flexibility. Errors that a compiler would catch become panics at runtime. The code path through a reflective call is opaque to the reader.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Clear: the compiler knows the type, the reader knows the type</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>n <span class="op">:=</span> <span class="bu">len</span><span class="op">(</span>mySlice<span class="op">)</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Unclear: works, but why? what type is v? what if Kind() is wrong?</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>v <span class="op">:=</span> reflect<span class="op">.</span>ValueOf<span class="op">(</span>mySlice<span class="op">)</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>n <span class="op">:=</span> v<span class="op">.</span>Len<span class="op">()</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Before reaching for <code>reflect</code>, check whether generics (Go 1.18+) solve your problem. A generic function preserves type safety and is readable. Reflection is appropriate for cases where the types are genuinely unknown at compile time — serialization, testing frameworks, dependency injection containers.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Java programmers with a Spring or Hibernate background are accustomed to frameworks that do heavy annotation processing and reflection under the hood. That is fine in frameworks you use but do not read. In Go application code, reflective paths are yours to own and debug. Keep them small, well-tested, and isolated from the rest of the codebase.</p>
+</div></div>
+
+{% endraw %}

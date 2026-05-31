@@ -1,0 +1,375 @@
+---
+layout: default
+title: "19. Reflection"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 19
+---
+
+{% raw %}
+<h1 data-number="19" id="reflection"><span class="header-section-number">19</span> Reflection</h1>
+<p> Reflection lets a program inspect and manipulate its own types and values at runtime, without knowing them at compile time. Go’s <code>reflect</code> package is how serialization libraries, dependency injection frameworks, and testing tools peer inside your structs — but it comes at a real performance cost, so it is a sharp tool to reach for only when compile-time alternatives fall short.</p>
+<h2 data-number="19.1" id="the-three-laws-of-reflection"><span class="header-section-number">19.1</span> The Three Laws of Reflection</h2>
+<p> Rob Pike formalized reflection in Go around three laws that govern how values move between the ordinary type system and the <code>reflect</code> world. Understanding them prevents the most common mistakes.</p>
+<p><strong>Law 1: Reflection goes from interface value to reflection object.</strong> When you call <code>reflect.TypeOf</code> or <code>reflect.ValueOf</code>, you pass a value; the runtime wraps it in an interface and hands you a <code>reflect.Type</code> or <code>reflect.Value</code> that describes it.</p>
+<p><strong>Law 2: Reflection goes from reflection object back to interface value.</strong> A <code>reflect.Value</code> can be converted back to an <code>interface{}</code> with <code>Value.Interface()</code>, from which you can type-assert to the concrete type.</p>
+<p><strong>Law 3: To modify a reflection object, the value must be settable.</strong> Settability is a stricter condition than addressability. If you want to set a field through reflection, you must start with a pointer to the value — not the value itself.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Think of the three laws as a round trip: <code>interface{}</code> -&gt; <code>reflect.Value</code> (law 1) -&gt; <code>interface{}</code> (law 2) -&gt; concrete type. Mutation requires a pointer from the start (law 3).</p>
+</div></div>
+<p>If you have used <code>java.lang.reflect</code>, the overall structure will feel familiar: you interrogate a type descriptor, walk its fields or methods, and optionally read or write values through accessor objects. The mechanics differ, but the mental model maps cleanly — Go’s <code>reflect.Type</code> is roughly <code>java.lang.Class</code>, and <code>reflect.Value</code> is roughly <code>java.lang.reflect.Field</code> combined with the value it holds.</p>
+<h2 data-number="19.2" id="reflect.typeof-and-reflect.valueof"><span class="header-section-number">19.2</span> <code>reflect.TypeOf</code> and <code>reflect.ValueOf</code></h2>
+<p>    The two entry points to the <code>reflect</code> package are <code>TypeOf</code> and <code>ValueOf</code>:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TypeOf<span class="op">(</span>i <span class="dt">any</span><span class="op">)</span> Type          <span class="co">// returns the dynamic type of i</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> ValueOf<span class="op">(</span>i <span class="dt">any</span><span class="op">)</span> Value        <span class="co">// returns a Value holding the concrete value of i</span></span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;reflect&quot;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    x <span class="op">:=</span> <span class="st">&quot;Last Night&quot;</span>                    <span class="co">// Morgan Wallen song</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    t <span class="op">:=</span> reflect<span class="op">.</span>TypeOf<span class="op">(</span>x<span class="op">)</span>               <span class="co">// reflect.Type</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    v <span class="op">:=</span> reflect<span class="op">.</span>ValueOf<span class="op">(</span>x<span class="op">)</span>              <span class="co">// reflect.Value</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">)</span>                       <span class="co">// string</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>v<span class="op">)</span>                       <span class="co">// Last Night</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">.</span>Kind<span class="op">())</span>                <span class="co">// string</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Both functions accept <code>any</code> (i.e., <code>interface{}</code>), so every value is automatically boxed before being inspected. That boxing is cheap for scalar values, but it does allocate for values that escape to the heap — one of the hidden costs of reflection.</p>
+<h3 data-number="19.2.1" id="kind-vs-type"><span class="header-section-number">19.2.1</span> <code>Kind</code> vs <code>Type</code></h3>
+<p>  <code>Type</code> and <code>Kind</code> are related but distinct.</p>
+<p><code>Type</code> is the specific named type as declared in your program — <code>string</code>, <code>int</code>, <code>Track</code>, <code>*Song</code>. <code>Kind</code> is the underlying category — <code>reflect.String</code>, <code>reflect.Int</code>, <code>reflect.Struct</code>, <code>reflect.Ptr</code>.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> BPM <span class="dt">int</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>b <span class="op">:=</span> BPM<span class="op">(</span><span class="dv">140</span><span class="op">)</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>t <span class="op">:=</span> reflect<span class="op">.</span>TypeOf<span class="op">(</span>b<span class="op">)</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">)</span>        <span class="co">// BPM</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">.</span>Kind<span class="op">())</span> <span class="co">// int</span></span></code></pre></div>
+<p><code>t.String()</code> returns <code>"BPM"</code> (the declared name); <code>t.Kind()</code> returns <code>reflect.Int</code> (the underlying kind). When you write a generic function using reflection — say, a printer that handles all integer-backed types — you switch on <code>Kind</code>, not on <code>Type</code>. If you switched on <code>Type</code>, you would need a separate case for every user-defined integer type.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> In Java, <code>getClass()</code> is analogous to <code>Type</code>, and there is no direct equivalent of <code>Kind</code>. When writing reflection code that handles a family of types (all structs, all slices, all integer-backed types), switch on <code>Kind</code>.</p>
+</div></div>
+<p>The full set of kinds is:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>reflect<span class="op">.</span>Bool</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>reflect<span class="op">.</span>Int<span class="op">,</span> reflect<span class="op">.</span>Int8<span class="op">,</span> reflect<span class="op">.</span>Int16<span class="op">,</span> reflect<span class="op">.</span>Int32<span class="op">,</span> reflect<span class="op">.</span>Int64</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>reflect<span class="op">.</span>Uint<span class="op">,</span> reflect<span class="op">.</span>Uint8<span class="op">,</span> reflect<span class="op">.</span>Uint16<span class="op">,</span> reflect<span class="op">.</span>Uint32<span class="op">,</span> reflect<span class="op">.</span>Uint64<span class="op">,</span> reflect<span class="op">.</span>Uintptr</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>reflect<span class="op">.</span>Float32<span class="op">,</span> reflect<span class="op">.</span>Float64</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>reflect<span class="op">.</span>Complex64<span class="op">,</span> reflect<span class="op">.</span>Complex128</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>reflect<span class="op">.</span>Array<span class="op">,</span> reflect<span class="op">.</span>Chan<span class="op">,</span> reflect<span class="op">.</span>Func<span class="op">,</span> reflect<span class="op">.</span>Interface</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>reflect<span class="op">.</span>Map<span class="op">,</span> reflect<span class="op">.</span>Pointer<span class="op">,</span> reflect<span class="op">.</span>Slice<span class="op">,</span> reflect<span class="op">.</span>String</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>reflect<span class="op">.</span>Struct<span class="op">,</span> reflect<span class="op">.</span>UnsafePointer</span></code></pre></div>
+<h2 data-number="19.3" id="reflect.value.elem"><span class="header-section-number">19.3</span> <code>reflect.Value.Elem()</code></h2>
+<p> <code>Elem()</code> does two different things depending on the kind of value it is called on:</p>
+<ul>
+<li>On a <strong>pointer</strong>: it dereferences the pointer and returns the value the pointer points to.</li>
+<li>On an <strong>interface</strong>: it unwraps the interface and returns the concrete value inside.</li>
+</ul>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>v Value<span class="op">)</span> Elem<span class="op">()</span> Value  <span class="co">// dereference pointer or unwrap interface; panics if Kind is neither</span></span></code></pre></div>
+<p>This is the step that makes mutation possible. If you pass a plain value to <code>ValueOf</code>, you get a non-addressable copy — you cannot set its fields. If you pass a pointer, <code>Elem()</code> gives you the value the pointer points to, which is addressable and settable.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;reflect&quot;</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Song <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    BPM    <span class="dt">int</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    s <span class="op">:=</span> Song<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Thought You Should Know&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Morgan Wallen&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">144</span><span class="op">}</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Inspect through a pointer so we can set fields later</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>    v <span class="op">:=</span> reflect<span class="op">.</span>ValueOf<span class="op">(&amp;</span>s<span class="op">).</span>Elem<span class="op">()</span>          <span class="co">// Elem() dereferences the pointer</span></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>v<span class="op">.</span>Type<span class="op">())</span>                    <span class="co">// main.Song</span></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>v<span class="op">.</span>Kind<span class="op">())</span>                    <span class="co">// struct</span></span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>v<span class="op">.</span>FieldByName<span class="op">(</span><span class="st">&quot;Title&quot;</span><span class="op">))</span>      <span class="co">// Thought You Should Know</span></span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Calling <code>Elem()</code> on a value whose kind is not <code>Ptr</code> or <code>Interface</code> panics at runtime. Always check <code>v.Kind()</code> before calling <code>Elem()</code> in generic reflection code.</p>
+</div></div>
+<h2 data-number="19.4" id="reflect.value.canset"><span class="header-section-number">19.4</span> <code>reflect.Value.CanSet()</code></h2>
+<p>  Before writing to a <code>reflect.Value</code>, you must check <code>CanSet()</code>. A value is settable only if it was obtained by dereferencing a pointer — that is, the reflection object refers to the original memory location, not a copy.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>v Value<span class="op">)</span> CanSet<span class="op">()</span> <span class="dt">bool</span>  <span class="co">// true if the value can be changed</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>v Value<span class="op">)</span> Set<span class="op">(</span>x Value<span class="op">)</span>   <span class="co">// sets v to x; panics if !CanSet or types differ</span></span></code></pre></div>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>x <span class="op">:=</span> <span class="dv">42</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>v <span class="op">:=</span> reflect<span class="op">.</span>ValueOf<span class="op">(</span>x<span class="op">)</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>v<span class="op">.</span>CanSet<span class="op">())</span> <span class="co">// false --- x was passed by value (a copy)</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>p <span class="op">:=</span> reflect<span class="op">.</span>ValueOf<span class="op">(&amp;</span>x<span class="op">).</span>Elem<span class="op">()</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>p<span class="op">.</span>CanSet<span class="op">())</span> <span class="co">// true  --- p refers to the original x</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>p<span class="op">.</span>SetInt<span class="op">(</span><span class="dv">99</span><span class="op">)</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>x<span class="op">)</span>          <span class="co">// 99</span></span></code></pre></div>
+<p>There are typed setters for each kind:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>v Value<span class="op">)</span> SetBool<span class="op">(</span>x <span class="dt">bool</span><span class="op">)</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>v Value<span class="op">)</span> SetFloat<span class="op">(</span>x <span class="dt">float64</span><span class="op">)</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>v Value<span class="op">)</span> SetInt<span class="op">(</span>x <span class="dt">int64</span><span class="op">)</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>v Value<span class="op">)</span> SetString<span class="op">(</span>x <span class="dt">string</span><span class="op">)</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>v Value<span class="op">)</span> SetUint<span class="op">(</span>x <span class="dt">uint64</span><span class="op">)</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Unexported struct fields are never settable through reflection, even if you hold a pointer to the struct. <code>CanSet()</code> returns <code>false</code> for unexported fields. Attempting <code>Set()</code> on an unexported field panics. Always check <code>CanSet()</code> before writing.</p>
+</div></div>
+<h2 data-number="19.5" id="struct-field-iteration"><span class="header-section-number">19.5</span> Struct Field Iteration</h2>
+<p>  One of the most common uses of reflection is walking the fields of a struct. <code>reflect.Type</code> provides methods for this:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t Type<span class="op">)</span> NumField<span class="op">()</span> <span class="dt">int</span>                         <span class="co">// number of fields</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t Type<span class="op">)</span> Field<span class="op">(</span>i <span class="dt">int</span><span class="op">)</span> StructField               <span class="co">// field descriptor by index</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t Type<span class="op">)</span> FieldByName<span class="op">(</span>name <span class="dt">string</span><span class="op">)</span> <span class="op">(</span>StructField<span class="op">,</span> <span class="dt">bool</span><span class="op">)</span> <span class="co">// field descriptor by name</span></span></code></pre></div>
+<p>A <code>reflect.StructField</code> carries the field’s metadata:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> StructField <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    Name      <span class="dt">string</span>        <span class="co">// field name</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    Type      Type          <span class="co">// field type</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    Tag       StructTag     <span class="co">// raw struct tag string</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    Index     <span class="op">[]</span><span class="dt">int</span>         <span class="co">// index sequence for Type.FieldByIndex</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    Offset    <span class="dt">uintptr</span>       <span class="co">// byte offset within the struct</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    Anonymous <span class="dt">bool</span>          <span class="co">// true if this is an embedded field</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">// unexported fields omitted</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Here is a function that prints every exported field name, type, and value for any struct passed to it:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;reflect&quot;</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span> <span class="st">`display:&quot;title&quot;`</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span> <span class="st">`display:&quot;artist&quot;`</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>    BPM    <span class="dt">int</span>    <span class="st">`display:&quot;bpm&quot;`</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> printFields<span class="op">(</span>s <span class="dt">any</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>    v <span class="op">:=</span> reflect<span class="op">.</span>ValueOf<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>    t <span class="op">:=</span> reflect<span class="op">.</span>TypeOf<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> t<span class="op">.</span>Kind<span class="op">()</span> <span class="op">!=</span> reflect<span class="op">.</span>Struct <span class="op">{</span></span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;not a struct&quot;</span><span class="op">)</span></span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="op">:=</span> <span class="kw">range</span> t<span class="op">.</span>NumField<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a>        field <span class="op">:=</span> t<span class="op">.</span>Field<span class="op">(</span>i<span class="op">)</span></span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>        value <span class="op">:=</span> v<span class="op">.</span>Field<span class="op">(</span>i<span class="op">)</span></span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%-10s %-8s = %v</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> field<span class="op">.</span>Name<span class="op">,</span> field<span class="op">.</span>Type<span class="op">,</span> value<span class="op">)</span></span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-30"><a href="#cb12-30" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb12-31"><a href="#cb12-31" aria-hidden="true" tabindex="-1"></a>    tr <span class="op">:=</span> Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;First Class&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Jack Harlow&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">97</span><span class="op">}</span></span>
+<span id="cb12-32"><a href="#cb12-32" aria-hidden="true" tabindex="-1"></a>    printFields<span class="op">(</span>tr<span class="op">)</span></span>
+<span id="cb12-33"><a href="#cb12-33" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Output:</p>
+<pre><code>Title      string   = First Class
+Artist     string   = Jack Harlow
+BPM        int      = 97</code></pre>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> <code>for i := range t.NumField()</code> uses the Go 1.22 range-over-integer syntax, which is cleaner than <code>for i := 0; i &lt; t.NumField(); i++</code>. Both produce the same result.</p>
+</div></div>
+<h3 data-number="19.5.1" id="reflect.structfield.tag-and-custom-tag-parsing"><span class="header-section-number">19.5.1</span> <code>reflect.StructField.Tag</code> and Custom Tag Parsing</h3>
+<p>  Chapter 2 introduced struct tags as metadata for fields. Reflection is what makes custom tag parsing possible.</p>
+<p><code>reflect.StructField.Tag</code> is of type <code>reflect.StructTag</code>, a <code>string</code> alias with two methods:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>tag StructTag<span class="op">)</span> Get<span class="op">(</span>key <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span>                   <span class="co">// value for key, or &quot;&quot; if absent</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>tag StructTag<span class="op">)</span> Lookup<span class="op">(</span>key <span class="dt">string</span><span class="op">)</span> <span class="op">(</span>value <span class="dt">string</span><span class="op">,</span> ok <span class="dt">bool</span><span class="op">)</span> <span class="co">// value + presence flag</span></span></code></pre></div>
+<p>Prefer <code>Lookup</code> over <code>Get</code> when the empty string is a meaningful tag value — <code>Get</code> cannot distinguish “absent” from <code>""</code>.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    Title    <span class="dt">string</span> <span class="st">`json:&quot;title&quot;         display:&quot;Title&quot;`</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    Artist   <span class="dt">string</span> <span class="st">`json:&quot;artist&quot;        display:&quot;Artist&quot;`</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    BPM      <span class="dt">int</span>    <span class="st">`json:&quot;bpm,omitempty&quot; display:&quot;BPM&quot;`</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    internal <span class="dt">string</span> <span class="co">// unexported --- skip in generic code</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> printTagged<span class="op">(</span>s <span class="dt">any</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    t <span class="op">:=</span> reflect<span class="op">.</span>TypeOf<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> t<span class="op">.</span>Kind<span class="op">()</span> <span class="op">!=</span> reflect<span class="op">.</span>Struct <span class="op">{</span></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="op">:=</span> <span class="kw">range</span> t<span class="op">.</span>NumField<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>        field <span class="op">:=</span> t<span class="op">.</span>Field<span class="op">(</span>i<span class="op">)</span></span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="op">!</span>field<span class="op">.</span>IsExported<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>            <span class="cf">continue</span></span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>        label<span class="op">,</span> ok <span class="op">:=</span> field<span class="op">.</span>Tag<span class="op">.</span>Lookup<span class="op">(</span><span class="st">&quot;display&quot;</span><span class="op">)</span></span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="op">!</span>ok <span class="op">{</span></span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>            label <span class="op">=</span> field<span class="op">.</span>Name <span class="co">// fall back to field name</span></span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%s: %v</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> label<span class="op">,</span> reflect<span class="op">.</span>ValueOf<span class="op">(</span>s<span class="op">).</span>Field<span class="op">(</span>i<span class="op">))</span></span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p> <code>field.IsExported()</code> (added in Go 1.17) is the clean way to skip unexported fields. Before 1.17 the idiom was <code>field.PkgPath == ""</code>, which still works but is less readable.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Tag values often carry options after a comma (e.g., <code>json:"bpm,omitempty"</code>). The <code>reflect.StructTag</code> methods return the full value string including the comma and options. Use <code>strings.Cut(value, ",")</code> to separate the name from the options:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>raw<span class="op">,</span> _ <span class="op">:=</span> field<span class="op">.</span>Tag<span class="op">.</span>Lookup<span class="op">(</span><span class="st">&quot;json&quot;</span><span class="op">)</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>name<span class="op">,</span> _<span class="op">,</span> _ <span class="op">:=</span> strings<span class="op">.</span>Cut<span class="op">(</span>raw<span class="op">,</span> <span class="st">&quot;,&quot;</span><span class="op">)</span></span></code></pre></div>
+</div></div>
+<h2 data-number="19.6" id="when-to-use-reflection"><span class="header-section-number">19.6</span> When to Use Reflection</h2>
+<p> Reflection is warranted when the types involved are genuinely unknown at compile time. The two canonical cases in production Go are:</p>
+<p><strong>Serialization libraries.</strong> <code>encoding/json</code>, <code>encoding/xml</code>, and <code>encoding/gob</code> all use reflection to marshal and unmarshal arbitrary user-defined types. They read struct tags, walk fields, and convert between Go values and encoded bytes — none of which is possible without reflection, because the library authors cannot know your struct in advance.</p>
+<p><strong>Dependency injection frameworks.</strong> Frameworks like <code>google/wire</code> (compile-time code generation) and <code>uber-go/fx</code> (runtime DI) use reflection to inspect constructor function signatures, discover what types they produce and consume, and wire them together automatically.</p>
+<p>Other valid uses include:</p>
+<ul>
+<li>Test assertion libraries (<code>github.com/stretchr/testify</code>) that deep-compare arbitrary values.</li>
+<li>ORM packages that map struct fields to database columns using <code>db:"..."</code> tags.</li>
+<li>Configuration loaders that populate structs from environment variables or config files.</li>
+<li>Code generators that read struct definitions to emit boilerplate (e.g., <code>stringer</code>, <code>protoc-gen-go</code>).</li>
+</ul>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Reflection is often reached for when generics or interfaces would work just as well. If you know the set of types at compile time, a generic function or a narrow interface is faster, safer, and more readable. Reach for reflection only when the type truly cannot be known until runtime. Chapter 17 covers when generics are the right choice instead. <strong><em>[no-premature-interface]</em></strong></p>
+</div></div>
+<h2 data-number="19.7" id="performance-cost-of-reflection"><span class="header-section-number">19.7</span> Performance Cost of Reflection</h2>
+<p> Reflection is significantly slower than direct code. Every <code>TypeOf</code>, <code>ValueOf</code>, field access, and setter call goes through the runtime’s type system rather than being resolved at compile time. The costs add up quickly:</p>
+<ul>
+<li><strong>Interface boxing</strong> — passing a value as <code>any</code> to <code>ValueOf</code> may allocate.</li>
+<li><strong>No inlining</strong> — reflect calls cannot be inlined by the compiler.</li>
+<li><strong>Dynamic dispatch</strong> — field accesses are index lookups, not direct memory offsets.</li>
+<li><strong>No static type checking</strong> — type errors become runtime panics, not compile errors.</li>
+</ul>
+<p>A rough rule of thumb: reflection-based code is typically 10–100x slower than equivalent direct code. For hot paths in a service, that difference is material.</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co">// direct field read --- nanoseconds</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>title <span class="op">:=</span> track<span class="op">.</span>Title</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="co">// reflected field read --- tens to hundreds of nanoseconds</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>title <span class="op">:=</span> reflect<span class="op">.</span>ValueOf<span class="op">(</span>track<span class="op">).</span>FieldByName<span class="op">(</span><span class="st">&quot;Title&quot;</span><span class="op">).</span>String<span class="op">()</span></span></code></pre></div>
+<p><strong>Mitigation strategies:</strong></p>
+<ul>
+<li>Cache <code>reflect.Type</code> values at startup — calling <code>reflect.TypeOf</code> on the same type repeatedly re-derives the type descriptor each time; storing it in a package-level variable avoids that cost.</li>
+<li>Cache field index paths — <code>Type.FieldByName</code> does a linear scan; computing the index once and using <code>Type.Field(i)</code> on subsequent calls is faster.</li>
+<li>Consider code generation — tools like <code>easyjson</code> and <code>msgp</code> generate direct marshal/unmarshal code from struct definitions, eliminating runtime reflection entirely.</li>
+</ul>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> The standard library’s own <code>encoding/json</code> is noticeably slower than generated alternatives for the same reason. If JSON throughput matters in your service, benchmark both approaches before committing to a design. See Chapter 18 for how to write benchmarks.</p>
+</div></div>
+<h3 data-number="19.7.1" id="prefer-generics-or-interfaces"><span class="header-section-number">19.7.1</span> Prefer Generics or Interfaces</h3>
+<p>  Before reaching for <code>reflect</code>, ask yourself:</p>
+<ol type="1">
+<li><p><strong>Can an interface solve it?</strong> If the operation can be expressed as a method set, define an interface. Types opt in by implementing the methods, and the compiler enforces correctness. Return the concrete type from implementing packages rather than the interface itself, so callers can always add methods later. <strong><em>[return-concrete-types]</em></strong></p></li>
+<li><p><strong>Can a generic function solve it?</strong> If you need to handle a fixed family of types uniformly (e.g., “all ordered types”, “all slices”), a generic function (Chapter 17) works at compile time with no runtime overhead.</p></li>
+<li><p><strong>Can code generation solve it?</strong> If the types are known at compile time but the boilerplate is too tedious to write by hand, <code>//go:generate</code> with a code generator is better than runtime reflection. The generated code is explicit, fast, and debuggable.</p></li>
+</ol>
+<p>Reflection becomes the right answer when none of the above apply — when the struct definition is only available at runtime (read from a plugin, received as user input, or declared in a package your code never imports directly).</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> In Java, reflection is a common idiom even for things that could be expressed with generics or interfaces, partly because Java generics were bolted on later and have significant limitations (type erasure, no primitive type parameters). Go generics (1.18) are more capable than Java generics in several ways (no erasure, can range over type parameters), so the case for reflection is narrower in Go than it is in Java.</p>
+</div></div>
+<hr />
+<h2 data-number="19.8" id="key-points"><span class="header-section-number">19.8</span> Key Points</h2>
+<ul>
+<li>Reflection has three laws: interface -&gt; reflect object, reflect object -&gt; interface, and mutation requires settability (i.e., a pointer).</li>
+<li><code>reflect.TypeOf(x)</code> returns the <code>reflect.Type</code> describing the dynamic type of <code>x</code>; <code>reflect.ValueOf(x)</code> returns a <code>reflect.Value</code> holding its value.</li>
+<li><code>Kind()</code> returns the underlying category (<code>reflect.Struct</code>, <code>reflect.Ptr</code>, etc.); <code>Type()</code> returns the specific named type. Switch on <code>Kind</code> when writing generic reflection code.</li>
+<li><code>Elem()</code> dereferences a pointer or unwraps an interface; it panics if the kind is neither.</li>
+<li><code>CanSet()</code> must be true before calling any setter; values are settable only when obtained through a pointer.</li>
+<li>Unexported fields are never settable through reflection.</li>
+<li>Walk struct fields with <code>Type.NumField()</code> and <code>Type.Field(i)</code>; skip unexported fields with <code>StructField.IsExported()</code>.</li>
+<li><code>StructField.Tag.Lookup(key)</code> retrieves a tag value; prefer it over <code>Get</code> when the empty string is meaningful.</li>
+<li>Reflection is the right tool for serialization libraries, dependency injection, and test assertion frameworks — cases where the concrete type is genuinely unknown at compile time.</li>
+<li>Reflection is 10–100x slower than direct code; cache <code>reflect.Type</code> values and field indices, or use code generation for hot paths.</li>
+<li>Before reaching for reflection, consider: can an interface solve it? can a generic function solve it? can code generation solve it?</li>
+</ul>
+<h2 data-number="19.9" id="exercises"><span class="header-section-number">19.9</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> Both Java’s <code>java.lang.reflect</code> and Go’s <code>reflect</code> package let you inspect types and values at runtime. Name two ways they are fundamentally similar and two ways they differ. In what situation would you reach for reflection in a Go program where a Java programmer might have reached for it as well, and in what situation would a Go programmer choose generics or interfaces instead?</p></li>
+<li><p><strong>What does this print?</strong></p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;reflect&quot;</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Album <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>    Tracks <span class="dt">int</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>    a <span class="op">:=</span> Album<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Jackman&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Jack Harlow&quot;</span><span class="op">,</span> Tracks<span class="op">:</span> <span class="dv">13</span><span class="op">}</span></span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a>    t <span class="op">:=</span> reflect<span class="op">.</span>TypeOf<span class="op">(</span>a<span class="op">)</span></span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>    v <span class="op">:=</span> reflect<span class="op">.</span>ValueOf<span class="op">(</span>a<span class="op">)</span></span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="op">:=</span> <span class="kw">range</span> t<span class="op">.</span>NumField<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>        f <span class="op">:=</span> t<span class="op">.</span>Field<span class="op">(</span>i<span class="op">)</span></span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%s (%s): %v</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> f<span class="op">.</span>Name<span class="op">,</span> f<span class="op">.</span>Type<span class="op">.</span>Kind<span class="op">(),</span> v<span class="op">.</span>Field<span class="op">(</span>i<span class="op">))</span></span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> Trace through the following program step by step. What does it print?</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;reflect&quot;</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>    n <span class="op">:=</span> <span class="dv">97</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>    v <span class="op">:=</span> reflect<span class="op">.</span>ValueOf<span class="op">(</span>n<span class="op">)</span></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>v<span class="op">.</span>CanSet<span class="op">())</span></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>    p <span class="op">:=</span> reflect<span class="op">.</span>ValueOf<span class="op">(&amp;</span>n<span class="op">).</span>Elem<span class="op">()</span></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>p<span class="op">.</span>CanSet<span class="op">())</span></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>    p<span class="op">.</span>SetInt<span class="op">(</span><span class="dv">99</span><span class="op">)</span></span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>n<span class="op">)</span></span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>    s <span class="op">:=</span> <span class="st">&quot;Last Night&quot;</span></span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a>    sv <span class="op">:=</span> reflect<span class="op">.</span>ValueOf<span class="op">(&amp;</span>s<span class="op">).</span>Elem<span class="op">()</span></span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a>    sv<span class="op">.</span>SetString<span class="op">(</span><span class="st">&quot;First Class&quot;</span><span class="op">)</span></span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Where is the bug?</strong> The following function is supposed to double every <code>int</code> field in a struct. It compiles and runs without panicking, but the original struct is never modified. Why?</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;reflect&quot;</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Stats <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>    Plays <span class="dt">int</span></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>    Likes <span class="dt">int</span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> doubleInts<span class="op">(</span>s <span class="dt">any</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>    v <span class="op">:=</span> reflect<span class="op">.</span>ValueOf<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>    t <span class="op">:=</span> v<span class="op">.</span>Type<span class="op">()</span></span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="op">:=</span> <span class="kw">range</span> t<span class="op">.</span>NumField<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a>        f <span class="op">:=</span> v<span class="op">.</span>Field<span class="op">(</span>i<span class="op">)</span></span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> f<span class="op">.</span>Kind<span class="op">()</span> <span class="op">==</span> reflect<span class="op">.</span>Int <span class="op">&amp;&amp;</span> f<span class="op">.</span>CanSet<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>            f<span class="op">.</span>SetInt<span class="op">(</span>f<span class="op">.</span>Int<span class="op">()</span> <span class="op">*</span> <span class="dv">2</span><span class="op">)</span></span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb20-22"><a href="#cb20-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb20-23"><a href="#cb20-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-24"><a href="#cb20-24" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb20-25"><a href="#cb20-25" aria-hidden="true" tabindex="-1"></a>    stats <span class="op">:=</span> Stats<span class="op">{</span>Plays<span class="op">:</span> <span class="dv">500_000</span><span class="op">,</span> Likes<span class="op">:</span> <span class="dv">12_000</span><span class="op">}</span></span>
+<span id="cb20-26"><a href="#cb20-26" aria-hidden="true" tabindex="-1"></a>    doubleInts<span class="op">(</span>stats<span class="op">)</span> <span class="co">// bug is here</span></span>
+<span id="cb20-27"><a href="#cb20-27" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>stats<span class="op">)</span></span>
+<span id="cb20-28"><a href="#cb20-28" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Implement a function <code>StructToMap(s any) map[string]any</code> that uses reflection to convert any struct’s exported fields into a <code>map[string]any</code>. The map keys should come from a <code>map:"key"</code> struct tag if present, and fall back to the field name otherwise. Ignore unexported fields. Test it on a struct with at least three exported fields and one unexported field, with at least two fields having <code>map:"..."</code> tags. Print the resulting map.</p></li>
+</ol>
+
+{% endraw %}

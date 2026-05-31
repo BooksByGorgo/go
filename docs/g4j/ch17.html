@@ -1,0 +1,378 @@
+---
+layout: default
+title: "17. Generics"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 17
+---
+
+{% raw %}
+<h1 data-number="17" id="generics"><span class="header-section-number">17</span> Generics</h1>
+<p> Java programmers are no strangers to generics — you have been writing <code>List&lt;T&gt;</code> and <code>Map&lt;K,V&gt;</code> for years.  Go added generics in version 1.18, and while the surface syntax looks familiar, the semantics differ in important ways: Go uses <strong>monomorphization</strong> rather than type erasure, introduces <strong>constraints</strong> as a first-class concept, and ships a constraint system powerful enough to express both simple and nuanced type requirements. This chapter covers type parameters, constraints, the tilde syntax, the standard packages that generics unlocked (<code>slices</code>, <code>maps</code>, <code>cmp</code>, <code>iter</code>, <code>unique</code>), and — critically — when you should reach for a concrete type instead.</p>
+<h2 data-number="17.1" id="type-parameters"><span class="header-section-number">17.1</span> Type Parameters</h2>
+<p>  In Java, a generic method looks like:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">public</span> <span class="dt">static</span> <span class="op">&lt;</span>T<span class="op">,</span> U<span class="op">&gt;</span> <span class="bu">List</span><span class="op">&lt;</span>U<span class="op">&gt;</span> <span class="fu">map</span><span class="op">(</span><span class="bu">List</span><span class="op">&lt;</span>T<span class="op">&gt;</span> list<span class="op">,</span> Function<span class="op">&lt;</span>T<span class="op">,</span> U<span class="op">&gt;</span> f<span class="op">)</span> <span class="op">{</span> <span class="kw">...</span> <span class="op">}</span></span></code></pre></div>
+<p>In Go, the type parameters move to a <strong>type parameter list</strong> in square brackets immediately after the function name:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Map<span class="op">[</span>T<span class="op">,</span> U <span class="dt">any</span><span class="op">](</span>s <span class="op">[]</span>T<span class="op">,</span> f <span class="kw">func</span><span class="op">(</span>T<span class="op">)</span> U<span class="op">)</span> <span class="op">[]</span>U <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    result <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span>U<span class="op">,</span> <span class="bu">len</span><span class="op">(</span>s<span class="op">))</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i<span class="op">,</span> v <span class="op">:=</span> <span class="kw">range</span> s <span class="op">{</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>        result<span class="op">[</span>i<span class="op">]</span> <span class="op">=</span> f<span class="op">(</span>v<span class="op">)</span>  <span class="co">// call f on each element and store the result</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>[T, U any]</code> declares two type parameters. <code>any</code> is the <strong>constraint</strong> — it means “T and U may be any type whatsoever.”  At the call site, the compiler usually infers the type arguments from the arguments you pass:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>titles <span class="op">:=</span> <span class="op">[]</span><span class="dt">string</span><span class="op">{</span><span class="st">&quot;greedy&quot;</span><span class="op">,</span> <span class="st">&quot;you broke me first&quot;</span><span class="op">,</span> <span class="st">&quot;Heather&quot;</span><span class="op">,</span> <span class="st">&quot;Astronomy&quot;</span><span class="op">}</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">:=</span> Map<span class="op">(</span>titles<span class="op">,</span> <span class="kw">func</span><span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span> <span class="cf">return</span> <span class="bu">len</span><span class="op">(</span>s<span class="op">)</span> <span class="op">})</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>lengths<span class="op">)</span> <span class="co">// [6 18 7 9]</span></span></code></pre></div>
+<p>You can supply them explicitly when inference fails:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">:=</span> Map<span class="op">[</span><span class="dt">string</span><span class="op">,</span> <span class="dt">int</span><span class="op">](</span>titles<span class="op">,</span> <span class="kw">func</span><span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span> <span class="cf">return</span> <span class="bu">len</span><span class="op">(</span>s<span class="op">)</span> <span class="op">})</span></span></code></pre></div>
+<h3 data-number="17.1.1" id="generic-types"><span class="header-section-number">17.1.1</span> Generic Types</h3>
+<p> Type parameters work on types as well as functions. A generic <code>Stack</code> is a classic example:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Stack<span class="op">[</span>T <span class="dt">any</span><span class="op">]</span> <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    items <span class="op">[]</span>T</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>Stack<span class="op">[</span>T<span class="op">])</span> Push<span class="op">(</span>v T<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    s<span class="op">.</span>items <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>s<span class="op">.</span>items<span class="op">,</span> v<span class="op">)</span>  <span class="co">// append v to the top of the stack</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>s <span class="op">*</span>Stack<span class="op">[</span>T<span class="op">])</span> Pop<span class="op">()</span> <span class="op">(</span>T<span class="op">,</span> <span class="dt">bool</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">len</span><span class="op">(</span>s<span class="op">.</span>items<span class="op">)</span> <span class="op">==</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>        <span class="kw">var</span> zero T              <span class="co">// zero value of T</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> zero<span class="op">,</span> <span class="ot">false</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>    top <span class="op">:=</span> s<span class="op">.</span>items<span class="op">[</span><span class="bu">len</span><span class="op">(</span>s<span class="op">.</span>items<span class="op">)-</span><span class="dv">1</span><span class="op">]</span></span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>    s<span class="op">.</span>items <span class="op">=</span> s<span class="op">.</span>items<span class="op">[:</span><span class="bu">len</span><span class="op">(</span>s<span class="op">.</span>items<span class="op">)-</span><span class="dv">1</span><span class="op">]</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> top<span class="op">,</span> <span class="ot">true</span></span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Instantiate it with a concrete type:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> playlist Stack<span class="op">[</span><span class="dt">string</span><span class="op">]</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>playlist<span class="op">.</span>Push<span class="op">(</span><span class="st">&quot;greedy&quot;</span><span class="op">)</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>playlist<span class="op">.</span>Push<span class="op">(</span><span class="st">&quot;Heather&quot;</span><span class="op">)</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>v<span class="op">,</span> ok <span class="op">:=</span> playlist<span class="op">.</span>Pop<span class="op">()</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>v<span class="op">,</span> ok<span class="op">)</span> <span class="co">// Heather true</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Unlike Java, Go generic types are instantiated with the concrete type written at the declaration site: <code>Stack[string]</code>, not <code>new Stack&lt;&gt;()</code>. There is no diamond operator because Go does not use constructors.</p>
+</div></div>
+<h2 data-number="17.2" id="constraints"><span class="header-section-number">17.2</span> Constraints</h2>
+<p>  A <strong>constraint</strong> is an interface that limits which types may be used as a type argument. Every type parameter has exactly one constraint. If you write no constraint, you must write <code>any</code> explicitly — there is no implicit “unconstrained.”</p>
+<h3 data-number="17.2.1" id="any"><span class="header-section-number">17.2.1</span> <code>any</code></h3>
+<p> <code>any</code> is the least restrictive constraint: it permits every type. A type parameter constrained to <code>any</code> supports only the operations that every type supports — assignment and passing as a function argument. You cannot call methods on it, compare it with <code>==</code>, or use it as a map key.</p>
+<h3 data-number="17.2.2" id="comparable"><span class="header-section-number">17.2.2</span> <code>comparable</code></h3>
+<p>  <code>comparable</code> is a built-in constraint that permits any type that supports <code>==</code> and <code>!=</code>. It is the constraint required for map keys:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Contains<span class="op">[</span>T <span class="dt">comparable</span><span class="op">](</span>s <span class="op">[]</span>T<span class="op">,</span> v T<span class="op">)</span> <span class="dt">bool</span> <span class="op">{</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> elem <span class="op">:=</span> <span class="kw">range</span> s <span class="op">{</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> elem <span class="op">==</span> v <span class="op">{</span>  <span class="co">// only valid because T is comparable</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="ot">true</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ot">false</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>any</code> and <code>comparable</code> are not interchangeable. If you write <code>func NewCache[K any, V any]() map[K]V</code>, the compiler rejects it because map keys must be <code>comparable</code>. Change <code>K any</code> to <code>K comparable</code>.</p>
+</div></div>
+<h3 data-number="17.2.3" id="custom-constraint-interfaces"><span class="header-section-number">17.2.3</span> Custom Constraint Interfaces</h3>
+<p>  A constraint can be any interface.  The interface may include method requirements, type union elements, or both.</p>
+<p>A method constraint requires the type to have a specific method:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Stringer <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    String<span class="op">()</span> <span class="dt">string</span>  <span class="co">// the type must have a String() string method</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> PrintAll<span class="op">[</span>T Stringer<span class="op">](</span>items <span class="op">[]</span>T<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> item <span class="op">:=</span> <span class="kw">range</span> items <span class="op">{</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>item<span class="op">.</span>String<span class="op">())</span>  <span class="co">// safe because T is constrained to Stringer</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>A type union constraint lists the exact types permitted:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Number <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="dt">int</span> <span class="op">|</span> <span class="dt">int32</span> <span class="op">|</span> <span class="dt">int64</span> <span class="op">|</span> <span class="dt">float32</span> <span class="op">|</span> <span class="dt">float64</span>  <span class="co">// any of these five types</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Sum<span class="op">[</span>T Number<span class="op">](</span>s <span class="op">[]</span>T<span class="op">)</span> T <span class="op">{</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> total T</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> v <span class="op">:=</span> <span class="kw">range</span> s <span class="op">{</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>        total <span class="op">+=</span> v  <span class="co">// + is defined for all types in Number</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> total</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>You can combine union elements with method requirements in a single constraint interface, though this is uncommon in practice.</p>
+<h2 data-number="17.3" id="the-tilde-syntax"><span class="header-section-number">17.3</span> The Tilde Syntax</h2>
+<p>   A type union like <code>int | float64</code> is too narrow: it excludes user-defined types whose <strong>underlying type</strong> is <code>int</code> or <code>float64</code>. Consider:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> BPM <span class="dt">int</span></span></code></pre></div>
+<p><code>BPM</code> is not <code>int</code> — it is a distinct named type. A function constrained to <code>int</code> will not accept <code>BPM</code>, even though <code>BPM</code> behaves exactly like an integer.</p>
+<p>The <strong>tilde</strong> prefix <code>~T</code> means “any type whose underlying type is T”:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Numeric <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">~</span><span class="dt">int</span> <span class="op">|</span> <span class="op">~</span><span class="dt">int32</span> <span class="op">|</span> <span class="op">~</span><span class="dt">int64</span> <span class="op">|</span> <span class="op">~</span><span class="dt">float32</span> <span class="op">|</span> <span class="op">~</span><span class="dt">float64</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Max<span class="op">[</span>T Numeric<span class="op">](</span>a<span class="op">,</span> b T<span class="op">)</span> T <span class="op">{</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> a <span class="op">&gt;</span> b <span class="op">{</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> a</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> b</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Now <code>Max</code> works with <code>BPM</code> as well as <code>int</code>:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> BPM <span class="dt">int</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>a <span class="op">:=</span> BPM<span class="op">(</span><span class="dv">128</span><span class="op">)</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>b <span class="op">:=</span> BPM<span class="op">(</span><span class="dv">140</span><span class="op">)</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>Max<span class="op">(</span>a<span class="op">,</span> b<span class="op">))</span> <span class="co">// 140</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Standard library constraints always use <code>~T</code> rather than bare <code>T</code> in union elements. <code>cmp.Ordered</code> (see below) is defined with <code>~int | ~int8 | ... | ~string</code> so that user-defined types work automatically.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Java generics use <strong>type erasure</strong> — the type parameter is replaced by <code>Object</code> (or the bound) at compile time and checked only at the boundaries. At runtime, a <code>List&lt;String&gt;</code> and a <code>List&lt;Integer&gt;</code> are the same <code>List</code>. Go uses <strong>monomorphization</strong> — the compiler generates a distinct instantiation for each unique set of type arguments (or uses a shared representation for pointer-shaped types). The upshot: Go generics have no hidden boxing cost for value types like <code>int</code>, and there is no “unchecked cast” at runtime.</p>
+</div></div>
+<h2 data-number="17.4" id="comparable-vs-any-map-keys"><span class="header-section-number">17.4</span> <code>comparable</code> vs <code>any</code> — Map Keys</h2>
+<p> Map keys must be <code>comparable</code>. If you write a generic function that creates or accepts a map, the key type parameter must be constrained to <code>comparable</code>.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co">// MapFromSlice builds a map from a slice of keys and a transform function.</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> MapFromSlice<span class="op">[</span>K <span class="dt">comparable</span><span class="op">,</span> V <span class="dt">any</span><span class="op">](</span>keys <span class="op">[]</span>K<span class="op">,</span> f <span class="kw">func</span><span class="op">(</span>K<span class="op">)</span> V<span class="op">)</span> <span class="kw">map</span><span class="op">[</span>K<span class="op">]</span>V <span class="op">{</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    m <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">map</span><span class="op">[</span>K<span class="op">]</span>V<span class="op">,</span> <span class="bu">len</span><span class="op">(</span>keys<span class="op">))</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> k <span class="op">:=</span> <span class="kw">range</span> keys <span class="op">{</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>        m<span class="op">[</span>k<span class="op">]</span> <span class="op">=</span> f<span class="op">(</span>k<span class="op">)</span>  <span class="co">// build the map entry</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> m</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>songs <span class="op">:=</span> <span class="op">[]</span><span class="dt">string</span><span class="op">{</span><span class="st">&quot;greedy&quot;</span><span class="op">,</span> <span class="st">&quot;you broke me first&quot;</span><span class="op">,</span> <span class="st">&quot;Heather&quot;</span><span class="op">,</span> <span class="st">&quot;Astronomy&quot;</span><span class="op">}</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">:=</span> MapFromSlice<span class="op">(</span>songs<span class="op">,</span> <span class="kw">func</span><span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span> <span class="cf">return</span> <span class="bu">len</span><span class="op">(</span>s<span class="op">)</span> <span class="op">})</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>lengths<span class="op">[</span><span class="st">&quot;Heather&quot;</span><span class="op">])</span> <span class="co">// 7</span></span></code></pre></div>
+<p><code>any</code> is deliberately weaker than <code>comparable</code>. A <code>[]int</code> satisfies <code>any</code> but does not satisfy <code>comparable</code>. This distinction is enforced at compile time — you cannot accidentally use a non-comparable type as a map key.</p>
+<h2 data-number="17.5" id="the-slices-package-go-1.21"><span class="header-section-number">17.5</span> The <code>slices</code> Package (Go 1.21)</h2>
+<p> Chapter 7 introduced the <code>slices</code> package. Now that you understand type parameters and constraints, the signatures make sense:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Sort<span class="op">[</span>S <span class="op">~[]</span>E<span class="op">,</span> E cmp<span class="op">.</span>Ordered<span class="op">](</span>x S<span class="op">)</span>                    <span class="co">// sort x in place; E must be ordered</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> SortFunc<span class="op">[</span>S <span class="op">~[]</span>E<span class="op">,</span> E <span class="dt">any</span><span class="op">](</span>x S<span class="op">,</span> cmp <span class="kw">func</span><span class="op">(</span>a<span class="op">,</span> b E<span class="op">)</span> <span class="dt">int</span><span class="op">)</span>  <span class="co">// sort using a custom comparator</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Contains<span class="op">[</span>S <span class="op">~[]</span>E<span class="op">,</span> E <span class="dt">comparable</span><span class="op">](</span>s S<span class="op">,</span> v E<span class="op">)</span> <span class="dt">bool</span>        <span class="co">// true if v appears in s</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Index<span class="op">[</span>S <span class="op">~[]</span>E<span class="op">,</span> E <span class="dt">comparable</span><span class="op">](</span>s S<span class="op">,</span> v E<span class="op">)</span> <span class="dt">int</span>            <span class="co">// first index of v, or -1</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Compact<span class="op">[</span>S <span class="op">~[]</span>E<span class="op">,</span> E <span class="dt">comparable</span><span class="op">](</span>s S<span class="op">)</span> S                 <span class="co">// remove consecutive duplicates</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Collect<span class="op">[</span>E <span class="dt">any</span><span class="op">](</span>seq iter<span class="op">.</span>Seq<span class="op">[</span>E<span class="op">])</span> <span class="op">[]</span>E                  <span class="co">// collect an iterator into a slice</span></span></code></pre></div>
+<p><code>S ~[]E</code> uses the tilde to accept any slice type whose element is <code>E</code>, including user-defined slice types like <code>type Playlist []string</code>. <code>E cmp.Ordered</code> requires elements that support <code>&lt;</code>, <code>&gt;</code>, and <code>==</code>. <code>E comparable</code> requires only <code>==</code>.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> <code>slices.Sort</code> works without a comparator because <code>cmp.Ordered</code> guarantees the <code>&lt;</code> operator. <code>slices.SortFunc</code> works on any element type because it delegates ordering to the comparator you supply. Use <code>Sort</code> for simple value types, <code>SortFunc</code> for structs.</p>
+</div></div>
+<h2 data-number="17.6" id="the-maps-package-go-1.21"><span class="header-section-number">17.6</span> The <code>maps</code> Package (Go 1.21)</h2>
+<p> Chapter 7 introduced the <code>maps</code> package. The full signatures reveal the constraints:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Clone<span class="op">[</span>Map <span class="op">~</span><span class="kw">map</span><span class="op">[</span>K<span class="op">]</span>V<span class="op">,</span> K <span class="dt">comparable</span><span class="op">,</span> V <span class="dt">any</span><span class="op">](</span>m Map<span class="op">)</span> Map            <span class="co">// shallow copy of m</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Keys<span class="op">[</span>Map <span class="op">~</span><span class="kw">map</span><span class="op">[</span>K<span class="op">]</span>V<span class="op">,</span> K <span class="dt">comparable</span><span class="op">,</span> V <span class="dt">any</span><span class="op">](</span>m Map<span class="op">)</span> iter<span class="op">.</span>Seq<span class="op">[</span>K<span class="op">]</span>     <span class="co">// iterator over keys</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Values<span class="op">[</span>Map <span class="op">~</span><span class="kw">map</span><span class="op">[</span>K<span class="op">]</span>V<span class="op">,</span> K <span class="dt">comparable</span><span class="op">,</span> V <span class="dt">any</span><span class="op">](</span>m Map<span class="op">)</span> iter<span class="op">.</span>Seq<span class="op">[</span>V<span class="op">]</span>   <span class="co">// iterator over values</span></span></code></pre></div>
+<p><code>Map ~map[K]V</code> uses the tilde to accept any named map type, not just <code>map[K]V</code> directly. <code>K comparable</code> is required because map keys must be comparable. <code>Keys</code> and <code>Values</code> return iterators — see the <code>iter</code> section below.</p>
+<h2 data-number="17.7" id="the-cmp-package"><span class="header-section-number">17.7</span> The <code>cmp</code> Package</h2>
+<p>   Chapter 7 introduced <code>cmp.Compare</code> and <code>cmp.Ordered</code>. The <code>cmp.Ordered</code> constraint is defined as:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co">// package cmp</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Ordered <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    <span class="op">~</span><span class="dt">int</span> <span class="op">|</span> <span class="op">~</span><span class="dt">int8</span> <span class="op">|</span> <span class="op">~</span><span class="dt">int16</span> <span class="op">|</span> <span class="op">~</span><span class="dt">int32</span> <span class="op">|</span> <span class="op">~</span><span class="dt">int64</span> <span class="op">|</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>        <span class="op">~</span><span class="dt">uint</span> <span class="op">|</span> <span class="op">~</span><span class="dt">uint8</span> <span class="op">|</span> <span class="op">~</span><span class="dt">uint16</span> <span class="op">|</span> <span class="op">~</span><span class="dt">uint32</span> <span class="op">|</span> <span class="op">~</span><span class="dt">uint64</span> <span class="op">|</span> <span class="op">~</span><span class="dt">uintptr</span> <span class="op">|</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>        <span class="op">~</span><span class="dt">float32</span> <span class="op">|</span> <span class="op">~</span><span class="dt">float64</span> <span class="op">|</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>        <span class="op">~</span><span class="dt">string</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Compare<span class="op">[</span>T Ordered<span class="op">](</span>x<span class="op">,</span> y T<span class="op">)</span> <span class="dt">int</span> <span class="co">// returns -1, 0, or +1</span></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Less<span class="op">[</span>T Ordered<span class="op">](</span>x<span class="op">,</span> y T<span class="op">)</span> <span class="dt">bool</span>   <span class="co">// true if x &lt; y</span></span></code></pre></div>
+<p>Every element in <code>Ordered</code> uses <code>~</code> so that user-defined types like <code>type BPM int</code> or <code>type Title string</code> satisfy the constraint automatically.</p>
+<h2 data-number="17.8" id="the-iter-package-go-1.23"><span class="header-section-number">17.8</span> The <code>iter</code> Package (Go 1.23)</h2>
+<p>   Go 1.23 introduced the <code>iter</code> package and <strong>range-over-func</strong> — the ability to <code>range</code> over a function value rather than a slice or map.</p>
+<h3 data-number="17.8.1" id="iterator-types"><span class="header-section-number">17.8.1</span> Iterator Types</h3>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co">// package iter</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Seq<span class="op">[</span>V <span class="dt">any</span><span class="op">]</span> <span class="kw">func</span><span class="op">(</span>yield <span class="kw">func</span><span class="op">(</span>V<span class="op">)</span> <span class="dt">bool</span><span class="op">)</span>      <span class="co">// single-value iterator</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Seq2<span class="op">[</span>K<span class="op">,</span> V <span class="dt">any</span><span class="op">]</span> <span class="kw">func</span><span class="op">(</span>yield <span class="kw">func</span><span class="op">(</span>K<span class="op">,</span> V<span class="op">)</span> <span class="dt">bool</span><span class="op">)</span> <span class="co">// two-value iterator (key and value)</span></span></code></pre></div>
+<p>An iterator is just a function that accepts a <strong>yield callback</strong>. The iterator calls <code>yield(v)</code> for each element. If <code>yield</code> returns <code>false</code>, the iteration should stop — this is how <code>break</code> works inside a <code>range</code> loop over an iterator.</p>
+<h3 data-number="17.8.2" id="writing-an-iterator"><span class="header-section-number">17.8.2</span> Writing an Iterator</h3>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co">// ArtistTitles yields &quot;Title (Artist)&quot; strings for a slice of tracks.</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> ArtistTitles<span class="op">(</span>tracks <span class="op">[]</span>Track<span class="op">)</span> iter<span class="op">.</span>Seq<span class="op">[</span><span class="dt">string</span><span class="op">]</span> <span class="op">{</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="kw">func</span><span class="op">(</span>yield <span class="kw">func</span><span class="op">(</span><span class="dt">string</span><span class="op">)</span> <span class="dt">bool</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> _<span class="op">,</span> t <span class="op">:=</span> <span class="kw">range</span> tracks <span class="op">{</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> <span class="op">!</span>yield<span class="op">(</span>t<span class="op">.</span>Title <span class="op">+</span> <span class="st">&quot; (&quot;</span> <span class="op">+</span> t<span class="op">.</span>Artist <span class="op">+</span> <span class="st">&quot;)&quot;</span><span class="op">)</span> <span class="op">{</span>  <span class="co">// stop if yield returns false</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>                <span class="cf">return</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 data-number="17.8.3" id="range-over-func"><span class="header-section-number">17.8.3</span> Range Over Func</h3>
+<p> Once you have an <code>iter.Seq[V]</code> or <code>iter.Seq2[K,V]</code>, you can loop over it with <code>range</code>:</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>    tracks <span class="op">:=</span> <span class="op">[]</span>Track<span class="op">{</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;greedy&quot;</span><span class="op">,</span>           Artist<span class="op">:</span> <span class="st">&quot;Tate McRae&quot;</span><span class="op">},</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;you broke me first&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Tate McRae&quot;</span><span class="op">},</span></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Heather&quot;</span><span class="op">,</span>          Artist<span class="op">:</span> <span class="st">&quot;Conan Gray&quot;</span><span class="op">},</span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Astronomy&quot;</span><span class="op">,</span>        Artist<span class="op">:</span> <span class="st">&quot;Conan Gray&quot;</span><span class="op">},</span></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> s <span class="op">:=</span> <span class="kw">range</span> ArtistTitles<span class="op">(</span>tracks<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">// greedy (Tate McRae)</span></span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>    <span class="co">// you broke me first (Tate McRae)</span></span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Heather (Conan Gray)</span></span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Astronomy (Conan Gray)</span></span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>break</code> inside the loop causes <code>yield</code> to return <code>false</code>, which signals the iterator to stop.</p>
+<h3 data-number="17.8.4" id="iter.seq2"><span class="header-section-number">17.8.4</span> <code>iter.Seq2</code></h3>
+<p><code>iter.Seq2[K,V]</code> is for iterators that yield two values, like index and element. <code>maps.Keys</code> and <code>maps.Values</code> return <code>iter.Seq[K]</code> and <code>iter.Seq[V]</code> respectively; <code>slices.All</code> (Go 1.23) returns <code>iter.Seq2[int, E]</code> yielding index–element pairs.</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co">// package slices (Go 1.23)</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> All<span class="op">[</span>S <span class="op">~[]</span>E<span class="op">,</span> E <span class="dt">any</span><span class="op">](</span>s S<span class="op">)</span> iter<span class="op">.</span>Seq2<span class="op">[</span><span class="dt">int</span><span class="op">,</span> E<span class="op">]</span>  <span class="co">// yields (index, element) pairs</span></span></code></pre></div>
+<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i<span class="op">,</span> title <span class="op">:=</span> <span class="kw">range</span> slices<span class="op">.</span>All<span class="op">([]</span><span class="dt">string</span><span class="op">{</span><span class="st">&quot;greedy&quot;</span><span class="op">,</span> <span class="st">&quot;Heather&quot;</span><span class="op">,</span> <span class="st">&quot;Astronomy&quot;</span><span class="op">})</span> <span class="op">{</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%d: %s</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> i<span class="op">,</span> title<span class="op">)</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="co">// 0: greedy</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="co">// 1: Heather</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="co">// 2: Astronomy</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> The <code>yield</code> function is the Go equivalent of Java’s <code>Consumer&lt;T&gt;</code> in <code>Iterable.forEach</code>, but with a crucial difference: returning <code>false</code> from <code>yield</code> is how early termination (i.e., <code>break</code>) is communicated back to the iterator. Always check the return value of <code>yield</code> and return immediately when it is <code>false</code>.</p>
+</div></div>
+<h2 data-number="17.9" id="the-unique-package-go-1.23"><span class="header-section-number">17.9</span> The <code>unique</code> Package (Go 1.23)</h2>
+<p>   The <code>unique</code> package provides <strong>value interning</strong> — it canonicalizes equal values so that identical values share the same memory address. This is useful for reducing memory pressure when the same strings (or other comparable values) appear many times.</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co">// package unique</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Make<span class="op">[</span>T <span class="dt">comparable</span><span class="op">](</span>v T<span class="op">)</span> Handle<span class="op">[</span>T<span class="op">]</span>  <span class="co">// intern v; equal values return the same Handle</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Handle<span class="op">[</span>T <span class="dt">comparable</span><span class="op">]</span> <span class="kw">struct</span> <span class="op">{</span> <span class="co">/* opaque */</span> <span class="op">}</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>h Handle<span class="op">[</span>T<span class="op">])</span> Value<span class="op">()</span> T  <span class="co">// retrieve the interned value</span></span></code></pre></div>
+<p>Two <code>Handle</code> values are equal (via <code>==</code>) if and only if their underlying values are equal. This means handles can be used as map keys to efficiently deduplicate values:</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;unique&quot;</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>    a <span class="op">:=</span> unique<span class="op">.</span>Make<span class="op">(</span><span class="st">&quot;Conan Gray&quot;</span><span class="op">)</span></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>    b <span class="op">:=</span> unique<span class="op">.</span>Make<span class="op">(</span><span class="st">&quot;Conan Gray&quot;</span><span class="op">)</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>    c <span class="op">:=</span> unique<span class="op">.</span>Make<span class="op">(</span><span class="st">&quot;Tate McRae&quot;</span><span class="op">)</span></span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>a <span class="op">==</span> b<span class="op">)</span> <span class="co">// true  --- same underlying string</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>a <span class="op">==</span> c<span class="op">)</span> <span class="co">// false --- different strings</span></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>a<span class="op">.</span>Value<span class="op">())</span> <span class="co">// Conan Gray</span></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> <code>unique</code> is particularly useful for reducing allocations when a program repeatedly interns the same short strings (e.g., artist names or tag values from a high-volume stream). Handles are pointer-sized and comparable, so they can serve as efficient map keys in place of full string values.</p>
+</div></div>
+<h2 data-number="17.10" id="generic-type-aliases-go-1.24"><span class="header-section-number">17.10</span> Generic Type Aliases (Go 1.24)</h2>
+<p>  Go 1.24 added support for <strong>generic type aliases</strong>. Before 1.24, a type alias could not have its own type parameters. Now it can:</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co">// A Pair is an alias for a two-element struct.</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Pair<span class="op">[</span>A<span class="op">,</span> B <span class="dt">any</span><span class="op">]</span> <span class="op">=</span> <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    First  A</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    Second B</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a><span class="co">// A StringMap is an alias for a map with string keys.</span></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> StringMap<span class="op">[</span>V <span class="dt">any</span><span class="op">]</span> <span class="op">=</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span>V</span></code></pre></div>
+<p>Generic type aliases are useful when you want a shorter or domain-specific name for a parameterized type from another package:</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Result<span class="op">[</span>T <span class="dt">any</span><span class="op">]</span> <span class="op">=</span> <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>    Value T</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    Err   <span class="dt">error</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> A generic type alias uses <code>=</code> in the definition, just like a non-generic alias. Without <code>=</code> you are defining a new named type, not an alias — the difference matters for method sets and assignability.</p>
+</div></div>
+<h2 data-number="17.11" id="when-not-to-use-generics"><span class="header-section-number">17.11</span> When NOT to Use Generics</h2>
+<p> Generics add expressive power, but they also add complexity. The Go team’s guidance, reinforced by experience with the 1.18 release, is to prefer concrete types unless you genuinely need the abstraction.</p>
+<p><strong>Use generics when:</strong></p>
+<ul>
+<li>You are writing a utility function that operates uniformly on multiple types with a shared structure (e.g., <code>Map</code>, <code>Filter</code>, <code>Reduce</code> over slices).</li>
+<li>You are building a container type (<code>Stack[T]</code>, <code>Queue[T]</code>) that does not care what it holds.</li>
+<li>You are writing library code that needs to work across a wide range of user-defined types.</li>
+</ul>
+<p><strong>Do not use generics when:</strong></p>
+<ul>
+<li>The function only ever needs one concrete type. Write <code>func Sum(s []int) int</code>, not <code>func Sum[T ~int](s []T) T</code>.</li>
+<li>An <code>interface{}</code> / <code>any</code> parameter is simpler and the type is checked at runtime anyway (e.g., encoding libraries).</li>
+<li>The constraint is so complex that callers struggle to satisfy it.</li>
+<li>You are chasing “zero duplication” in application code where two concrete implementations are clearer than one generic one.</li>
+</ul>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> A common mistake when learning Go generics is over-constraining type parameters. If your function only calls <code>String()</code> on <code>T</code>, constrain <code>T</code> to <code>fmt.Stringer</code>, not to a union of every concrete type you think callers might use. Narrow constraints keep the function flexible; wide unions tie it to a fixed list.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Java generics are primarily a <strong>type safety</strong> mechanism — they prevent <code>ClassCastException</code> at runtime. Go generics serve the additional role of enabling <strong>static dispatch</strong>: the compiler can inline and optimize generic code in ways that <code>any</code> + type assertions cannot. But if you do not need the optimization and the types are few, a simple <code>interface</code> with a method set is often more idiomatic Go than a type-parameterized function.</p>
+</div></div>
+<h2 data-number="17.12" id="key-points"><span class="header-section-number">17.12</span> Key Points</h2>
+<ul>
+<li>Type parameters are declared in square brackets after the function or type name: <code>func Foo[T any](...) ...</code>.</li>
+<li>Every type parameter requires a constraint; <code>any</code> permits all types, <code>comparable</code> permits types that support <code>==</code>.</li>
+<li>Constraint interfaces may contain method requirements, type union elements (<code>int | string</code>), or both.</li>
+<li>The tilde prefix <code>~T</code> means “any type whose underlying type is T” — essential for user-defined types like <code>type BPM int</code>.</li>
+<li>Map key type parameters must be constrained to <code>comparable</code>, not <code>any</code>.</li>
+<li>Go uses <strong>monomorphization</strong> (concrete code per instantiation), not type erasure; value types like <code>int</code> are never boxed.</li>
+<li>The <code>slices</code>, <code>maps</code>, and <code>cmp</code> packages (Go 1.21) are the standard library’s first-class use of generics; their <code>~T</code> constraints accept user-defined slice and map types.</li>
+<li><code>iter.Seq[V]</code> and <code>iter.Seq2[K,V]</code> (Go 1.23) are the iterator types; write an iterator by returning a function that calls a <code>yield</code> callback and checks its return value.</li>
+<li><code>unique.Make[T]</code> (Go 1.23) interns comparable values; equal values share one canonical <code>Handle</code>.</li>
+<li>Generic type aliases (<code>type Alias[T any] = OtherType[T]</code>) are supported from Go 1.24.</li>
+<li>Prefer concrete types and interfaces over generics in application code; reach for generics when writing containers or utilities that must work uniformly across many types.</li>
+</ul>
+<h2 data-number="17.13" id="exercises"><span class="header-section-number">17.13</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> Java generics use <strong>type erasure</strong>: at runtime, <code>List&lt;String&gt;</code> and <code>List&lt;Integer&gt;</code> are both just <code>List</code>. Generic type information is only available at compile time. Go generics use <strong>monomorphization</strong> (or a shared pointer-shaped representation): the compiler may generate distinct code for each instantiation. Describe one concrete advantage and one concrete disadvantage of each approach. How does type erasure affect what you can do with a Java generic type at runtime (e.g., <code>instanceof List&lt;String&gt;</code>)? Does Go have the same limitation?</p></li>
+<li><p><strong>What does this print?</strong></p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Filter<span class="op">[</span>T <span class="dt">any</span><span class="op">](</span>s <span class="op">[]</span>T<span class="op">,</span> keep <span class="kw">func</span><span class="op">(</span>T<span class="op">)</span> <span class="dt">bool</span><span class="op">)</span> <span class="op">[]</span>T <span class="op">{</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> out <span class="op">[]</span>T</span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> v <span class="op">:=</span> <span class="kw">range</span> s <span class="op">{</span></span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> keep<span class="op">(</span>v<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>            out <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>out<span class="op">,</span> v<span class="op">)</span></span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> out</span>
+<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> BPM <span class="dt">int</span></span>
+<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a>    beats <span class="op">:=</span> <span class="op">[]</span>BPM<span class="op">{</span><span class="dv">72</span><span class="op">,</span> <span class="dv">128</span><span class="op">,</span> <span class="dv">96</span><span class="op">,</span> <span class="dv">140</span><span class="op">,</span> <span class="dv">80</span><span class="op">}</span></span>
+<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a>    fast <span class="op">:=</span> Filter<span class="op">(</span>beats<span class="op">,</span> <span class="kw">func</span><span class="op">(</span>b BPM<span class="op">)</span> <span class="dt">bool</span> <span class="op">{</span> <span class="cf">return</span> b <span class="op">&gt;=</span> <span class="dv">120</span> <span class="op">})</span></span>
+<span id="cb27-20"><a href="#cb27-20" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>fast<span class="op">)</span></span>
+<span id="cb27-21"><a href="#cb27-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-22"><a href="#cb27-22" aria-hidden="true" tabindex="-1"></a>    words <span class="op">:=</span> <span class="op">[]</span><span class="dt">string</span><span class="op">{</span><span class="st">&quot;greedy&quot;</span><span class="op">,</span> <span class="st">&quot;Heather&quot;</span><span class="op">,</span> <span class="st">&quot;Astronomy&quot;</span><span class="op">,</span> <span class="st">&quot;you broke me first&quot;</span><span class="op">}</span></span>
+<span id="cb27-23"><a href="#cb27-23" aria-hidden="true" tabindex="-1"></a>    long <span class="op">:=</span> Filter<span class="op">(</span>words<span class="op">,</span> <span class="kw">func</span><span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">bool</span> <span class="op">{</span> <span class="cf">return</span> <span class="bu">len</span><span class="op">(</span>s<span class="op">)</span> <span class="op">&gt;</span> <span class="dv">7</span> <span class="op">})</span></span>
+<span id="cb27-24"><a href="#cb27-24" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>long<span class="op">)</span></span>
+<span id="cb27-25"><a href="#cb27-25" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> The function below has the signature <code>func Reduce[T, U any](s []T, init U, f func(U, T) U) U</code>. Trace the execution of <code>Reduce([]int{1, 2, 3, 4}, 0, func(acc, v int) int { return acc + v })</code>. What is the concrete type bound to <code>T</code>? What is the concrete type bound to <code>U</code>? What value does the function return, and what are the intermediate values of <code>acc</code> after each call to <code>f</code>?</p></li>
+<li><p><strong>Where is the bug?</strong></p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Playlist <span class="op">[]</span><span class="dt">string</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Dedupe<span class="op">[</span>T <span class="dt">any</span><span class="op">](</span>s <span class="op">[]</span>T<span class="op">)</span> <span class="op">[]</span>T <span class="op">{</span></span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>    seen <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">map</span><span class="op">[</span>T<span class="op">]</span><span class="dt">bool</span><span class="op">)</span></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> out <span class="op">[]</span>T</span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> v <span class="op">:=</span> <span class="kw">range</span> s <span class="op">{</span></span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="op">!</span>seen<span class="op">[</span>v<span class="op">]</span> <span class="op">{</span></span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>            seen<span class="op">[</span>v<span class="op">]</span> <span class="op">=</span> <span class="ot">true</span></span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a>            out <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>out<span class="op">,</span> v<span class="op">)</span></span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> out</span>
+<span id="cb28-17"><a href="#cb28-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb28-18"><a href="#cb28-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-19"><a href="#cb28-19" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb28-20"><a href="#cb28-20" aria-hidden="true" tabindex="-1"></a>    p <span class="op">:=</span> Playlist<span class="op">{</span><span class="st">&quot;greedy&quot;</span><span class="op">,</span> <span class="st">&quot;Heather&quot;</span><span class="op">,</span> <span class="st">&quot;greedy&quot;</span><span class="op">,</span> <span class="st">&quot;Astronomy&quot;</span><span class="op">,</span> <span class="st">&quot;Heather&quot;</span><span class="op">}</span></span>
+<span id="cb28-21"><a href="#cb28-21" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>Dedupe<span class="op">(</span>p<span class="op">))</span></span>
+<span id="cb28-22"><a href="#cb28-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Implement a generic <code>Set[T comparable]</code> type backed by a <code>map[T]struct{}</code>. It should support three methods: <code>Add(v T)</code> (add an element), <code>Contains(v T) bool</code> (membership test), and <code>Values() []T</code> (return all elements as a slice in any order). In <code>main</code>, create a <code>Set[string]</code>, add the four song titles “greedy”, “you broke me first”, “Heather”, and “Astronomy”, add “Heather” a second time, and print the length of the set and whether it contains “Heather” and “Maniac”.</p></li>
+</ol>
+
+{% endraw %}

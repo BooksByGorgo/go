@@ -1,0 +1,268 @@
+---
+layout: default
+title: "Appendix B: Tooling"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 101
+---
+
+{% raw %}
+<h1 id="tooling">Tooling</h1>
+<p> Go ships with an unusually complete set of first-party tools, and the ecosystem adds a few more that every Go developer uses daily. This appendix is a quick reference for all of them.</p>
+<h2 id="gofmt-and-goimports">gofmt and goimports</h2>
+<p>  Go formatting is not a style guide suggestion — it is enforced. <code>gofmt</code> is the official formatter, and idiomatic Go code is always <code>gofmt</code>-clean. There is no equivalent debate in the Go community about brace placement or indentation because <code>gofmt</code> makes every decision for you.</p>
+<p>The Java world has tools like Checkstyle and Google Java Format, but they are optional and configurable. <code>gofmt</code> has almost no configuration on purpose: one canonical style for all Go code everywhere.</p>
+<p>Run the formatter in place:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">gofmt</span> <span class="at">-w</span> .          <span class="co"># rewrite all .go files under the current directory</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">gofmt</span> <span class="at">-l</span> .          <span class="co"># list files that differ from the canonical format</span></span></code></pre></div>
+<p><code>goimports</code> extends <code>gofmt</code> by also adding missing imports and removing unused ones. It is a strict superset of <code>gofmt</code> and is preferred in editor integrations.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">goimports</span> <span class="at">-w</span> .      <span class="co"># format and fix imports in place</span></span></code></pre></div>
+<p>Install it once:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> install golang.org/x/tools/cmd/goimports@latest</span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Configure your editor to run <code>goimports -w</code> on every save. In VS Code this is the default when the Go extension is installed. In IntelliJ IDEA with the Go plugin, enable <strong>Reformat code on save</strong> and set the formatter to <code>goimports</code>. You should never need to run either tool manually once your editor is configured.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Submitting un-formatted code in a Go project is a red flag. Most Go CI pipelines run <code>gofmt -l .</code> and fail the build if any file differs. Don’t rely on reviewers to catch it.</p>
+</div></div>
+<h2 id="go-vet">go vet</h2>
+<p> <code>go vet</code> is a static analysis tool that catches mistakes the compiler deliberately ignores. The compiler only rejects code that is syntactically or type-invalid; <code>go vet</code> catches things that compile fine but are almost certainly bugs.</p>
+<p>Java programmers will recognize this role from SpotBugs or ErrorProne, but <code>go vet</code> is built in and requires no configuration.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> vet ./...        <span class="co"># vet all packages in the module</span></span></code></pre></div>
+<p>Common mistakes <code>go vet</code> catches:</p>
+<ul>
+<li><code>Printf</code>-family format string mismatches (<code>fmt.Printf("%d", "hello")</code>)</li>
+<li>Passing a mutex by value (copying a <code>sync.Mutex</code> breaks its invariants)</li>
+<li>Unreachable code after <code>return</code></li>
+<li>Incorrect use of <code>sync/atomic</code> on non-aligned types</li>
+<li>Calling <code>t.Fatal</code> or <code>t.Error</code> from a goroutine inside a test</li>
+</ul>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Run <code>go vet ./...</code> as part of your normal build step, not just on CI. It is fast enough that there is no reason to skip it locally. Many Makefiles include a <code>vet</code> target that runs before tests.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> <code>go vet</code> is not a linter. It reports only definite bugs or misuses, not style violations or suspicious patterns. For broader coverage, use <code>golangci-lint</code> (see below).</p>
+</div></div>
+<h2 id="golangci-lint">golangci-lint</h2>
+<p>  <code>golangci-lint</code> is the standard linter aggregator for Go. It runs dozens of individual linters in parallel, merges their output, and is fast enough to use in CI. The closest Java equivalent is a combination of Checkstyle, SpotBugs, PMD, and ErrorProne — all configured in one place.</p>
+<p>Install it:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># macOS / Linux via the official installer (preferred)</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ex">curl</span> <span class="at">-sSfL</span> https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh <span class="kw">|</span> <span class="fu">sh</span> <span class="at">-s</span> <span class="at">--</span> <span class="at">-b</span> <span class="va">$(</span><span class="ex">go</span> env GOPATH<span class="va">)</span>/bin</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="co"># or via go install (slower, but always available)</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> install github.com/golangci/golangci-lint/cmd/golangci-lint@latest</span></code></pre></div>
+<p>Run it:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">golangci-lint</span> run ./...             <span class="co"># run all enabled linters</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="ex">golangci-lint</span> run <span class="at">--fix</span> ./...       <span class="co"># auto-fix what can be auto-fixed</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="ex">golangci-lint</span> linters               <span class="co"># list all available linters and their status</span></span></code></pre></div>
+<h3 id="configuration">Configuration</h3>
+<p>  Configuration lives in <code>.golangci.yml</code> at the module root. A minimal starting config:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode yaml"><code class="sourceCode yaml"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">linters</span><span class="kw">:</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">enable</span><span class="kw">:</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> govet</span><span class="co">        # go vet findings</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> errcheck</span><span class="co">     # unchecked errors</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> staticcheck</span><span class="co">  # advanced static analysis</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> gosimple</span><span class="co">     # simplification suggestions</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> ineffassign</span><span class="co">  # assignments that are never read</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="kw">-</span><span class="at"> unused</span><span class="co">       # unused code</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="fu">linters-settings</span><span class="kw">:</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">govet</span><span class="kw">:</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="at">    </span><span class="fu">enable-all</span><span class="kw">:</span><span class="at"> </span><span class="ch">true</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a><span class="fu">issues</span><span class="kw">:</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a><span class="at">  </span><span class="fu">exclude-use-default</span><span class="kw">:</span><span class="at"> </span><span class="ch">false</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Start with a small, agreed-upon set of linters and expand over time. Enabling every linter at once on an existing codebase produces a wall of noise that discourages use. The linters <code>govet</code>, <code>errcheck</code>, <code>staticcheck</code>, and <code>unused</code> are a solid first set.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Do not install <code>golangci-lint</code> with <code>go install</code> in CI. The resulting binary depends on which Go version is in the environment, and linter behavior can change between releases. Use the pinned version from the official install script or a pinned Docker image instead.</p>
+</div></div>
+<h2 id="go-doc-and-godoc">go doc and godoc</h2>
+<p>   Go uses plain comments immediately above declarations as documentation — no annotation syntax, no XML tags. The Java equivalent is Javadoc; the Go equivalent is much simpler.</p>
+<p>A documented function looks like this:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Greet returns a greeting for the named person.</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="co">// If name is empty, it returns a generic greeting.</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Greet<span class="op">(</span>name <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> name <span class="op">==</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">&quot;Hello, stranger.&quot;</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="st">&quot;Hello, &quot;</span> <span class="op">+</span> name <span class="op">+</span> <span class="st">&quot;.&quot;</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The <code>go doc</code> command reads these comments from source and displays them in the terminal:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> doc fmt                      <span class="co"># show package-level docs for fmt</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> doc fmt.Println              <span class="co"># show docs for a specific function</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> doc <span class="at">-all</span> fmt                 <span class="co"># show all exported names and their docs</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> doc <span class="at">-src</span> fmt.Println         <span class="co"># show the source of the function</span></span></code></pre></div>
+<p><code>godoc</code> starts a local web server that serves documentation for all installed packages in the same HTML format as pkg.go.dev:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="ex">godoc</span> <span class="at">-http</span><span class="op">=</span>:6060               <span class="co"># serve docs at http://localhost:6060</span></span></code></pre></div>
+<p>Install <code>godoc</code> if it is not already present:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> install golang.org/x/tools/cmd/godoc@latest</span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Write doc comments for every exported name. <code>golangci-lint</code> includes the <code>godot</code> linter, which enforces that doc comments end with a period. Treat a missing doc comment on an exported symbol the same way you would treat a missing Javadoc block.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Unlike Javadoc, Go doc comments are plain text — no HTML, no <code>@param</code>, no <code>@return</code> tags. Since Go 1.19, the <code>go doc</code> format supports a lightweight markup (lists, code fences, links) but it is still far simpler than Javadoc.</p>
+</div></div>
+<h2 id="gopls">gopls</h2>
+<p>   <code>gopls</code> (pronounced “go please”) is the official Go language server. It implements the Language Server Protocol (LSP), the same protocol that powers Java support in VS Code via the Eclipse JDT Language Server and in IntelliJ via its built-in engine. Any editor that speaks LSP — VS Code, Neovim, Emacs, Helix, and others — can use <code>gopls</code> for Go support.</p>
+<p><code>gopls</code> provides:</p>
+<ul>
+<li>Code completion</li>
+<li>Go-to-definition and find-references</li>
+<li>Inline type information and documentation</li>
+<li>Rename refactoring</li>
+<li>Auto-import via <code>goimports</code></li>
+<li>Real-time <code>go vet</code> and some <code>staticcheck</code> diagnostics</li>
+<li>Inlay hints for parameter names and return types</li>
+</ul>
+<p>You rarely invoke <code>gopls</code> directly; your editor or its Go plugin manages it. Install or update it:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> install golang.org/x/tools/gopls@latest</span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Keep <code>gopls</code> updated. It improves rapidly and newer versions understand newer Go language features. Running an old <code>gopls</code> against a module that uses a new Go version can produce confusing false errors.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> If <code>gopls</code> is slow or consuming too much memory on a large module, check that your <code>GOPATH</code> module cache is not inside a Dropbox or similar sync folder. File-watcher conflicts with sync tools are a common source of <code>gopls</code> instability.</p>
+</div></div>
+<h2 id="delve">Delve</h2>
+<p>  Delve is the standard debugger for Go. The Java equivalent is <code>jdb</code> on the command line, or the debugger built into IntelliJ IDEA and Eclipse. Delve understands goroutines, deferred functions, and Go’s calling conventions — things that a generic C debugger like GDB cannot handle correctly.</p>
+<p>Install Delve:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> install github.com/go-delve/delve/cmd/dlv@latest</span></code></pre></div>
+<h3 id="key-commands">Key Commands</h3>
+<p> Start a debug session for a main package:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="ex">dlv</span> debug ./cmd/myapp              <span class="co"># compile with debug info and attach</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="ex">dlv</span> debug ./cmd/myapp <span class="at">--</span> <span class="at">--port</span> 8080  <span class="co"># pass flags to the program after --</span></span></code></pre></div>
+<p>Debug tests in a package:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="ex">dlv</span> test ./pkg/mypackage           <span class="co"># debug test binary</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="ex">dlv</span> test ./pkg/mypackage <span class="at">--</span> <span class="at">-run</span> TestFoo  <span class="co"># run only TestFoo under the debugger</span></span></code></pre></div>
+<p>Attach to an already-running process:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="ex">dlv</span> attach <span class="op">&lt;</span>pid<span class="op">&gt;</span>                   <span class="co"># attach to a running process by PID</span></span></code></pre></div>
+<p>Inside a Delve session the most useful commands are:</p>
+<pre><code>break main.main       # set a breakpoint at a function
+break myfile.go:42    # set a breakpoint at a file and line
+continue              # run until the next breakpoint
+next                  # step over the current line
+step                  # step into the current call
+stepout               # step out of the current function
+print varname         # print a variable
+locals                # print all local variables
+goroutines            # list all goroutines
+goroutine 3           # switch to goroutine 3
+stack                 # print the current call stack</code></pre>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> In VS Code with the Go extension, the <strong>Run and Debug</strong> panel uses Delve under the hood. You get full GUI debugging — breakpoints, watch expressions, call stack, goroutine list — without leaving the editor. IntelliJ IDEA’s Go plugin also integrates Delve. For day-to-day work you rarely need the <code>dlv</code> CLI directly.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> <code>go build</code> without flags strips debug information to reduce binary size. Delve re-adds it automatically when you use <code>dlv debug</code>, but if you attach to a production binary built with <code>-ldflags="-s -w"</code> you will have no symbols. Keep an unstripped build around when you need to debug a production issue.</p>
+</div></div>
+<h3 id="goroutine-inspection">Goroutine Inspection</h3>
+<p> One of Delve’s most useful capabilities over <code>jdb</code> is first-class goroutine support. The <code>goroutines</code> command lists every live goroutine with its current state and top-of-stack location. The <code>goroutine &lt;id&gt;</code> command switches your debugging context to that goroutine, and <code>stack</code> then shows its full call stack. This makes diagnosing deadlocks and goroutine leaks far easier than thread dumps in Java.</p>
+<h2 id="go-tool-compile--gcflags-m">go tool compile -gcflags=-m</h2>
+<p>   Every Go value is allocated either on the stack or on the heap. Stack allocation is free; heap allocation requires the garbage collector to eventually reclaim it. The compiler performs <em>escape analysis</em> to decide where each value lives: if a value’s address outlives the function that created it, the value <em>escapes to the heap</em>.</p>
+<p>You can see these decisions:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> build <span class="at">-gcflags</span><span class="op">=</span><span class="st">&#39;-m&#39;</span> ./...              <span class="co"># print escape analysis decisions</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> build <span class="at">-gcflags</span><span class="op">=</span><span class="st">&#39;-m=2&#39;</span> ./...            <span class="co"># more verbose; show the reason for each decision</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> build <span class="at">-gcflags</span><span class="op">=</span><span class="st">&#39;-m -l&#39;</span> ./...           <span class="co"># disable inlining, then show escape analysis</span></span></code></pre></div>
+<p>Sample output for a small function:</p>
+<pre><code>./main.go:12:6: can inline greet
+./main.go:18:12: greet escapes to heap
+./main.go:22:13: moved to heap: result</code></pre>
+<p>Java programmers do not usually think about stack vs. heap allocation explicitly because the JVM decides everything. In Go the distinction matters for performance-sensitive code: a value that escapes forces a heap allocation and adds GC pressure.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Do not prematurely optimize by trying to prevent all escapes. Run <code>-gcflags=-m</code> only when a profiler shows that allocations are a bottleneck, then look at the output to understand why specific values escape and whether anything can be restructured to avoid it.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Passing a pointer to a function does not automatically cause the pointee to escape. The compiler performs interprocedural analysis. If it can prove the pointer does not outlive the call, the value stays on the stack. This is why small structs passed by pointer in tight loops often don’t show up as heap allocations.</p>
+</div></div>
+<h2 id="summary">Summary</h2>
+<p> The table below maps each Go tool to its closest Java equivalent.</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Go Tool</th>
+<th>Purpose</th>
+<th>Java Equivalent</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gofmt</code></td>
+<td>Canonical code formatter</td>
+<td>Google Java Format, <code>prettier</code></td>
+</tr>
+<tr>
+<td><code>goimports</code></td>
+<td>Format + manage imports</td>
+<td>IntelliJ optimize imports, <code>google-java-format</code></td>
+</tr>
+<tr>
+<td><code>go vet</code></td>
+<td>Built-in static analysis</td>
+<td>SpotBugs, ErrorProne</td>
+</tr>
+<tr>
+<td><code>golangci-lint</code></td>
+<td>Linter aggregator</td>
+<td>Checkstyle + SpotBugs + PMD combined</td>
+</tr>
+<tr>
+<td><code>go doc</code></td>
+<td>Terminal doc viewer</td>
+<td><code>javadoc</code> CLI output</td>
+</tr>
+<tr>
+<td><code>godoc</code></td>
+<td>Local documentation server</td>
+<td><code>javadoc</code> HTML output, pkg.go.dev</td>
+</tr>
+<tr>
+<td><code>gopls</code></td>
+<td>LSP language server</td>
+<td>Eclipse JDT LS, IntelliJ built-in engine</td>
+</tr>
+<tr>
+<td><code>dlv</code> (Delve)</td>
+<td>Debugger with goroutine support</td>
+<td><code>jdb</code>, IntelliJ / Eclipse debugger</td>
+</tr>
+<tr>
+<td><code>go build -gcflags=-m</code></td>
+<td>Escape analysis output</td>
+<td>JVM <code>-XX:+PrintEscapeAnalysis</code> (JIT only)</td>
+</tr>
+</tbody>
+</table>
+
+{% endraw %}

@@ -1,344 +1,554 @@
 ---
 layout: default
-title: "6. Pointers"
+title: "6. Objects using Methods and Embedding"
 parent: "Gorgo Go for Java Programmers"
 nav_order: 6
 ---
 
 {% raw %}
-<h1 data-number="6" id="pointers"><span class="header-section-number">6</span> Pointers</h1>
-<p> If you have written C or C++ you already know what pointers are and why they are dangerous. If you have written only Java, you have been using pointers all along — Java just never let you see them. This chapter pulls back the curtain, shows you exactly what Go’s pointer syntax means, explains what Go deliberately leaves out (arithmetic), and teaches you when you must reach for a pointer instead of a plain value. By the end you will understand why some functions need a <code>*int</code> parameter, why some methods need a <code>*T</code> receiver, and why the Go compiler — not you — decides whether a variable lives on the stack or the heap.</p>
-<h2 data-number="6.1" id="and-address-of-and-dereference"><span class="header-section-number">6.1</span> <code>&amp;</code> and <code>*</code> — Address-Of and Dereference</h2>
-<p>   Two operators are all you need to work with Go pointers.</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="op">&amp;</span>expr   <span class="co">// address-of: produces a pointer to expr</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="op">*</span>pExpr  <span class="co">// dereference: follows the pointer to reach the value</span></span></code></pre></div>
-<p>A <strong>pointer type</strong> names what the pointer points to, with a <code>*</code> prefix:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> p <span class="op">*</span><span class="dt">int</span>      <span class="co">// p is a pointer to int; its zero value is nil</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> s <span class="op">*</span><span class="dt">string</span>   <span class="co">// s is a pointer to string; also nil</span></span></code></pre></div>
-<p>Here is the whole idea in one small program:</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<h1 data-number="6" id="objects-using-methods-and-embedding"><span class="header-section-number">6</span> Objects using Methods and Embedding</h1>
+<p>  Java bundles data, behavior, and code reuse together in a single class construct. Go separates them into three distinct mechanisms: structs hold data, methods attach behavior to structs, and embedding provides composition-based code reuse. This chapter covers all three, explains how to write constructors and handle resource cleanup without the language features Java provides for those tasks, and shows why Go’s “no inheritance” stance is a strength rather than a limitation.</p>
+<h2 data-number="6.1" id="receivers-and-methods"><span class="header-section-number">6.1</span> Receivers and Methods</h2>
+<p>  </p>
+<p>Go has methods that correspond to structs like Java, but they are declared very differently. Consider the following class:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> <span class="bu">Point</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="dt">int</span> x<span class="op">;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">int</span> y<span class="op">;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">void</span> <span class="fu">scale</span><span class="op">(</span><span class="dt">int</span> factor<span class="op">)</span> <span class="op">{</span> x <span class="op">*=</span> factor<span class="op">;</span> y <span class="op">*=</span> factor<span class="op">;</span> <span class="op">}</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>In Java you define the member variables of a class in the same place you define all the methods of a class. Go does it differently. You define the member variables with <code>struct</code>, and the methods are declare later to operate on that structure using <em>Receivers</em> that have the following forms:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t T<span class="op">)</span> MethodName<span class="op">(</span>params<span class="op">)</span> returnType    <span class="co">// value receiver --- gets a copy of T</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t <span class="op">*</span>T<span class="op">)</span> MethodName<span class="op">(</span>params<span class="op">)</span> returnType   <span class="co">// pointer receiver --- gets a pointer to T</span></span></code></pre></div>
+<p>Method declarations look just like normal function declarations except for the receiver variables, shown as <code>t</code> in the above examples. These receiver variables act like the <code>this</code> pointer in Java with two big differences. First you can pick the name. Go best practices say that it should be a one or two letter abbreviation of the type name. <strong><em>[receiver-name-abbreviation]</em></strong> Second, a receiver can act on a pointer to an object – like <code>this</code> in Java — or it can act a a copy of the object. The former is called a pointer receiver, the latter a value receiver.</p>
+<p>Using <code>Point</code> again as a minimal example:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Point <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    X<span class="op">,</span> Y <span class="dt">int</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
 <span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    x <span class="op">:=</span> <span class="dv">42</span></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    p <span class="op">:=</span> <span class="op">&amp;</span>x          <span class="co">// p holds the address of x</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>p<span class="op">)</span>   <span class="co">// something like 0xc0000b4008</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(*</span>p<span class="op">)</span>  <span class="co">// 42 --- dereference to get the value</span></span>
-<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>p <span class="op">=</span> <span class="dv">99</span>          <span class="co">// write through the pointer</span></span>
-<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>x<span class="op">)</span>   <span class="co">// 99 --- x changed because *p and x are the same memory</span></span>
-<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p> The zero value of any pointer type is <code>nil</code>. Dereferencing a <code>nil</code> pointer causes a runtime panic — the same kind of <code>NullPointerException</code> you know from Java, just with a different name.</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> p <span class="op">*</span><span class="dt">int</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>p<span class="op">)</span>  <span class="co">// &lt;nil&gt;</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(*</span>p<span class="op">)</span> <span class="co">// panic: runtime error: invalid memory address or nil pointer dereference</span></span></code></pre></div>
-<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
-<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
-<div style="flex: 1; min-width: 0;">
-<p><strong>Wut:</strong> In Java, every object variable is secretly a reference (pointer) to heap memory, but the language provides no syntax to get or store the raw address. In Go, pointers are explicit: you use <code>&amp;</code> to take an address and <code>*</code> to follow it. The Java “hidden pointer” and the Go pointer are the same idea — Go just shows you the machinery.</p>
-</div></div>
-<h3 data-number="6.1.1" id="pointers-to-basic-types"><span class="header-section-number">6.1.1</span> Pointers to Basic Types</h3>
-<p> Java programmers sometimes wonder why you would ever have a pointer to an <code>int</code>. In Java, primitive <code>int</code> is always a value, and you box it into <code>Integer</code> when you need reference semantics. In Go you use <code>*int</code> directly — no boxing, no wrapper class.</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> newInt<span class="op">(</span>n <span class="dt">int</span><span class="op">)</span> <span class="op">*</span><span class="dt">int</span> <span class="op">{</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    v <span class="op">:=</span> n</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>v   <span class="co">// safe: compiler moves v to the heap if needed (see Escape Analysis)</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>p <span class="op">:=</span> newInt<span class="op">(</span><span class="dv">7</span><span class="op">)</span></span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(*</span>p<span class="op">)</span> <span class="co">// 7</span></span></code></pre></div>
-<h2 data-number="6.2" id="no-pointer-arithmetic"><span class="header-section-number">6.2</span> No Pointer Arithmetic</h2>
-<p> In C and C++, you can write <code>ptr + 1</code> to advance a pointer to the next element in an array. Go forbids this entirely.</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>x <span class="op">:=</span> <span class="dv">42</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>p <span class="op">:=</span> <span class="op">&amp;</span>x</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>p<span class="op">++</span>      <span class="co">// compile error: invalid operation: p++ (non-numeric type *int)</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>p <span class="op">+</span> <span class="dv">1</span>    <span class="co">// compile error: invalid operation: p + 1 (mismatched types *int and untyped int)</span></span></code></pre></div>
-<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
-<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
-<div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> No pointer arithmetic means the compiler and garbage collector always know exactly what a pointer points to. It also eliminates an entire class of security vulnerabilities (buffer overruns, out-of-bounds reads) that plague C codebases. If you need to walk through elements, use a slice — slices carry length and capacity and support range iteration safely.</p>
-</div></div>
-<p>When you genuinely need unsafe pointer arithmetic (for C interop or performance-critical operations), the <code>unsafe</code> package exists, but it earns its name. That is an advanced topic far outside normal day-to-day Go.</p>
-<h2 data-number="6.3" id="pointer-vs-value-semantics"><span class="header-section-number">6.3</span> Pointer vs Value Semantics</h2>
-<p>  Go structs are <strong>value types</strong>: assigning one struct to another copies all the fields. Java objects are always <strong>reference types</strong>: variables hold pointers to the object. Assigning a variable to another copies the pointer, not the object, thus both variables end up referring to the same object.</p>
-<p>Consider a <code>Point</code> struct (covered fully in Chapter 8):</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Point <span class="kw">struct</span> <span class="op">{</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    X<span class="op">,</span> Y <span class="dt">int</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>Value copy behavior:</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>a <span class="op">:=</span> Point<span class="op">{</span>X<span class="op">:</span> <span class="dv">3</span><span class="op">,</span> Y<span class="op">:</span> <span class="dv">4</span><span class="op">}</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>b <span class="op">:=</span> a              <span class="co">// b is a full copy</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>b<span class="op">.</span>X <span class="op">=</span> <span class="dv">99</span></span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>a<span class="op">.</span>X<span class="op">)</span>    <span class="co">// 3 --- a is unchanged</span></span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>b<span class="op">.</span>X<span class="op">)</span>    <span class="co">// 99</span></span></code></pre></div>
-<p>The same assignment in Java would have <code>b</code> and <code>a</code> pointing at the same object, so setting <code>b.x = 99</code> would also change <code>a.x</code>.</p>
-<h3 data-number="6.3.1" id="the-swap-that-doesnt-work"><span class="header-section-number">6.3.1</span> The Swap That Doesn’t Work</h3>
-<p> The classic demonstration of why value semantics matters is a swap function.</p>
-<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co">// This does NOT work.</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> swapBad<span class="op">(</span>a<span class="op">,</span> b <span class="dt">int</span><span class="op">)</span> <span class="op">{</span></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    a<span class="op">,</span> b <span class="op">=</span> b<span class="op">,</span> a <span class="co">// swaps the local copies only</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    x<span class="op">,</span> y <span class="op">:=</span> <span class="dv">10</span><span class="op">,</span> <span class="dv">20</span></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    swapBad<span class="op">(</span>x<span class="op">,</span> y<span class="op">)</span></span>
-<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>x<span class="op">,</span> y<span class="op">)</span> <span class="co">// 10 20 --- unchanged</span></span>
-<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p><code>swapBad</code> receives copies of <code>x</code> and <code>y</code>. Swapping <code>a</code> and <code>b</code> inside the function has no effect on the caller’s variables.</p>
-<h3 data-number="6.3.2" id="the-swap-that-works"><span class="header-section-number">6.3.2</span> The Swap That Works</h3>
-<p> Pass pointers and write through them:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co">// This works.</span></span>
-<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> swap<span class="op">(</span>a<span class="op">,</span> b <span class="op">*</span><span class="dt">int</span><span class="op">)</span> <span class="op">{</span>    <span class="co">// a and b are pointers to the caller&#39;s ints</span></span>
-<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>a<span class="op">,</span> <span class="op">*</span>b <span class="op">=</span> <span class="op">*</span>b<span class="op">,</span> <span class="op">*</span>a       <span class="co">// dereference both and swap the values in-place</span></span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    x<span class="op">,</span> y <span class="op">:=</span> <span class="dv">10</span><span class="op">,</span> <span class="dv">20</span></span>
-<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>    swap<span class="op">(&amp;</span>x<span class="op">,</span> <span class="op">&amp;</span>y<span class="op">)</span>           <span class="co">// pass the addresses of x and y</span></span>
-<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>x<span class="op">,</span> y<span class="op">)</span>      <span class="co">// 20 10 --- swapped</span></span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
-<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
-<div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> Go has a built-in swap idiom that makes <code>swap</code> functions rare in practice: <code>x, y = y, x</code> works directly without any function call. The pointer swap above is a teaching example; in real code, just write the one-liner.</p>
-</div></div>
-<h2 data-number="6.4" id="when-mutation-requires-a-pointer"><span class="header-section-number">6.4</span> When Mutation Requires a Pointer</h2>
-<p> The most common mistake for Java programmers moving to Go is writing a function that is supposed to modify a variable — and being surprised when nothing changes.</p>
-<p>A struct is a value type: passing one to a function copies every field.</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    Title <span class="dt">string</span></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    Plays <span class="dt">int</span></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Intended to record a play. Does not work.</span></span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> playBad<span class="op">(</span>t Track<span class="op">)</span> <span class="op">{</span></span>
-<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    t<span class="op">.</span>Plays<span class="op">++</span> <span class="co">// modifies the local copy</span></span>
-<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>    song <span class="op">:=</span> Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;As It Was&quot;</span><span class="op">,</span> Plays<span class="op">:</span> <span class="dv">0</span><span class="op">}</span></span>
-<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>    playBad<span class="op">(</span>song<span class="op">)</span></span>
-<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>song<span class="op">.</span>Plays<span class="op">)</span> <span class="co">// 0 --- still 0</span></span>
-<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>The fix is to pass a pointer so the function can reach the caller’s variable:</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> play<span class="op">(</span>t <span class="op">*</span>Track<span class="op">)</span> <span class="op">{</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    t<span class="op">.</span>Plays<span class="op">++</span> <span class="co">// modifies the caller&#39;s Track</span></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    song <span class="op">:=</span> Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;As It Was&quot;</span><span class="op">,</span> Plays<span class="op">:</span> <span class="dv">0</span><span class="op">}</span></span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    play<span class="op">(&amp;</span>song<span class="op">)</span></span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>song<span class="op">.</span>Plays<span class="op">)</span> <span class="co">// 1</span></span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
-<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
-<div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> Go automatically handles the dereference when you write <code>t.Plays</code> through a pointer — you do not need to write <code>(*t).Plays</code>.</p>
-</div></div>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="co">// Value receiver --- Scale gets a copy of the Point.</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>p Point<span class="op">)</span> ScaleBad<span class="op">(</span>factor <span class="dt">int</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    p<span class="op">.</span>X <span class="op">*=</span> factor   <span class="co">// modifies the copy only</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    p<span class="op">.</span>Y <span class="op">*=</span> factor</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="co">// Pointer receiver --- Scale gets a pointer to the original Point.</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>p <span class="op">*</span>Point<span class="op">)</span> Scale<span class="op">(</span>factor <span class="dt">int</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    p<span class="op">.</span>X <span class="op">*=</span> factor   <span class="co">// modifies the original</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    p<span class="op">.</span>Y <span class="op">*=</span> factor</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>pt <span class="op">:=</span> Point<span class="op">{</span>X<span class="op">:</span> <span class="dv">3</span><span class="op">,</span> Y<span class="op">:</span> <span class="dv">4</span><span class="op">}</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>pt<span class="op">.</span>ScaleBad<span class="op">(</span><span class="dv">10</span><span class="op">)</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>pt<span class="op">)</span> <span class="co">// {3 4} --- unchanged; ScaleBad worked on a copy</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>pt<span class="op">.</span>Scale<span class="op">(</span><span class="dv">10</span><span class="op">)</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>pt<span class="op">)</span> <span class="co">// {30 40} --- changed; Scale worked on the original</span></span></code></pre></div>
+<p>Go is convenient here: even though <code>pt</code> is a plain <code>Point</code> value (not a <code>*Point</code>), you can call <code>pt.Scale(10)</code> and Go automatically takes the address for you — it is equivalent to <code>(&amp;pt).Scale(10)</code>.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Trap:</strong> Java programmers are used to mutating object fields through a parameter because Java objects are always references. In Go, a struct parameter is a copy; mutating its fields inside the function has no effect on the caller. Always pass <code>*T</code> when the function needs to modify a struct.</p>
+<p><strong>Trap:</strong> The <code>Point</code> example above deliberately mixes a value receiver (<code>ScaleBad</code>) with a pointer receiver (<code>Scale</code>) to show the behavioral difference. In real code, <code>Point</code> would have <code>Scale</code> as its only method (or all methods would use <code>*Point</code>). The name <code>ScaleBad</code> is the hint: delete it and use only pointer receivers.</p>
 </div></div>
-<h3 data-number="6.4.1" id="reference-like-types"><span class="header-section-number">6.4.1</span> Reference-Like Types</h3>
-<p> Several built-in types carry an internal pointer, so passing them by value still allows the function to mutate the underlying data — but only the data the pointer reaches, not the variable itself.</p>
-<table style="width:100%;">
-<colgroup>
-<col style="width: 5%" />
-<col style="width: 24%" />
-<col style="width: 33%" />
-<col style="width: 37%" />
-</colgroup>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> If any method on a type needs a pointer receiver, make all methods on that type pointer receivers. Mixing value and pointer receivers on the same type confuses the method set rules and makes interface satisfaction harder to reason about. This is a firm Go idiom worth following from day one. <strong><em>[no-mixed-receivers]</em></strong></p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> If you call a pointer receiver method through a value that is not addressable — for example, the return value of a function call used directly — Go cannot take the address and the compiler reports an error. Addressability is covered in more detail in Chapter 2.</p>
+</div></div>
+<p> The same rules apply to any type. Here is a <code>Track</code> type with two pointer-receiver methods:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t <span class="op">*</span>Track<span class="op">)</span> String<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span>              <span class="co">// pointer receiver: consistent with ScaleBPM</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;%s by %s (%d BPM)&quot;</span><span class="op">,</span> t<span class="op">.</span>Title<span class="op">,</span> t<span class="op">.</span>Artist<span class="op">,</span> t<span class="op">.</span>BPM<span class="op">)</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t <span class="op">*</span>Track<span class="op">)</span> ScaleBPM<span class="op">(</span>factor <span class="dt">float64</span><span class="op">)</span> <span class="op">{</span>     <span class="co">// pointer receiver: mutates BPM</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    t<span class="op">.</span>BPM <span class="op">=</span> <span class="dt">int</span><span class="op">(</span><span class="dt">float64</span><span class="op">(</span>t<span class="op">.</span>BPM<span class="op">)</span> <span class="op">*</span> factor<span class="op">)</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>ScaleBPM</code> mutates <code>BPM</code>, so it needs <code>*Track</code>. <strong><em>[pointer-receiver-for-mutation]</em></strong> <code>String</code> uses <code>*Track</code> too, even though it only reads, to keep receivers consistent.</p>
+<p>Unlike Java, where all methods of a class must live inside that class’s file, Go methods can be declared in any file within the same package — which means the same directory. A single file can also define structs and methods for several different types. There is no rule that says <code>track.go</code> must contain only <code>Track</code>-related code. The constraint is the package boundary: a type and its methods must all be in the same package, but they can be spread across as many files as you like.</p>
+<p>How you split code across files is a style question. The Google Go Style Guide recommends keeping files focused and reasonably short: “files should be focused enough that a maintainer can tell which file contains something, and the files should be small enough that it will be easy to find once there” <span class="citation" data-cites="GoBestPractices">[@GoBestPractices]</span>. A common pattern is one file per major type, with its closely related helpers alongside it.</p>
+<h3 data-number="6.1.1" id="method-sets"><span class="header-section-number">6.1.1</span> Method Sets</h3>
+<p> Every type has a <strong>method set</strong> — the set of methods you can call on a value of that type.</p>
+<table>
 <thead>
 <tr>
-<th>Type</th>
-<th>What the value contains</th>
-<th>Contents mutable without pointer?</th>
-<th>Variable reassignable without pointer?</th>
+<th>Value type</th>
+<th>Methods callable</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td><code>map[K]V</code></td>
-<td>pointer to hash table</td>
-<td>yes — add, delete, update entries</td>
-<td>no</td>
+<td><code>T</code></td>
+<td>only value-receiver methods of <code>T</code></td>
 </tr>
 <tr>
-<td><code>[]T</code> (slice)</td>
-<td>pointer + length + capacity</td>
-<td>yes — modify elements</td>
-<td>no — caller’s len/cap unchanged</td>
-</tr>
-<tr>
-<td><code>chan T</code></td>
-<td>pointer to channel runtime</td>
-<td>yes — send and receive</td>
-<td>no</td>
-</tr>
-<tr>
-<td><code>func(...)</code></td>
-<td>pointer to code + closure env</td>
-<td>n/a</td>
-<td>no</td>
+<td><code>*T</code></td>
+<td>all methods of <code>T</code> (both value and pointer receivers)</td>
 </tr>
 </tbody>
 </table>
-<p>The pattern is always the same: the <em>header</em> (the variable itself) is copied on every call, but it contains a pointer to shared data. Mutating through that pointer affects the original; replacing the header does not.</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> addPlay<span class="op">(</span>s <span class="op">[]</span><span class="dt">int</span><span class="op">,</span> n <span class="dt">int</span><span class="op">)</span> <span class="op">{</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    s <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>s<span class="op">,</span> n<span class="op">)</span> <span class="co">// appends to a local copy of the header --- caller sees nothing</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> addPlayPtr<span class="op">(</span>s <span class="op">*[]</span><span class="dt">int</span><span class="op">,</span> n <span class="dt">int</span><span class="op">)</span> <span class="op">{</span></span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>s <span class="op">=</span> <span class="bu">append</span><span class="op">(*</span>s<span class="op">,</span> n<span class="op">)</span> <span class="co">// replaces the caller&#39;s header</span></span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>    plays <span class="op">:=</span> <span class="op">[]</span><span class="dt">int</span><span class="op">{</span><span class="dv">1</span><span class="op">,</span> <span class="dv">2</span><span class="op">,</span> <span class="dv">3</span><span class="op">}</span></span>
-<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>    addPlay<span class="op">(</span>plays<span class="op">,</span> <span class="dv">4</span><span class="op">)</span></span>
-<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>plays<span class="op">)</span> <span class="co">// [1 2 3] --- unchanged</span></span>
-<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>    addPlayPtr<span class="op">(&amp;</span>plays<span class="op">,</span> <span class="dv">4</span><span class="op">)</span></span>
-<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>plays<span class="op">)</span> <span class="co">// [1 2 3 4]</span></span>
-<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>A <code>*T</code> pointer can call everything: pointer-receiver methods (directly) and value-receiver methods (Go automatically dereferences). A plain <code>T</code> value can only call value-receiver methods.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Wut:</strong> Because a map’s header is already a pointer to the hash table, you can insert and delete entries through a plain map parameter — no <code>*map[K]V</code> needed. Slices are different: a plain slice parameter lets you modify existing elements, but <code>append</code> (which may grow the backing array and update len/cap) requires a pointer to the slice header or a returned value.</p>
+<p><strong>Wut:</strong> You might expect that <code>T</code> can call pointer-receiver methods too, because Go auto-takes addresses for you when you write <code>t.ScaleBPM(1.1)</code> on an addressable variable. It can — but only for <em>calls</em>, not for interface satisfaction. When you store a <code>T</code> (not <code>*T</code>) in an interface, only the value-receiver methods are in the method set. This distinction matters in Chapter 8.</p>
 </div></div>
-<h3 data-number="6.4.2" id="contrast-with-java"><span class="header-section-number">6.4.2</span> Contrast with Java</h3>
-<p>In Java you can mutate the fields of an object passed as a parameter, but you cannot reassign which object the caller’s variable points to:</p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Java: mutating a field works; reassigning does not affect the caller</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="dt">void</span> <span class="fu">bump</span><span class="op">(</span>Counter c<span class="op">)</span> <span class="op">{</span></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    c<span class="op">.</span><span class="fu">value</span><span class="op">++;</span>       <span class="co">// caller sees this change</span></span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    c <span class="op">=</span> <span class="kw">new</span> <span class="fu">Counter</span><span class="op">();</span> <span class="co">// caller does NOT see this -- reassigns local ref only</span></span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>Go’s model is more consistent: nothing you do inside a function can affect a caller’s variable unless the function received a pointer to it.</p>
-<h2 data-number="6.5" id="value-receivers-vs-pointer-receivers"><span class="header-section-number">6.5</span> Value Receivers vs Pointer Receivers</h2>
-<p>   Methods are introduced fully in Chapter 8, but understanding pointer receivers is so tightly coupled to pointers that it belongs here. A <strong>method</strong> in Go is a function with a special <em>receiver</em> declared in its own parentheses between the <code>func</code> keyword and the method name.</p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t T<span class="op">)</span> MethodName<span class="op">(</span>params<span class="op">)</span> returnType    <span class="co">// value receiver --- gets a copy of T</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t <span class="op">*</span>T<span class="op">)</span> MethodName<span class="op">(</span>params<span class="op">)</span> returnType   <span class="co">// pointer receiver --- gets a pointer to T</span></span></code></pre></div>
-<p>Using <code>Point</code> again as a minimal example:</p>
-<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Point <span class="kw">struct</span> <span class="op">{</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    X<span class="op">,</span> Y <span class="dt">int</span></span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="co">// Value receiver --- Scale gets a copy of the Point.</span></span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>p Point<span class="op">)</span> ScaleBad<span class="op">(</span>factor <span class="dt">int</span><span class="op">)</span> <span class="op">{</span></span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>    p<span class="op">.</span>X <span class="op">*=</span> factor   <span class="co">// modifies the copy only</span></span>
-<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    p<span class="op">.</span>Y <span class="op">*=</span> factor</span>
-<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a><span class="co">// Pointer receiver --- Scale gets a pointer to the original Point.</span></span>
-<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>p <span class="op">*</span>Point<span class="op">)</span> Scale<span class="op">(</span>factor <span class="dt">int</span><span class="op">)</span> <span class="op">{</span></span>
-<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>    p<span class="op">.</span>X <span class="op">*=</span> factor   <span class="co">// modifies the original</span></span>
-<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>    p<span class="op">.</span>Y <span class="op">*=</span> factor</span>
-<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>pt <span class="op">:=</span> Point<span class="op">{</span>X<span class="op">:</span> <span class="dv">3</span><span class="op">,</span> Y<span class="op">:</span> <span class="dv">4</span><span class="op">}</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>pt<span class="op">.</span>ScaleBad<span class="op">(</span><span class="dv">10</span><span class="op">)</span></span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>pt<span class="op">)</span> <span class="co">// {3 4} --- unchanged; ScaleBad worked on a copy</span></span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>pt<span class="op">.</span>Scale<span class="op">(</span><span class="dv">10</span><span class="op">)</span></span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>pt<span class="op">)</span> <span class="co">// {30 40} --- changed; Scale worked on the original</span></span></code></pre></div>
-<p>Go is convenient here: even though <code>pt</code> is a plain <code>Point</code> value (not a <code>*Point</code>), you can call <code>pt.Scale(10)</code> and Go automatically takes the address for you — it is equivalent to <code>(&amp;pt).Scale(10)</code>.</p>
+<h3 data-number="6.1.2" id="calling-methods"><span class="header-section-number">6.1.2</span> Calling Methods</h3>
+<p> Go is flexible about how you call methods on values vs pointers:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>t <span class="op">:=</span> Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Messy&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Lola Young&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">118</span><span class="op">}</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="co">// Calling a pointer-receiver method on an addressable value --- Go auto-takes address.</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">.</span>String<span class="op">())</span>    <span class="co">// equivalent to (&amp;t).String() --- Messy by Lola Young (118 BPM)</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>t<span class="op">.</span>ScaleBPM<span class="op">(</span><span class="fl">1.1</span><span class="op">)</span>            <span class="co">// equivalent to (&amp;t).ScaleBPM(1.1)</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">.</span>BPM<span class="op">)</span>         <span class="co">// 129</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="co">// Calling a pointer-receiver method on a pointer --- straightforward.</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>p <span class="op">:=</span> <span class="op">&amp;</span>t</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>p<span class="op">.</span>String<span class="op">())</span>    <span class="co">// Messy by Lola Young (129 BPM)</span></span></code></pre></div>
+<p>Go’s auto-dereference and auto-address rules mean you rarely write <code>(&amp;t).Method()</code> or <code>(*p).Method()</code> yourself.</p>
+<h3 data-number="6.1.3" id="attaching-methods-to-the-playlist"><span class="header-section-number">6.1.3</span> Attaching Methods to the Playlist</h3>
+<p> Using the <code>Track</code> and <code>Playlist</code> types from Chapter 2, here is a complete example of both receiver kinds in one type:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    Title    <span class="dt">string</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    Artist   <span class="dt">string</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    BPM      <span class="dt">int</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    Duration <span class="dt">float64</span> <span class="co">// seconds</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Playlist <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    Name   <span class="dt">string</span></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    tracks <span class="op">[]</span>Track</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>p <span class="op">*</span>Playlist<span class="op">)</span> Add<span class="op">(</span>t Track<span class="op">)</span> <span class="op">{</span>         <span class="co">// pointer receiver: mutates the slice</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>    p<span class="op">.</span>tracks <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>p<span class="op">.</span>tracks<span class="op">,</span> t<span class="op">)</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>p <span class="op">*</span>Playlist<span class="op">)</span> Len<span class="op">()</span> <span class="dt">int</span> <span class="op">{</span>            <span class="co">// pointer receiver: consistent with Add</span></span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="bu">len</span><span class="op">(</span>p<span class="op">.</span>tracks<span class="op">)</span></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>p <span class="op">*</span>Playlist<span class="op">)</span> AverageBPM<span class="op">()</span> <span class="dt">float64</span> <span class="op">{</span> <span class="co">// pointer receiver: consistent with Add</span></span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">len</span><span class="op">(</span>p<span class="op">.</span>tracks<span class="op">)</span> <span class="op">==</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="dv">0</span></span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>    total <span class="op">:=</span> <span class="dv">0</span></span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> t <span class="op">:=</span> <span class="kw">range</span> p<span class="op">.</span>tracks <span class="op">{</span></span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>        total <span class="op">+=</span> t<span class="op">.</span>BPM</span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dt">float64</span><span class="op">(</span>total<span class="op">)</span> <span class="op">/</span> <span class="dt">float64</span><span class="op">(</span><span class="bu">len</span><span class="op">(</span>p<span class="op">.</span>tracks<span class="op">))</span></span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>pl <span class="op">:=</span> Playlist<span class="op">{</span>Name<span class="op">:</span> <span class="st">&quot;Late Night Vibes&quot;</span><span class="op">}</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>pl<span class="op">.</span>Add<span class="op">(</span>Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Messy&quot;</span><span class="op">,</span>        Artist<span class="op">:</span> <span class="st">&quot;Lola Young&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">118</span><span class="op">})</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>pl<span class="op">.</span>Add<span class="op">(</span>Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;MOTOMAMI&quot;</span><span class="op">,</span>     Artist<span class="op">:</span> <span class="st">&quot;Rosalía&quot;</span><span class="op">,</span>    BPM<span class="op">:</span> <span class="dv">127</span><span class="op">})</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>pl<span class="op">.</span>Add<span class="op">(</span>Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Golden Hour&quot;</span><span class="op">,</span>  Artist<span class="op">:</span> <span class="st">&quot;JVKE&quot;</span><span class="op">,</span>       BPM<span class="op">:</span> <span class="dv">97</span><span class="op">})</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>pl<span class="op">.</span>Len<span class="op">())</span>                       <span class="co">// 3</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%.1f BPM</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> pl<span class="op">.</span>AverageBPM<span class="op">())</span>  <span class="co">// 114.0 BPM</span></span></code></pre></div>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> If any method on a type needs a pointer receiver, make all methods on that type pointer receivers. Mixing value and pointer receivers on the same type confuses the method set rules and makes interface satisfaction harder to reason about. This is a firm Go idiom worth following from day one.</p>
+<p><strong>Tip:</strong> All three methods use pointer receivers because <code>Add</code> needs one, and the rule is: if any method on a type needs a pointer receiver, make them all pointer receivers. <code>tracks</code> is also unexported (lowercase), so callers outside this package can only grow the playlist through <code>Add</code>, which lets you add validation later without breaking the public API.</p>
 </div></div>
-<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
-<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
-<div style="flex: 1; min-width: 0;">
-<p><strong>Wut:</strong> If you call a pointer receiver method through a value that is not addressable — for example, the return value of a function call used directly — Go cannot take the address and the compiler reports an error. Addressability is covered in more detail in Chapter 8.</p>
-</div></div>
-<h2 data-number="6.6" id="escape-analysis"><span class="header-section-number">6.6</span> Escape Analysis</h2>
-<p>   In C, returning a pointer to a local variable is undefined behavior — the stack frame is gone by the time the caller uses the pointer. In Go this is perfectly safe:</p>
-<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> newPoint<span class="op">(</span>x<span class="op">,</span> y <span class="dt">int</span><span class="op">)</span> <span class="op">*</span>Point <span class="op">{</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>    p <span class="op">:=</span> Point<span class="op">{</span>X<span class="op">:</span> x<span class="op">,</span> Y<span class="op">:</span> y<span class="op">}</span>   <span class="co">// local variable</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>p                 <span class="co">// safe --- compiler handles it</span></span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>The Go compiler performs <strong>escape analysis</strong>: it determines at compile time whether a variable’s lifetime can be bounded to the current stack frame, or whether it must be allocated on the heap so that it outlives the function. If you take the address of a local variable and return it (or store it somewhere that outlives the function), the compiler silently moves the variable to the heap. You never have to make this decision yourself.</p>
-<p> ### <code>new(T)</code> and <code>&amp;T{}</code></p>
-<p> Two ways to allocate a pointer to a zeroed value are equivalent:</p>
-<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>p1 <span class="op">:=</span> <span class="bu">new</span><span class="op">(</span>Point<span class="op">)</span>      <span class="co">// allocates a zeroed Point; returns *Point</span></span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>p2 <span class="op">:=</span> <span class="op">&amp;</span>Point<span class="op">{}</span>        <span class="co">// composite literal with zero values; also returns *Point</span></span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(*</span>p1 <span class="op">==</span> <span class="op">*</span>p2<span class="op">)</span> <span class="co">// true --- both are zeroed Points</span></span></code></pre></div>
-<p><code>new(T)</code> is the older form; <code>&amp;T{}</code> is more idiomatic in modern Go because it lets you initialize fields at the same time:</p>
-<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>p3 <span class="op">:=</span> <span class="op">&amp;</span>Point<span class="op">{</span>X<span class="op">:</span> <span class="dv">5</span><span class="op">,</span> Y<span class="op">:</span> <span class="dv">7</span><span class="op">}</span>   <span class="co">// initialized and allocated in one expression</span></span></code></pre></div>
-<p>Both forms trigger escape analysis; neither forces the allocation onto the heap unless the pointer actually escapes.</p>
-<h3 data-number="6.6.1" id="inspecting-escape-decisions"><span class="header-section-number">6.6.1</span> Inspecting Escape Decisions</h3>
-<p> You can ask the compiler to show its escape analysis decisions with:</p>
-<div class="sourceCode" id="cb21"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> build <span class="at">-gcflags</span><span class="op">=</span>-m ./...</span></code></pre></div>
-<p>The output contains lines like:</p>
-<pre><code>./main.go:6:2: moved to heap: p
-./main.go:9:16: &amp;x does not escape</code></pre>
-<p>The first line tells you the variable was promoted to the heap because it escaped the function (someone kept a pointer to it). The second tells you the address was taken but the pointer never outlived the function, so the variable stayed on the stack.</p>
+<h2 data-number="6.2" id="constructors"><span class="header-section-number">6.2</span> Constructors</h2>
+<p> Go has <strong>no constructor syntax</strong>. There is no <code>new SomeClass(...)</code> keyword, no <code>__init__</code> method, and no special function that runs automatically when a struct is created.</p>
+<p>A zero-value struct is valid on its own — that is by design. When you need a struct that starts in a specific non-zero state, or when you want to validate inputs at creation time, the idiomatic Go replacement is a <strong><code>New*</code> factory function</strong>.</p>
+<h3 data-number="6.2.1" id="the-new-pattern"><span class="header-section-number">6.2.1</span> The New* Pattern</h3>
+<p> By convention, a factory function is named <code>New</code> followed by the type name. <code>go doc</code> and IDE tools recognize this pattern and display it alongside the type.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewPlaylist<span class="op">(</span>name <span class="dt">string</span><span class="op">)</span> <span class="op">*</span>Playlist <span class="op">{</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>Playlist<span class="op">{</span>Name<span class="op">:</span> name<span class="op">}</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The return type is <code>*Playlist</code> rather than <code>Playlist</code> so the caller gets a pointer and can immediately call pointer-receiver methods like <code>Add</code>. <strong><em>[return-concrete-types]</em></strong></p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>pl <span class="op">:=</span> NewPlaylist<span class="op">(</span><span class="st">&quot;Late Night Vibes&quot;</span><span class="op">)</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>pl<span class="op">.</span>Add<span class="op">(</span>Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Messy&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Lola Young&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">118</span><span class="op">})</span></span></code></pre></div>
+<p>Compare with Java:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Java</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>Playlist pl <span class="op">=</span> <span class="kw">new</span> <span class="fu">Playlist</span><span class="op">(</span><span class="st">&quot;Late Night Vibes&quot;</span><span class="op">);</span></span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Go</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>pl <span class="op">:=</span> NewPlaylist<span class="op">(</span><span class="st">&quot;Late Night Vibes&quot;</span><span class="op">)</span></span></code></pre></div>
+<p>The call sites look nearly identical. The Go version is a plain function call with no special language support — but that is all you need.</p>
+<h3 data-number="6.2.2" id="constructors-that-validate"><span class="header-section-number">6.2.2</span> Constructors That Validate</h3>
+<p> Factory functions can return an <code>error</code> when the inputs are invalid. A Java constructor throws an exception; a Go factory function returns the error as a second value. Error strings should be lowercase and not end with punctuation <strong><em>[lowercase-error-strings]</em></strong>, as the <code>NewTrack</code> example below demonstrates.</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewTrack<span class="op">(</span>title<span class="op">,</span> artist <span class="dt">string</span><span class="op">,</span> bpm <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Track<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> title <span class="op">==</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> Track<span class="op">{},</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;newTrack: title must not be empty&quot;</span><span class="op">)</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> artist <span class="op">==</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> Track<span class="op">{},</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;newTrack: artist must not be empty&quot;</span><span class="op">)</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> bpm <span class="op">&lt;=</span> <span class="dv">0</span> <span class="op">||</span> bpm <span class="op">&gt;</span> <span class="dv">300</span> <span class="op">{</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> Track<span class="op">{},</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;newTrack: BPM %d is out of range [1, 300]&quot;</span><span class="op">,</span> bpm<span class="op">)</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> Track<span class="op">{</span>Title<span class="op">:</span> title<span class="op">,</span> Artist<span class="op">:</span> artist<span class="op">,</span> BPM<span class="op">:</span> bpm<span class="op">},</span> <span class="ot">nil</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>t<span class="op">,</span> err <span class="op">:=</span> NewTrack<span class="op">(</span><span class="st">&quot;MOTOMAMI&quot;</span><span class="op">,</span> <span class="st">&quot;Rosalía&quot;</span><span class="op">,</span> <span class="dv">127</span><span class="op">)</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">.</span>Title<span class="op">)</span> <span class="co">// MOTOMAMI</span></span></code></pre></div>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> You do not need to read escape analysis output in daily work. It becomes useful when profiling shows unexpected heap allocations, or when you are writing a hot inner loop and want to confirm that short-lived values are staying on the stack.</p>
+<p><strong>Tip:</strong> Return <code>(T, error)</code> — a value, not a pointer — when the zero value of <code>T</code> is harmless and <code>T</code> is small. Return <code>(*T, error)</code> when the caller needs to call pointer-receiver methods immediately after construction, or when <code>T</code> is large enough that you want to avoid copying it.</p>
 </div></div>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Wut:</strong> A common misconception is that <code>new(T)</code> always allocates on the heap and <code>:=</code> always allocates on the stack. Neither is true — the compiler decides based on escape analysis, not on the syntax you used. <code>var x int; p := &amp;x; return p</code> will promote <code>x</code> to the heap even though you never wrote <code>new</code>.</p>
+<p><strong>Wut:</strong> In Java, throwing in a constructor is the only way to signal a construction failure. In Go, a factory function returns <code>(nil, err)</code> or <code>(T{}, err)</code>. There is no special “failed construction” state — the error is just a value you check like any other.</p>
 </div></div>
-<h2 data-number="6.7" id="key-points"><span class="header-section-number">6.7</span> Key Points</h2>
-<ul>
-<li><code>&amp;x</code> produces a pointer to <code>x</code>; <code>*p</code> follows the pointer to read or write the value.</li>
-<li>The zero value of any pointer type is <code>nil</code>; dereferencing <code>nil</code> panics.</li>
-<li>In Java, object variables are hidden pointers; in Go, pointers are explicit.</li>
-<li>Go has no pointer arithmetic; use slices for indexed access.</li>
-<li>Go structs are value types — assignment copies all fields. Java objects are reference types — assignment copies only the reference.</li>
-<li>A function that receives a value parameter cannot modify the caller’s variable; it must receive a pointer.</li>
-<li>A method with a value receiver gets a copy of the receiver; a method with a pointer receiver can mutate the original.</li>
-<li>If any method on a type needs a pointer receiver, make all methods pointer receivers.</li>
-<li>The Go compiler uses escape analysis to decide whether a variable lives on the stack or the heap; you do not manage this manually.</li>
-<li><code>new(T)</code> and <code>&amp;T{}</code> are equivalent ways to allocate a zeroed value; <code>&amp;T{}</code> is more idiomatic.</li>
-<li><code>go build -gcflags=-m</code> shows escape analysis decisions.</li>
-</ul>
-<h2 data-number="6.8" id="exercises"><span class="header-section-number">6.8</span> Exercises</h2>
-<ol type="1">
-<li><p><strong>Think about it:</strong> In Java, you can mutate the fields of an object passed to a method, but you cannot change which object the caller’s variable refers to. In Go, you can do neither with a plain struct value parameter, but you can do both with a pointer parameter. What is the deeper rule that unifies these two behaviors, and what does it tell you about how Go and Java model “passing by reference”?</p></li>
-<li><p><strong>What does this print?</strong></p>
-<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> double<span class="op">(</span>n <span class="op">*</span><span class="dt">int</span><span class="op">)</span> <span class="op">{</span></span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>n <span class="op">*=</span> <span class="dv">2</span></span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    a <span class="op">:=</span> <span class="dv">5</span></span>
-<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>    b <span class="op">:=</span> <span class="op">&amp;</span>a</span>
-<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>    double<span class="op">(</span>b<span class="op">)</span></span>
-<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>a<span class="op">)</span></span>
-<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(*</span>b<span class="op">)</span></span>
-<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
-<li><p><strong>Calculation:</strong> Given the following declarations:</p>
-<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>x <span class="op">:=</span> <span class="dv">100</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>p <span class="op">:=</span> <span class="op">&amp;</span>x</span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>q <span class="op">:=</span> p</span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a><span class="op">*</span>q <span class="op">=</span> <span class="dv">200</span></span></code></pre></div>
-<p>What are the values of <code>x</code>, <code>*p</code>, and <code>*q</code> after these four lines? How many distinct integers are stored in memory?</p></li>
-<li><p><strong>Where is the bug?</strong> The following code tries to append a suffix to a string through a pointer.</p>
-<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
-<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> addExcitement<span class="op">(</span>s <span class="op">*</span><span class="dt">string</span><span class="op">)</span> <span class="op">{</span></span>
-<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    s <span class="op">+=</span> <span class="st">&quot;!&quot;</span></span>
+<h2 data-number="6.3" id="destructors"><span class="header-section-number">6.3</span> Destructors</h2>
+<p> Go has <strong>no destructor syntax</strong>. There is no <code>finalize()</code>, no <code>__del__</code>, and no <code>~ClassName()</code>. The garbage collector reclaims heap memory automatically; you do not manage object lifetimes.</p>
+<p>For resources that need explicit cleanup — open files, network connections, mutex locks, database transactions — Go’s answer is <code>defer</code>.</p>
+<h3 data-number="6.3.1" id="defer-for-cleanup"><span class="header-section-number">6.3.1</span> defer for Cleanup</h3>
+<p> <code>defer</code> was introduced in Chapter 4. The key rule: a deferred call runs when the surrounding function returns, in LIFO order. This makes it the idiomatic replacement for Java’s try-with-resources.</p>
+<p>The standard open/close pattern:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>f<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>Open<span class="op">(</span>path<span class="op">)</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> err</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> f<span class="op">.</span>Close<span class="op">()</span>  <span class="co">// runs when the enclosing function returns, no matter how</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="co">// ... use f ...</span></span></code></pre></div>
+<p>The <code>defer f.Close()</code> line is written immediately after the successful open, before any logic that might return early on error. That placement ensures <code>f.Close()</code> is called on every path out of the function.</p>
+<p>Compare the patterns side by side:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Java: try-with-resources</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span> <span class="op">(</span><span class="bu">FileReader</span> f <span class="op">=</span> <span class="kw">new</span> <span class="bu">FileReader</span><span class="op">(</span>path<span class="op">))</span> <span class="op">{</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">// use f --- close is called automatically on exit</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">catch</span> <span class="op">(</span><span class="bu">IOException</span> e<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">// handle error</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Go: defer</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>f<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>Open<span class="op">(</span>path<span class="op">)</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> err</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> f<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="co">// use f --- Close is called automatically on return</span></span></code></pre></div>
+<p>Both guarantee that the resource is released even if the body returns early. The Go form scales naturally to multiple resources:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>db<span class="op">,</span> err <span class="op">:=</span> sql<span class="op">.</span>Open<span class="op">(</span><span class="st">&quot;postgres&quot;</span><span class="op">,</span> dsn<span class="op">)</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> err</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> db<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>tx<span class="op">,</span> err <span class="op">:=</span> db<span class="op">.</span>Begin<span class="op">()</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> err</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> tx<span class="op">.</span>Rollback<span class="op">()</span> <span class="co">// rolls back only if Commit has not been called</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Write <code>defer resource.Close()</code> immediately after a successful acquisition. If you defer first and the acquisition later, you will defer on a nil value and panic.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>defer</code> captures the receiver or arguments by value at the time the <code>defer</code> statement executes, not when the deferred function runs. If you need to capture the current state at run time, wrap the call in a closure: <code>defer func() { f.Close() }()</code>.</p>
+</div></div>
+<h3 data-number="6.3.2" id="runtime.setfinalizer"><span class="header-section-number">6.3.2</span> runtime.SetFinalizer</h3>
+<p> The <code>runtime</code> package has <code>SetFinalizer(obj, finalizer)</code>, which registers a function to run when the GC is about to collect <code>obj</code>. It exists for interoperability with C libraries that require explicit deallocation, and for similar low-level needs.</p>
+<p>In almost every other situation, <code>SetFinalizer</code> is the wrong tool. Finalizers run at an unpredictable time, may never run at all if the program exits normally, and interact poorly with GC tuning.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Do not use <code>runtime.SetFinalizer</code> to release file handles, locks, or network connections. Use <code>defer</code> instead — it is deterministic, runs immediately on function exit, and is far easier to reason about.</p>
+</div></div>
+<h2 data-number="6.4" id="embedding"><span class="header-section-number">6.4</span> Embedding</h2>
+<p> Go has no inheritance. The mechanism for code reuse between types is <strong>embedding</strong>: you include one struct inside another by naming only the type, without a field name.</p>
+<p> The fields and methods of the embedded type are <strong>promoted</strong> to the outer type — you can access them directly as if they were declared on the outer type itself.</p>
+<h3 data-number="6.4.1" id="field-and-method-promotion"><span class="header-section-number">6.4.1</span> Field and Method Promotion</h3>
+<p> </p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Artist <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>    Name    <span class="dt">string</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    Country <span class="dt">string</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>a Artist<span class="op">)</span> Label<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;%s (%s)&quot;</span><span class="op">,</span> a<span class="op">.</span>Name<span class="op">,</span> a<span class="op">.</span>Country<span class="op">)</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Song <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>    Artist        <span class="co">// embedded --- no field name</span></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>    BPM    <span class="dt">int</span></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> Song<span class="op">{</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>    Artist<span class="op">:</span> Artist<span class="op">{</span>Name<span class="op">:</span> <span class="st">&quot;Rosalía&quot;</span><span class="op">,</span> Country<span class="op">:</span> <span class="st">&quot;Spain&quot;</span><span class="op">},</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>    Title<span class="op">:</span>  <span class="st">&quot;MOTOMAMI&quot;</span><span class="op">,</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>    BPM<span class="op">:</span>    <span class="dv">130</span><span class="op">,</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">.</span>Name<span class="op">)</span>    <span class="co">// Rosalía  --- promoted from Artist</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">.</span>Country<span class="op">)</span> <span class="co">// Spain    --- promoted from Artist</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">.</span>Label<span class="op">())</span> <span class="co">// Rosalía (Spain) --- promoted method</span></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">.</span>Title<span class="op">)</span>   <span class="co">// MOTOMAMI --- own field</span></span></code></pre></div>
+<p>You can still reach the embedded struct directly by its type name when you need to:</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">.</span>Artist<span class="op">.</span>Name<span class="op">)</span> <span class="co">// Rosalía --- explicit path</span></span></code></pre></div>
+<p>The explicit path is also how you distinguish between an outer field and an embedded field when there is a name collision — covered below.</p>
+<h3 data-number="6.4.2" id="embedded-value-vs-embedded-pointer"><span class="header-section-number">6.4.2</span> Embedded Value vs Embedded Pointer</h3>
+<p> You can embed either a value or a pointer to a type:</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Song <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    Artist        <span class="co">// embedded value --- Song owns the Artist data</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> SongRef <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>Artist       <span class="co">// embedded pointer --- SongRef borrows Artist data</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Use an <strong>embedded value</strong> when the outer struct fully owns the embedded data and you want simple value-copy semantics.</p>
+<p>Use an <strong>embedded pointer</strong> when multiple outer structs share the same embedded object, or when the embedded type is large and you want to avoid copying it.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> A zero-value <code>SongRef</code> has a <code>nil</code> <code>*Artist</code> pointer. Accessing any promoted field or method on a nil embedded pointer causes a runtime panic. Always initialize the embedded pointer before use:</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>sr <span class="op">:=</span> SongRef<span class="op">{</span>Artist<span class="op">:</span> <span class="op">&amp;</span>Artist<span class="op">{</span>Name<span class="op">:</span> <span class="st">&quot;Rosalía&quot;</span><span class="op">,</span> Country<span class="op">:</span> <span class="st">&quot;Spain&quot;</span><span class="op">},</span> Title<span class="op">:</span> <span class="st">&quot;MOTOMAMI&quot;</span><span class="op">}</span></span></code></pre></div>
+</div></div>
+<h3 data-number="6.4.3" id="name-collisions"><span class="header-section-number">6.4.3</span> Name Collisions</h3>
+<p> If two embedded types define a field or method with the same name, the compiler reports an ambiguity error the moment you try to access the name without qualification.</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Meta <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>    Title <span class="dt">string</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>    Meta          <span class="co">// has Title</span></span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span> <span class="co">// also has Title</span></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>t <span class="op">:=</span> Track<span class="op">{</span>Meta<span class="op">:</span> Meta<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;metadata title&quot;</span><span class="op">},</span> Title<span class="op">:</span> <span class="st">&quot;track title&quot;</span><span class="op">}</span></span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">.</span>Title<span class="op">)</span>       <span class="co">// &quot;track title&quot; --- outer field wins (no ambiguity here)</span></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">.</span>Meta<span class="op">.</span>Title<span class="op">)</span>  <span class="co">// &quot;metadata title&quot; --- must qualify to reach embedded field</span></span></code></pre></div>
+<p>When the outer type itself declares <code>Title</code>, that field shadows the promoted one — no ambiguity, outer wins. When two embedded types both promote the same name and the outer type does not declare it, the compiler errors on any unqualified access:</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> A <span class="kw">struct</span><span class="op">{</span> Val <span class="dt">int</span> <span class="op">}</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> B <span class="kw">struct</span><span class="op">{</span> Val <span class="dt">int</span> <span class="op">}</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> C <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    A</span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    B</span>
 <span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
 <span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>    msg <span class="op">:=</span> <span class="st">&quot;Bad Guy&quot;</span></span>
-<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>    addExcitement<span class="op">(&amp;</span>msg<span class="op">)</span></span>
-<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>msg<span class="op">)</span></span>
-<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>(This code does not compile — what is the type error?)</p></li>
-<li><p><strong>Write a program:</strong> Write a function <code>increment(n *int)</code> that adds one to the integer pointed to by <code>n</code>. Then write a second function <code>incrementBy(n *int, delta int)</code> that adds <code>delta</code> to the integer. In <code>main</code>, declare an integer variable, call both functions on it, and print the value after each call to confirm the changes took effect.</p></li>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>c <span class="op">:=</span> C<span class="op">{}</span></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>c<span class="op">.</span>Val<span class="op">)</span>   <span class="co">// compile error: ambiguous selector c.Val</span></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>c<span class="op">.</span>A<span class="op">.</span>Val<span class="op">)</span> <span class="co">// OK</span></span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>c<span class="op">.</span>B<span class="op">.</span>Val<span class="op">)</span> <span class="co">// OK</span></span></code></pre></div>
+<h2 data-number="6.5" id="embedding-vs-inheritance"><span class="header-section-number">6.5</span> Embedding vs Inheritance</h2>
+<p>  Java’s class inheritance is an <em>is-a</em> relationship: a <code>FeaturedTrack</code> that extends <code>Track</code> is substitutable wherever a <code>Track</code> is expected. Go embedding is a <em>has-a</em> relationship: a <code>FeaturedTrack</code> that embeds <code>Track</code> gets <code>Track</code>’s promoted fields and methods, but is not substitutable for a <code>Track</code>.</p>
+<h3 data-number="6.5.1" id="side-by-side-comparison"><span class="header-section-number">6.5.1</span> Side-by-Side Comparison</h3>
+<div class="sourceCode" id="cb26"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Java: inheritance</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> FeaturedTrack <span class="kw">extends</span> <span class="bu">Track</span> <span class="op">{</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    <span class="bu">String</span> feature<span class="op">;</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">FeaturedTrack</span><span class="op">(</span><span class="bu">String</span> title<span class="op">,</span> <span class="bu">String</span> artist<span class="op">,</span> <span class="dt">int</span> bpm<span class="op">,</span> <span class="bu">String</span> feature<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>        <span class="kw">super</span><span class="op">(</span>title<span class="op">,</span> artist<span class="op">,</span> bpm<span class="op">);</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>        <span class="kw">this</span><span class="op">.</span><span class="fu">feature</span> <span class="op">=</span> feature<span class="op">;</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">@Override</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">public</span> <span class="bu">String</span> <span class="fu">toString</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="kw">super</span><span class="op">.</span><span class="fu">toString</span><span class="op">()</span> <span class="op">+</span> <span class="st">&quot; ft. &quot;</span> <span class="op">+</span> feature<span class="op">;</span></span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a><span class="co">// A FeaturedTrack IS-A Track --- substitutable.</span></span>
+<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a><span class="bu">Track</span> t <span class="op">=</span> <span class="kw">new</span> <span class="fu">FeaturedTrack</span><span class="op">(</span><span class="st">&quot;Golden Hour&quot;</span><span class="op">,</span> <span class="st">&quot;JVKE&quot;</span><span class="op">,</span> <span class="dv">97</span><span class="op">,</span> <span class="st">&quot;Rosalía&quot;</span><span class="op">);</span></span></code></pre></div>
+<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Go: embedding</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> FeaturedTrack <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>    Track              <span class="co">// has-a Track, not is-a Track</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>    Feature <span class="dt">string</span></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>ft FeaturedTrack<span class="op">)</span> String<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ft<span class="op">.</span>Track<span class="op">.</span>String<span class="op">()</span> <span class="op">+</span> <span class="st">&quot; ft. &quot;</span> <span class="op">+</span> ft<span class="op">.</span>Feature</span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>ft <span class="op">:=</span> FeaturedTrack<span class="op">{</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    Track<span class="op">:</span>   Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Golden Hour&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;JVKE&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">97</span><span class="op">},</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>    Feature<span class="op">:</span> <span class="st">&quot;Rosalía&quot;</span><span class="op">,</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>ft<span class="op">.</span>Title<span class="op">)</span>    <span class="co">// Golden Hour --- promoted</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>ft<span class="op">.</span>String<span class="op">())</span> <span class="co">// Golden Hour by JVKE (97 BPM) ft. Rosalía</span></span></code></pre></div>
+<p>But this does <strong>not</strong> compile:</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> t Track <span class="op">=</span> ft  <span class="co">// compile error: cannot use FeaturedTrack as Track</span></span></code></pre></div>
+<p>A <code>FeaturedTrack</code> is not a <code>Track</code>. It has a <code>Track</code> inside, but Go’s type system does not consider that inheritance.</p>
+<h3 data-number="6.5.2" id="what-you-get-and-what-you-dont"><span class="header-section-number">6.5.2</span> What You Get and What You Don’t</h3>
+<p><strong>What embedding gives you:</strong></p>
+<ul>
+<li>Promoted fields: <code>ft.Title</code>, <code>ft.Artist</code>, <code>ft.BPM</code> work without qualification.</li>
+<li>Promoted methods: <code>ft.ScaleBPM(1.05)</code> delegates to the embedded <code>Track</code>’s method.</li>
+<li>Less boilerplate: no need to write forwarding methods by hand.</li>
+</ul>
+<p><strong>What embedding does not give you:</strong></p>
+<ul>
+<li>Substitutability: a <code>FeaturedTrack</code> cannot be passed where a <code>Track</code> is expected.</li>
+<li>Virtual dispatch: there is no override mechanism; the outer type’s method simply shadows the inner one.</li>
+</ul>
+<h3 data-number="6.5.3" id="how-interfaces-fill-the-gap"><span class="header-section-number">6.5.3</span> How Interfaces Fill the Gap</h3>
+<p> Go fills the polymorphism gap with interfaces (covered in Chapter 8). If both <code>Track</code> and <code>FeaturedTrack</code> implement the same interface, they can be used interchangeably through that interface — regardless of their struct relationship.</p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Playable <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>    Play<span class="op">()</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>    String<span class="op">()</span> <span class="dt">string</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Both types provide Play() and String() ---</span></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a><span class="co">// both satisfy Playable, independently.</span></span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> announce<span class="op">(</span>p Playable<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;Now playing:&quot;</span><span class="op">,</span> p<span class="op">.</span>String<span class="op">())</span></span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a>    p<span class="op">.</span>Play<span class="op">()</span></span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a>announce<span class="op">(</span>t<span class="op">)</span>   <span class="co">// Track satisfies Playable</span></span>
+<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a>announce<span class="op">(</span>ft<span class="op">)</span>  <span class="co">// FeaturedTrack also satisfies Playable</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> The Go proverb is “favor composition over inheritance.” Go takes that further: composition via embedding is the <em>only</em> option. Once you internalize it, you will find the explicit has-a relationship easier to reason about than deep inheritance hierarchies.</p>
+</div></div>
+<h3 data-number="6.5.4" id="a-realistic-embedding-example-loggedplaylist"><span class="header-section-number">6.5.4</span> A Realistic Embedding Example: LoggedPlaylist</h3>
+<p> Embedding shines when you want to extend the behavior of an existing type without modifying it. A common pattern is to wrap a type with one that adds cross-cutting concerns — logging, metrics, caching — by embedding the original and selectively overriding methods.</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;log&quot;</span></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> LoggedPlaylist <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>    Playlist                     <span class="co">// embeds all of Playlist&#39;s fields and methods</span></span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewLoggedPlaylist<span class="op">(</span>name <span class="dt">string</span><span class="op">)</span> <span class="op">*</span>LoggedPlaylist <span class="op">{</span></span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>LoggedPlaylist<span class="op">{</span>Playlist<span class="op">:</span> Playlist<span class="op">{</span>Name<span class="op">:</span> name<span class="op">}}</span></span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-14"><a href="#cb31-14" aria-hidden="true" tabindex="-1"></a><span class="co">// Add wraps Playlist.Add with a log line.</span></span>
+<span id="cb31-15"><a href="#cb31-15" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>lp <span class="op">*</span>LoggedPlaylist<span class="op">)</span> Add<span class="op">(</span>t Track<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb31-16"><a href="#cb31-16" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;adding %q to %q&quot;</span><span class="op">,</span> t<span class="op">.</span>Title<span class="op">,</span> lp<span class="op">.</span>Name<span class="op">)</span></span>
+<span id="cb31-17"><a href="#cb31-17" aria-hidden="true" tabindex="-1"></a>    lp<span class="op">.</span>Playlist<span class="op">.</span>Add<span class="op">(</span>t<span class="op">)</span> <span class="co">// delegate to the embedded method</span></span>
+<span id="cb31-18"><a href="#cb31-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb32"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>lp <span class="op">:=</span> NewLoggedPlaylist<span class="op">(</span><span class="st">&quot;Late Night Vibes&quot;</span><span class="op">)</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>lp<span class="op">.</span>Add<span class="op">(</span>Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Messy&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Lola Young&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">118</span><span class="op">})</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="co">// 2026/05/28 00:00:00 adding &quot;Messy&quot; to &quot;Late Night Vibes&quot;</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>lp<span class="op">.</span>Len<span class="op">())</span>          <span class="co">// 1  --- promoted from Playlist</span></span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>lp<span class="op">.</span>AverageBPM<span class="op">())</span>   <span class="co">// 118 --- promoted from Playlist</span></span></code></pre></div>
+<p><code>LoggedPlaylist</code> inherits <code>Len</code> and <code>AverageBPM</code> for free via promotion. It only needs to define <code>Add</code> — the one method it wants to wrap.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> When <code>LoggedPlaylist.Add</code> calls <code>lp.Playlist.Add(t)</code>, it must use the explicit qualified path <code>lp.Playlist.Add</code>. Writing <code>lp.Add(t)</code> inside the method would call <code>LoggedPlaylist.Add</code> recursively and loop forever.</p>
+</div></div>
+<h2 data-number="6.6" id="key-points"><span class="header-section-number">6.6</span> Key Points</h2>
+<ul>
+<li>A method is a function with a receiver declared between <code>func</code> and the method name.</li>
+<li>A value receiver <code>(t T)</code> gets a copy; a pointer receiver <code>(t *T)</code> gets a pointer to the original and can mutate it.</li>
+<li>If any method on a type uses a pointer receiver, use pointer receivers for all methods on that type.</li>
+<li>The method set of <code>*T</code> includes all methods of <code>T</code>; the method set of <code>T</code> includes only value-receiver methods.</li>
+<li>Go auto-takes the address for pointer-receiver calls on addressable values and auto-dereferences for value-receiver calls on pointers.</li>
+<li>Go has no constructor syntax; the idiomatic replacement is a <code>New*</code> factory function.</li>
+<li>Factory functions return <code>*T</code> so the caller can immediately use pointer-receiver methods.</li>
+<li>Factory functions can return <code>(T, error)</code> or <code>(*T, error)</code> to signal construction failures.</li>
+<li><code>go doc</code> and IDE tooling recognize the <code>New*</code> naming convention.</li>
+<li>Go has no destructor syntax; the GC reclaims heap memory automatically.</li>
+<li>Use <code>defer resource.Close()</code> immediately after a successful resource acquisition for deterministic cleanup.</li>
+<li><code>defer</code> is Go’s equivalent of Java’s try-with-resources; multiple defers form a LIFO cleanup stack.</li>
+<li><code>runtime.SetFinalizer</code> exists but is rarely correct; prefer <code>defer</code>.</li>
+<li>Embedding includes one struct type inside another by naming only the type, with no field name.</li>
+<li>Embedded fields and methods are promoted to the outer type; you can access them without qualification.</li>
+<li>An embedded value gives full ownership; an embedded pointer shares the embedded data.</li>
+<li>A zero-value struct with an embedded pointer has a nil embedded pointer; accessing promoted members panics.</li>
+<li>When two embedded types have the same field or method name and the outer type does not shadow it, any unqualified access is a compile error; resolve it with an explicit path.</li>
+<li>Go embedding is a has-a relationship, not an is-a relationship; a <code>FeaturedTrack</code> cannot be used where a <code>Track</code> is expected.</li>
+<li>Interfaces fill the polymorphism gap: any type that provides the required methods satisfies the interface, regardless of its embedding structure.</li>
+<li>“Favor composition over inheritance” is the Go proverb; embedding is the language’s only code-reuse mechanism.</li>
+</ul>
+<h2 data-number="6.7" id="exercises"><span class="header-section-number">6.7</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> In Java, a class bundles data and behavior together and inheritance lets you share both across a type hierarchy. Go separates data (struct), behavior (methods), and code reuse (embedding) into three distinct mechanisms, and interfaces handle polymorphism independently of all three. What advantages does Go’s separated approach offer over Java’s unified class model? Can you think of a scenario where Java’s approach is simpler or more convenient?</p></li>
+<li><p><strong>What does this print?</strong></p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Base <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>    ID <span class="dt">int</span></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b Base<span class="op">)</span> Describe<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;Base ID=%d&quot;</span><span class="op">,</span> b<span class="op">.</span>ID<span class="op">)</span></span>
+<span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb33-12"><a href="#cb33-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-13"><a href="#cb33-13" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Widget <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb33-14"><a href="#cb33-14" aria-hidden="true" tabindex="-1"></a>    Base</span>
+<span id="cb33-15"><a href="#cb33-15" aria-hidden="true" tabindex="-1"></a>    Color <span class="dt">string</span></span>
+<span id="cb33-16"><a href="#cb33-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb33-17"><a href="#cb33-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-18"><a href="#cb33-18" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb33-19"><a href="#cb33-19" aria-hidden="true" tabindex="-1"></a>    w <span class="op">:=</span> Widget<span class="op">{</span></span>
+<span id="cb33-20"><a href="#cb33-20" aria-hidden="true" tabindex="-1"></a>        Base<span class="op">:</span>  Base<span class="op">{</span>ID<span class="op">:</span> <span class="dv">42</span><span class="op">},</span></span>
+<span id="cb33-21"><a href="#cb33-21" aria-hidden="true" tabindex="-1"></a>        Color<span class="op">:</span> <span class="st">&quot;blue&quot;</span><span class="op">,</span></span>
+<span id="cb33-22"><a href="#cb33-22" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb33-23"><a href="#cb33-23" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>w<span class="op">.</span>ID<span class="op">)</span></span>
+<span id="cb33-24"><a href="#cb33-24" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>w<span class="op">.</span>Color<span class="op">)</span></span>
+<span id="cb33-25"><a href="#cb33-25" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>w<span class="op">.</span>Describe<span class="op">())</span></span>
+<span id="cb33-26"><a href="#cb33-26" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>w<span class="op">.</span>Base<span class="op">.</span>Describe<span class="op">())</span></span>
+<span id="cb33-27"><a href="#cb33-27" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> Trace the following program by hand and determine what is printed. Track which method (<code>Track.String</code> or <code>FeaturedTrack.String</code>) is called at each step and what each call returns.</p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span></span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a>    BPM    <span class="dt">int</span></span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t Track<span class="op">)</span> String<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;%s by %s&quot;</span><span class="op">,</span> t<span class="op">.</span>Title<span class="op">,</span> t<span class="op">.</span>Artist<span class="op">)</span></span>
+<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb34-14"><a href="#cb34-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-15"><a href="#cb34-15" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> FeaturedTrack <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb34-16"><a href="#cb34-16" aria-hidden="true" tabindex="-1"></a>    Track</span>
+<span id="cb34-17"><a href="#cb34-17" aria-hidden="true" tabindex="-1"></a>    Feature <span class="dt">string</span></span>
+<span id="cb34-18"><a href="#cb34-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb34-19"><a href="#cb34-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-20"><a href="#cb34-20" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>ft FeaturedTrack<span class="op">)</span> String<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb34-21"><a href="#cb34-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ft<span class="op">.</span>Track<span class="op">.</span>String<span class="op">()</span> <span class="op">+</span> <span class="st">&quot; ft. &quot;</span> <span class="op">+</span> ft<span class="op">.</span>Feature</span>
+<span id="cb34-22"><a href="#cb34-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb34-23"><a href="#cb34-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-24"><a href="#cb34-24" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb34-25"><a href="#cb34-25" aria-hidden="true" tabindex="-1"></a>    t <span class="op">:=</span> Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Golden Hour&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;JVKE&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">97</span><span class="op">}</span></span>
+<span id="cb34-26"><a href="#cb34-26" aria-hidden="true" tabindex="-1"></a>    ft <span class="op">:=</span> FeaturedTrack<span class="op">{</span>Track<span class="op">:</span> t<span class="op">,</span> Feature<span class="op">:</span> <span class="st">&quot;Rosalía&quot;</span><span class="op">}</span></span>
+<span id="cb34-27"><a href="#cb34-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-28"><a href="#cb34-28" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">.</span>String<span class="op">())</span></span>
+<span id="cb34-29"><a href="#cb34-29" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>ft<span class="op">.</span>String<span class="op">())</span></span>
+<span id="cb34-30"><a href="#cb34-30" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>ft<span class="op">.</span>Track<span class="op">.</span>String<span class="op">())</span></span>
+<span id="cb34-31"><a href="#cb34-31" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>ft<span class="op">.</span>BPM<span class="op">)</span></span>
+<span id="cb34-32"><a href="#cb34-32" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Where is the bug?</strong> The following program panics at runtime. Identify the exact line that panics, explain why, and describe how to fix it.</p>
+<div class="sourceCode" id="cb35"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Artist <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>    Name <span class="dt">string</span></span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>a Artist<span class="op">)</span> Label<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="st">&quot;Artist: &quot;</span> <span class="op">+</span> a<span class="op">.</span>Name</span>
+<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Song <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb35-14"><a href="#cb35-14" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>Artist</span>
+<span id="cb35-15"><a href="#cb35-15" aria-hidden="true" tabindex="-1"></a>    Title <span class="dt">string</span></span>
+<span id="cb35-16"><a href="#cb35-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb35-17"><a href="#cb35-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-18"><a href="#cb35-18" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb35-19"><a href="#cb35-19" aria-hidden="true" tabindex="-1"></a>    s <span class="op">:=</span> Song<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Chorizo Asado&quot;</span><span class="op">}</span></span>
+<span id="cb35-20"><a href="#cb35-20" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">.</span>Title<span class="op">)</span></span>
+<span id="cb35-21"><a href="#cb35-21" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">.</span>Label<span class="op">())</span> <span class="co">// line A</span></span>
+<span id="cb35-22"><a href="#cb35-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Define a struct <code>Counter</code> with a single <code>int</code> field <code>Value</code>. Write a <code>New*</code> constructor that accepts a starting value and returns a <code>*Counter</code>. Add three pointer-receiver methods: <code>Increment()</code> that adds 1, <code>Reset()</code> that sets <code>Value</code> to zero, and <code>String() string</code> that returns the current value formatted as <code>"count: N"</code>. In <code>main</code>, create a <code>Counter</code> with <code>NewCounter(10)</code>, increment it three times, print it, reset it, and print it again. Use <code>defer</code> to print <code>"done"</code> at the end of <code>main</code>, so that “done” appears as the very last line of output.</p></li>
 </ol>
 
 {% endraw %}

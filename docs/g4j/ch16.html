@@ -1,0 +1,460 @@
+---
+layout: default
+title: "16. Database Access"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 16
+---
+
+{% raw %}
+<h1 data-number="16" id="database-access"><span class="header-section-number">16</span> Database Access</h1>
+<p> Almost every real-world application reads and writes a database. Go’s <code>database/sql</code> package plays the same role as Java’s JDBC: it gives you a standard interface that works with any database driver, so your application code stays independent of the specific database engine underneath it. If you already know JDBC, you will recognize most of the ideas here — the idioms are just different enough to matter.</p>
+<h2 data-number="16.1" id="the-sql.db-connection-pool"><span class="header-section-number">16.1</span> The <code>sql.DB</code> Connection Pool</h2>
+<p>  In JDBC you open a <code>Connection</code> to represent a single database connection, and you typically manage a <code>DataSource</code> connection pool separately. Go combines these two concepts: <code>sql.DB</code> <strong>is</strong> the connection pool.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;database/sql&quot;</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;log&quot;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    _ <span class="st">&quot;github.com/lib/pq&quot;</span> <span class="co">// register the Postgres driver; see the Driver Registration section</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    db<span class="op">,</span> err <span class="op">:=</span> sql<span class="op">.</span>Open<span class="op">(</span><span class="st">&quot;postgres&quot;</span><span class="op">,</span> <span class="st">&quot;postgres://user:pass@localhost/music?sslmode=disable&quot;</span><span class="op">)</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>        log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> db<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="co">// db is ready to use; no actual connection has been made yet</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> <code>sql.Open</code> does <strong>not</strong> open a connection. It validates the driver name and DSN format and returns a pool handle. The first real connection is made lazily on the first query. To verify connectivity at startup, call <code>db.PingContext(ctx)</code> immediately after <code>sql.Open</code>.</p>
+</div></div>
+<p><code>sql.DB</code> manages a pool of underlying connections and is <strong>safe for concurrent use by multiple goroutines</strong>. You should create one <code>sql.DB</code> per database and share it across your whole application — creating a new <code>sql.DB</code> per request is a common mistake that exhausts connection limits quickly.</p>
+<p>You can tune the pool with a handful of methods:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>db<span class="op">.</span>SetMaxOpenConns<span class="op">(</span><span class="dv">25</span><span class="op">)</span>      <span class="co">// maximum number of open connections</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>db<span class="op">.</span>SetMaxIdleConns<span class="op">(</span><span class="dv">25</span><span class="op">)</span>      <span class="co">// maximum number of idle connections kept in the pool</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>db<span class="op">.</span>SetConnMaxLifetime<span class="op">(</span>time<span class="op">.</span>Hour<span class="op">)</span> <span class="co">// maximum age of a connection before it is recycled</span></span></code></pre></div>
+<p>The Java JDBC analogy:</p>
+<table>
+<thead>
+<tr>
+<th>JDBC</th>
+<th>Go <code>database/sql</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DataSource</code></td>
+<td><code>*sql.DB</code></td>
+</tr>
+<tr>
+<td><code>Connection</code></td>
+<td>internal, managed by the pool</td>
+</tr>
+<tr>
+<td><code>PreparedStatement</code></td>
+<td><code>*sql.Stmt</code></td>
+</tr>
+<tr>
+<td><code>ResultSet</code></td>
+<td><code>*sql.Rows</code></td>
+</tr>
+<tr>
+<td><code>SQLException</code></td>
+<td><code>error</code> (idiomatic Go)</td>
+</tr>
+</tbody>
+</table>
+<h2 data-number="16.2" id="querying-the-database"><span class="header-section-number">16.2</span> Querying the Database</h2>
+<p>   Every query method has a plain form (<code>Query</code>, <code>QueryRow</code>, <code>Exec</code>) and a context-aware form (<code>QueryContext</code>, <code>QueryRowContext</code>, <code>ExecContext</code>). Always use the context-aware forms in production code; they respect cancellation and deadlines (see Chapter 12).</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Always prefer these:</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>db<span class="op">.</span>QueryContext<span class="op">(</span>ctx<span class="op">,</span> query<span class="op">,</span> args<span class="op">...)</span>     <span class="co">// multiple rows</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>db<span class="op">.</span>QueryRowContext<span class="op">(</span>ctx<span class="op">,</span> query<span class="op">,</span> args<span class="op">...)</span>  <span class="co">// exactly one row</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>db<span class="op">.</span>ExecContext<span class="op">(</span>ctx<span class="op">,</span> query<span class="op">,</span> args<span class="op">...)</span>      <span class="co">// INSERT / UPDATE / DELETE</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> The plain <code>db.Query</code>, <code>db.QueryRow</code>, and <code>db.Exec</code> methods use <code>context.Background()</code> internally and cannot be cancelled. Using them in a web handler or an RPC server means the query runs to completion even after the client disconnects. Always pass a context.</p>
+</div></div>
+<h3 data-number="16.2.1" id="querying-multiple-rows"><span class="header-section-number">16.2.1</span> Querying Multiple Rows</h3>
+<p> <code>db.QueryContext</code> returns <code>*sql.Rows</code>, which you iterate with <code>rows.Next()</code>.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> listSongs<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> db <span class="op">*</span>sql<span class="op">.</span>DB<span class="op">,</span> artist <span class="dt">string</span><span class="op">)</span> <span class="op">([]</span>Song<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    rows<span class="op">,</span> err <span class="op">:=</span> db<span class="op">.</span>QueryContext<span class="op">(</span>ctx<span class="op">,</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;SELECT id, title, artist FROM songs WHERE artist = $1&quot;</span><span class="op">,</span> artist<span class="op">)</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> err</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> rows<span class="op">.</span>Close<span class="op">()</span> <span class="co">// always close rows when done</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> songs <span class="op">[]</span>Song</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> rows<span class="op">.</span>Next<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>        <span class="kw">var</span> s Song</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> err <span class="op">:=</span> rows<span class="op">.</span>Scan<span class="op">(&amp;</span>s<span class="op">.</span>ID<span class="op">,</span> <span class="op">&amp;</span>s<span class="op">.</span>Title<span class="op">,</span> <span class="op">&amp;</span>s<span class="op">.</span>Artist<span class="op">);</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> err</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>        songs <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>songs<span class="op">,</span> s<span class="op">)</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>    <span class="co">// rows.Err() reports any error that stopped iteration early</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">:=</span> rows<span class="op">.</span>Err<span class="op">();</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> err</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> songs<span class="op">,</span> <span class="ot">nil</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> If you forget <code>defer rows.Close()</code>, the connection borrowed from the pool is never returned. Under load, the pool is exhausted and new queries block forever. Always <code>defer rows.Close()</code> immediately after checking the error from <code>QueryContext</code>.</p>
+</div></div>
+<p>The Java JDBC equivalent pattern is:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span> <span class="op">(</span><span class="bu">PreparedStatement</span> ps <span class="op">=</span> conn<span class="op">.</span><span class="fu">prepareStatement</span><span class="op">(</span>sql<span class="op">))</span> <span class="op">{</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    ps<span class="op">.</span><span class="fu">setString</span><span class="op">(</span><span class="dv">1</span><span class="op">,</span> artist<span class="op">);</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span> <span class="op">(</span><span class="bu">ResultSet</span> rs <span class="op">=</span> ps<span class="op">.</span><span class="fu">executeQuery</span><span class="op">())</span> <span class="op">{</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">while</span> <span class="op">(</span>rs<span class="op">.</span><span class="fu">next</span><span class="op">())</span> <span class="op">{</span> <span class="kw">...</span> <span class="op">}</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Go’s <code>defer rows.Close()</code> replaces the <code>try-with-resources</code> block.</p>
+<h3 data-number="16.2.2" id="querying-a-single-row"><span class="header-section-number">16.2.2</span> Querying a Single Row</h3>
+<p> When you expect exactly one row, use <code>QueryRowContext</code>. It returns <code>*sql.Row</code>, and you call <code>Scan</code> on it directly — no loop needed.</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> getSong<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> db <span class="op">*</span>sql<span class="op">.</span>DB<span class="op">,</span> id <span class="dt">int</span><span class="op">)</span> <span class="op">(</span>Song<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> s Song</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    err <span class="op">:=</span> db<span class="op">.</span>QueryRowContext<span class="op">(</span>ctx<span class="op">,</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;SELECT id, title, artist FROM songs WHERE id = $1&quot;</span><span class="op">,</span> id<span class="op">).</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>        Scan<span class="op">(&amp;</span>s<span class="op">.</span>ID<span class="op">,</span> <span class="op">&amp;</span>s<span class="op">.</span>Title<span class="op">,</span> <span class="op">&amp;</span>s<span class="op">.</span>Artist<span class="op">)</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> Song<span class="op">{},</span> err</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> s<span class="op">,</span> <span class="ot">nil</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p> If no row matches the query, <code>Scan</code> returns the sentinel error <code>sql.ErrNoRows</code>. Use <code>errors.Is</code> to test for it (Chapter 9):</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> errors<span class="op">.</span>Is<span class="op">(</span>err<span class="op">,</span> sql<span class="op">.</span>ErrNoRows<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> Song<span class="op">{},</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;song %d not found&quot;</span><span class="op">,</span> id<span class="op">)</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 data-number="16.2.3" id="executing-non-query-statements"><span class="header-section-number">16.2.3</span> Executing Non-Query Statements</h3>
+<p> <code>ExecContext</code> is for statements that do not return rows: <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code>, <code>CREATE TABLE</code>, and so on. It returns <code>sql.Result</code>, which tells you how many rows were affected and the last inserted auto-increment ID.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> addSong<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> db <span class="op">*</span>sql<span class="op">.</span>DB<span class="op">,</span> title<span class="op">,</span> artist <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">int64</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    result<span class="op">,</span> err <span class="op">:=</span> db<span class="op">.</span>ExecContext<span class="op">(</span>ctx<span class="op">,</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;INSERT INTO songs (title, artist) VALUES ($1, $2)&quot;</span><span class="op">,</span> title<span class="op">,</span> artist<span class="op">)</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="dv">0</span><span class="op">,</span> err</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result<span class="op">.</span>LastInsertId<span class="op">()</span> <span class="co">// not all drivers support this</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Postgres does not support <code>LastInsertId</code>. Use <code>RETURNING id</code> in your <code>INSERT</code> statement and <code>QueryRowContext</code> + <code>Scan</code> to read the generated key back.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> id <span class="dt">int64</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>err <span class="op">:=</span> db<span class="op">.</span>QueryRowContext<span class="op">(</span>ctx<span class="op">,</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;INSERT INTO songs (title, artist) VALUES ($1, $2) RETURNING id&quot;</span><span class="op">,</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    title<span class="op">,</span> artist<span class="op">).</span>Scan<span class="op">(&amp;</span>id<span class="op">)</span></span></code></pre></div>
+</div></div>
+<h2 data-number="16.3" id="scanning-results"><span class="header-section-number">16.3</span> Scanning Results</h2>
+<p>  <code>rows.Scan</code> maps database column values into Go variables. You pass a pointer to each destination variable, in the same order as the columns in your <code>SELECT</code> list.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> id    <span class="dt">int</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> title <span class="dt">string</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> plays <span class="dt">int64</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>rows<span class="op">.</span>Scan<span class="op">(&amp;</span>id<span class="op">,</span> <span class="op">&amp;</span>title<span class="op">,</span> <span class="op">&amp;</span>plays<span class="op">)</span></span></code></pre></div>
+<p><code>Scan</code> handles type conversions between the database wire type and the Go type. For example, a SQL <code>INT</code> column can scan into <code>int</code>, <code>int32</code>, <code>int64</code>, or <code>string</code>. If the conversion is not possible, <code>Scan</code> returns an error.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> The number of arguments to <code>Scan</code> must match the number of columns returned by your query. A mismatch causes a runtime error, not a compile-time error. If you <code>SELECT *</code> and the schema changes, <code>Scan</code> will fail — prefer explicit column lists.</p>
+</div></div>
+<h2 data-number="16.4" id="nullable-column-values-with-sql.nullt"><span class="header-section-number">16.4</span> Nullable Column Values with <code>sql.Null[T]</code></h2>
+<p>  SQL columns can be <code>NULL</code>. If you scan a <code>NULL</code> value into a plain Go variable such as <code>string</code> or <code>int</code>, <code>Scan</code> returns an error. Before Go 1.22 you used type-specific helpers like <code>sql.NullString</code> and <code>sql.NullInt64</code>. Go 1.22 introduced the generic <code>sql.Null[T]</code>:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Null<span class="op">[</span>T <span class="dt">any</span><span class="op">]</span> <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    V     T    <span class="co">// the value; zero value of T if NULL</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    Valid <span class="dt">bool</span> <span class="co">// true if the column is not NULL</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Use it when a column may be <code>NULL</code>:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Song <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    ID     <span class="dt">int</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    Album  sql<span class="op">.</span>Null<span class="op">[</span><span class="dt">string</span><span class="op">]</span> <span class="co">// NULL when the song is a single</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>    Plays  sql<span class="op">.</span>Null<span class="op">[</span><span class="dt">int64</span><span class="op">]</span>  <span class="co">// NULL when plays are not tracked</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> s Song</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>rows<span class="op">.</span>Scan<span class="op">(&amp;</span>s<span class="op">.</span>ID<span class="op">,</span> <span class="op">&amp;</span>s<span class="op">.</span>Title<span class="op">,</span> <span class="op">&amp;</span>s<span class="op">.</span>Artist<span class="op">,</span> <span class="op">&amp;</span>s<span class="op">.</span>Album<span class="op">,</span> <span class="op">&amp;</span>s<span class="op">.</span>Plays<span class="op">)</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> s<span class="op">.</span>Album<span class="op">.</span>Valid <span class="op">{</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;Album:&quot;</span><span class="op">,</span> s<span class="op">.</span>Album<span class="op">.</span>V<span class="op">)</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;Single (no album)&quot;</span><span class="op">)</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> <code>sql.Null[T]</code> works with any type <code>T</code> that <code>database/sql</code> knows how to scan. For older code (pre-1.22) you will see <code>sql.NullString</code>, <code>sql.NullInt64</code>, <code>sql.NullFloat64</code>, and <code>sql.NullBool</code>. They are still valid and work the same way; <code>sql.Null[T]</code> just generalizes them.</p>
+</div></div>
+<h2 data-number="16.5" id="transactions"><span class="header-section-number">16.5</span> Transactions</h2>
+<p>  A transaction groups multiple statements into an atomic unit: either all succeed or all are rolled back. In JDBC you call <code>conn.setAutoCommit(false)</code> and then <code>conn.commit()</code> or <code>conn.rollback()</code>. In Go you call <code>db.BeginTx</code> to get a <code>*sql.Tx</code>, then use <code>tx.Commit()</code> or <code>tx.Rollback()</code>.</p>
+<p><code>*sql.Tx</code> has the same query methods as <code>*sql.DB</code>: <code>QueryContext</code>, <code>QueryRowContext</code>, <code>ExecContext</code>, and <code>PrepareContext</code>. All statements executed on a <code>*sql.Tx</code> run inside the same database transaction.</p>
+<h3 data-number="16.5.1" id="the-deferred-rollback-pattern"><span class="header-section-number">16.5.1</span> The Deferred Rollback Pattern</h3>
+<p> The idiomatic Go pattern for transactions uses <code>defer</code> to guarantee a rollback if anything goes wrong:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> transferPlay<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> db <span class="op">*</span>sql<span class="op">.</span>DB<span class="op">,</span> fromID<span class="op">,</span> toID <span class="dt">int</span><span class="op">,</span> count <span class="dt">int64</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    tx<span class="op">,</span> err <span class="op">:=</span> db<span class="op">.</span>BeginTx<span class="op">(</span>ctx<span class="op">,</span> <span class="ot">nil</span><span class="op">)</span> <span class="co">// nil uses the default isolation level</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> err</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> tx<span class="op">.</span>Rollback<span class="op">()</span> <span class="co">// no-op if tx.Commit() has already been called</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    _<span class="op">,</span> err <span class="op">=</span> tx<span class="op">.</span>ExecContext<span class="op">(</span>ctx<span class="op">,</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;UPDATE songs SET plays = plays - $1 WHERE id = $2&quot;</span><span class="op">,</span> count<span class="op">,</span> fromID<span class="op">)</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> err <span class="co">// defer fires tx.Rollback()</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>    _<span class="op">,</span> err <span class="op">=</span> tx<span class="op">.</span>ExecContext<span class="op">(</span>ctx<span class="op">,</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;UPDATE songs SET plays = plays + $1 WHERE id = $2&quot;</span><span class="op">,</span> count<span class="op">,</span> toID<span class="op">)</span></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> err <span class="co">// defer fires tx.Rollback()</span></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> tx<span class="op">.</span>Commit<span class="op">()</span> <span class="co">// defer fires tx.Rollback(), but Rollback after Commit is a no-op</span></span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The key insight: <code>tx.Rollback()</code> is a no-op if the transaction has already been committed. So you can <code>defer tx.Rollback()</code> unconditionally right after <code>BeginTx</code>, and then call <code>tx.Commit()</code> at the end of the happy path. If anything returns early with an error, the deferred rollback fires and cleans up.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> This pattern is the Go equivalent of Java’s <code>try { ... conn.commit(); } catch (Exception e) { conn.rollback(); }</code> boilerplate. It is shorter and harder to forget because <code>defer</code> always runs, even on panics.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> After <code>tx.Commit()</code> or <code>tx.Rollback()</code> is called, the <code>*sql.Tx</code> is no longer usable. Any further operations on it return <code>sql.ErrTxDone</code>.</p>
+</div></div>
+<h2 data-number="16.6" id="prepared-statements"><span class="header-section-number">16.6</span> Prepared Statements</h2>
+<p>  A prepared statement is a pre-compiled SQL template that can be executed multiple times with different parameter values. In JDBC, <code>PreparedStatement</code> is the standard way to parameterize queries. In Go, use <code>db.PrepareContext</code> to get a <code>*sql.Stmt</code>:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> bulkInsert<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> db <span class="op">*</span>sql<span class="op">.</span>DB<span class="op">,</span> songs <span class="op">[]</span>Song<span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    stmt<span class="op">,</span> err <span class="op">:=</span> db<span class="op">.</span>PrepareContext<span class="op">(</span>ctx<span class="op">,</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;INSERT INTO songs (title, artist) VALUES ($1, $2)&quot;</span><span class="op">)</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> err</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> stmt<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> s <span class="op">:=</span> <span class="kw">range</span> songs <span class="op">{</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> _<span class="op">,</span> err <span class="op">:=</span> stmt<span class="op">.</span>ExecContext<span class="op">(</span>ctx<span class="op">,</span> s<span class="op">.</span>Title<span class="op">,</span> s<span class="op">.</span>Artist<span class="op">);</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> err</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ot">nil</span></span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>*sql.Stmt</code> has the same execution methods as <code>*sql.DB</code>: <code>QueryContext</code>, <code>QueryRowContext</code>, and <code>ExecContext</code>.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Prepare the statement once and execute it many times. Preparing a statement on every iteration of a loop defeats the purpose — the database has to parse and plan the query each time anyway.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Go’s <code>database/sql</code> transparently re-prepares statements when a connection from the pool is replaced. The <code>*sql.Stmt</code> handle is associated with the pool, not a single connection. Under the hood, Go may prepare the same statement on multiple connections as needed. This is different from JDBC, where a <code>PreparedStatement</code> is tied to a single <code>Connection</code>.</p>
+</div></div>
+<p>You can also prepare a statement inside a transaction:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>tx<span class="op">,</span> err <span class="op">:=</span> db<span class="op">.</span>BeginTx<span class="op">(</span>ctx<span class="op">,</span> <span class="ot">nil</span><span class="op">)</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span> <span class="op">...</span> <span class="op">}</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> tx<span class="op">.</span>Rollback<span class="op">()</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>stmt<span class="op">,</span> err <span class="op">:=</span> tx<span class="op">.</span>PrepareContext<span class="op">(</span>ctx<span class="op">,</span> <span class="st">&quot;INSERT INTO songs (title, artist) VALUES ($1, $2)&quot;</span><span class="op">)</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span> <span class="op">...</span> <span class="op">}</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> stmt<span class="op">.</span>Close<span class="op">()</span></span></code></pre></div>
+<p>Statements prepared on a <code>*sql.Tx</code> are scoped to that transaction.</p>
+<h2 data-number="16.7" id="driver-registration"><span class="header-section-number">16.7</span> Driver Registration</h2>
+<p>  <code>database/sql</code> is driver-neutral. It defines the API; the actual wire protocol to a specific database is provided by a third-party driver package. Drivers register themselves with <code>database/sql</code> in their <code>init()</code> function (see Chapter 4). You import the driver package for its side effects — you never call it directly.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> _ <span class="st">&quot;github.com/lib/pq&quot;</span>          <span class="co">// PostgreSQL driver</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> _ <span class="st">&quot;github.com/mattn/go-sqlite3&quot;</span> <span class="co">// SQLite driver</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> _ <span class="st">&quot;github.com/go-sql-driver/mysql&quot;</span> <span class="co">// MySQL driver</span></span></code></pre></div>
+<p> The <code>_</code> alias discards the package name so the compiler does not complain about an unused import. The <code>init()</code> function inside the driver package calls <code>sql.Register("postgres", &amp;Driver{})</code> (or equivalent), making the driver available to <code>sql.Open</code>.</p>
+<p>This is the same blank import pattern introduced in Chapter 1 (for side-effect-only imports). The driver package has a valuable side effect — driver registration — but no exported API that your code calls directly.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> The driver name string you pass to <code>sql.Open</code> (e.g., <code>"postgres"</code>, <code>"sqlite3"</code>, <code>"mysql"</code>) must match the name the driver registers in its <code>init()</code>. Check the driver’s documentation if <code>sql.Open</code> returns <code>unknown driver</code> — you may be using the wrong name or missing the blank import.</p>
+</div></div>
+<h2 data-number="16.8" id="pgx-the-postgresql-driver"><span class="header-section-number">16.8</span> <code>pgx</code> — The PostgreSQL Driver</h2>
+<p>  For PostgreSQL specifically, <code>github.com/jackc/pgx/v5</code> is the dominant driver and most new Go projects use it directly rather than through <code>database/sql</code>. <code>pgx</code> exposes the full Postgres wire protocol — named parameters, <code>COPY</code>, <code>LISTEN</code>/<code>NOTIFY</code>, batch queries — none of which are available through the <code>database/sql</code> interface.</p>
+<p>You can use <code>pgx</code> in two modes:</p>
+<p><strong>Mode 1: as a <code>database/sql</code> driver</strong> (drop-in, no API change):</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;database/sql&quot;</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    _ <span class="st">&quot;github.com/jackc/pgx/v5/stdlib&quot;</span> <span class="co">// registers &quot;pgx&quot; driver name</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>db<span class="op">,</span> err <span class="op">:=</span> sql<span class="op">.</span>Open<span class="op">(</span><span class="st">&quot;pgx&quot;</span><span class="op">,</span> os<span class="op">.</span>Getenv<span class="op">(</span><span class="st">&quot;DATABASE_URL&quot;</span><span class="op">))</span></span></code></pre></div>
+<p><strong>Mode 2: native <code>pgx</code> API</strong> (recommended for new Postgres projects):</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;github.com/jackc/pgx/v5/pgxpool&quot;</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>pool<span class="op">,</span> err <span class="op">:=</span> pgxpool<span class="op">.</span>New<span class="op">(</span>ctx<span class="op">,</span> os<span class="op">.</span>Getenv<span class="op">(</span><span class="st">&quot;DATABASE_URL&quot;</span><span class="op">))</span></span></code></pre></div>
+<p><code>pgxpool.Pool</code> is a connection pool with the same context-aware query methods as <code>database/sql</code> but with access to Postgres-specific features. <code>pgx</code> also provides <code>pgx.CollectRows</code> and <code>pgx.RowToStruct</code> helpers that scan results directly into structs without manual <code>Scan</code> calls.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Prefer the native <code>pgx</code> API for new PostgreSQL projects. Use the <code>stdlib</code> wrapper only when you need to share code with a <code>database/sql</code>-based library (e.g., <code>sqlx</code>, <code>goose</code>).</p>
+</div></div>
+<h2 data-number="16.9" id="putting-it-together-a-small-music-store"><span class="header-section-number">16.9</span> Putting It Together: A Small Music Store</h2>
+<p>Here is a complete, self-contained example that opens an in-memory SQLite database, creates a table, inserts a few songs, and queries them back. It demonstrates everything covered in this chapter in one place.</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;context&quot;</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;database/sql&quot;</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;log&quot;</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>    _ <span class="st">&quot;github.com/mattn/go-sqlite3&quot;</span> <span class="co">// register the SQLite driver</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Song <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>    ID     <span class="dt">int</span></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span></span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>    Album  sql<span class="op">.</span>Null<span class="op">[</span><span class="dt">string</span><span class="op">]</span></span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a>    db<span class="op">,</span> err <span class="op">:=</span> sql<span class="op">.</span>Open<span class="op">(</span><span class="st">&quot;sqlite3&quot;</span><span class="op">,</span> <span class="st">&quot;:memory:&quot;</span><span class="op">)</span></span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a>        log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> db<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-26"><a href="#cb19-26" aria-hidden="true" tabindex="-1"></a>    ctx <span class="op">:=</span> context<span class="op">.</span>Background<span class="op">()</span></span>
+<span id="cb19-27"><a href="#cb19-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-28"><a href="#cb19-28" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">:=</span> db<span class="op">.</span>PingContext<span class="op">(</span>ctx<span class="op">);</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span> <span class="co">// verify connectivity</span></span>
+<span id="cb19-29"><a href="#cb19-29" aria-hidden="true" tabindex="-1"></a>        log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb19-30"><a href="#cb19-30" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-31"><a href="#cb19-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-32"><a href="#cb19-32" aria-hidden="true" tabindex="-1"></a>    _<span class="op">,</span> err <span class="op">=</span> db<span class="op">.</span>ExecContext<span class="op">(</span>ctx<span class="op">,</span> <span class="st">`</span></span>
+<span id="cb19-33"><a href="#cb19-33" aria-hidden="true" tabindex="-1"></a><span class="st">        CREATE TABLE songs (</span></span>
+<span id="cb19-34"><a href="#cb19-34" aria-hidden="true" tabindex="-1"></a><span class="st">            id     INTEGER PRIMARY KEY AUTOINCREMENT,</span></span>
+<span id="cb19-35"><a href="#cb19-35" aria-hidden="true" tabindex="-1"></a><span class="st">            title  TEXT    NOT NULL,</span></span>
+<span id="cb19-36"><a href="#cb19-36" aria-hidden="true" tabindex="-1"></a><span class="st">            artist TEXT    NOT NULL,</span></span>
+<span id="cb19-37"><a href="#cb19-37" aria-hidden="true" tabindex="-1"></a><span class="st">            album  TEXT</span></span>
+<span id="cb19-38"><a href="#cb19-38" aria-hidden="true" tabindex="-1"></a><span class="st">        )`</span><span class="op">)</span></span>
+<span id="cb19-39"><a href="#cb19-39" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb19-40"><a href="#cb19-40" aria-hidden="true" tabindex="-1"></a>        log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb19-41"><a href="#cb19-41" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-42"><a href="#cb19-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-43"><a href="#cb19-43" aria-hidden="true" tabindex="-1"></a>    <span class="co">// bulk insert using a prepared statement</span></span>
+<span id="cb19-44"><a href="#cb19-44" aria-hidden="true" tabindex="-1"></a>    stmt<span class="op">,</span> err <span class="op">:=</span> db<span class="op">.</span>PrepareContext<span class="op">(</span>ctx<span class="op">,</span></span>
+<span id="cb19-45"><a href="#cb19-45" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;INSERT INTO songs (title, artist, album) VALUES (?, ?, ?)&quot;</span><span class="op">)</span></span>
+<span id="cb19-46"><a href="#cb19-46" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb19-47"><a href="#cb19-47" aria-hidden="true" tabindex="-1"></a>        log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb19-48"><a href="#cb19-48" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-49"><a href="#cb19-49" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> stmt<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb19-50"><a href="#cb19-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-51"><a href="#cb19-51" aria-hidden="true" tabindex="-1"></a>    inserts <span class="op">:=</span> <span class="op">[]</span>Song<span class="op">{</span></span>
+<span id="cb19-52"><a href="#cb19-52" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;On My Mama&quot;</span><span class="op">,</span>  Artist<span class="op">:</span> <span class="st">&quot;Victoria Monét&quot;</span><span class="op">,</span> Album<span class="op">:</span> sql<span class="op">.</span>Null<span class="op">[</span><span class="dt">string</span><span class="op">]{</span>V<span class="op">:</span> <span class="st">&quot;JAGUAR II&quot;</span><span class="op">,</span> Valid<span class="op">:</span> <span class="ot">true</span><span class="op">}},</span></span>
+<span id="cb19-53"><a href="#cb19-53" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Coastin&#39;&quot;</span><span class="op">,</span>    Artist<span class="op">:</span> <span class="st">&quot;Victoria Monét&quot;</span><span class="op">,</span> Album<span class="op">:</span> sql<span class="op">.</span>Null<span class="op">[</span><span class="dt">string</span><span class="op">]{</span>V<span class="op">:</span> <span class="st">&quot;JAGUAR II&quot;</span><span class="op">,</span> Valid<span class="op">:</span> <span class="ot">true</span><span class="op">}},</span></span>
+<span id="cb19-54"><a href="#cb19-54" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Evergreen&quot;</span><span class="op">,</span>   Artist<span class="op">:</span> <span class="st">&quot;Omar Apollo&quot;</span><span class="op">,</span>    Album<span class="op">:</span> sql<span class="op">.</span>Null<span class="op">[</span><span class="dt">string</span><span class="op">]{</span>V<span class="op">:</span> <span class="st">&quot;IVORY&quot;</span><span class="op">,</span>     Valid<span class="op">:</span> <span class="ot">true</span><span class="op">}},</span></span>
+<span id="cb19-55"><a href="#cb19-55" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Killing Me&quot;</span><span class="op">,</span>  Artist<span class="op">:</span> <span class="st">&quot;Omar Apollo&quot;</span><span class="op">,</span>    Album<span class="op">:</span> sql<span class="op">.</span>Null<span class="op">[</span><span class="dt">string</span><span class="op">]{}},</span>                          <span class="co">// NULL album</span></span>
+<span id="cb19-56"><a href="#cb19-56" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-57"><a href="#cb19-57" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> s <span class="op">:=</span> <span class="kw">range</span> inserts <span class="op">{</span></span>
+<span id="cb19-58"><a href="#cb19-58" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> _<span class="op">,</span> err <span class="op">:=</span> stmt<span class="op">.</span>ExecContext<span class="op">(</span>ctx<span class="op">,</span> s<span class="op">.</span>Title<span class="op">,</span> s<span class="op">.</span>Artist<span class="op">,</span> s<span class="op">.</span>Album<span class="op">);</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb19-59"><a href="#cb19-59" aria-hidden="true" tabindex="-1"></a>            log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb19-60"><a href="#cb19-60" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb19-61"><a href="#cb19-61" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-62"><a href="#cb19-62" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-63"><a href="#cb19-63" aria-hidden="true" tabindex="-1"></a>    <span class="co">// query all songs for Victoria Monét</span></span>
+<span id="cb19-64"><a href="#cb19-64" aria-hidden="true" tabindex="-1"></a>    rows<span class="op">,</span> err <span class="op">:=</span> db<span class="op">.</span>QueryContext<span class="op">(</span>ctx<span class="op">,</span></span>
+<span id="cb19-65"><a href="#cb19-65" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;SELECT id, title, artist, album FROM songs WHERE artist = ?&quot;</span><span class="op">,</span> <span class="st">&quot;Victoria Monét&quot;</span><span class="op">)</span></span>
+<span id="cb19-66"><a href="#cb19-66" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb19-67"><a href="#cb19-67" aria-hidden="true" tabindex="-1"></a>        log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb19-68"><a href="#cb19-68" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-69"><a href="#cb19-69" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> rows<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb19-70"><a href="#cb19-70" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-71"><a href="#cb19-71" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> rows<span class="op">.</span>Next<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb19-72"><a href="#cb19-72" aria-hidden="true" tabindex="-1"></a>        <span class="kw">var</span> s Song</span>
+<span id="cb19-73"><a href="#cb19-73" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> err <span class="op">:=</span> rows<span class="op">.</span>Scan<span class="op">(&amp;</span>s<span class="op">.</span>ID<span class="op">,</span> <span class="op">&amp;</span>s<span class="op">.</span>Title<span class="op">,</span> <span class="op">&amp;</span>s<span class="op">.</span>Artist<span class="op">,</span> <span class="op">&amp;</span>s<span class="op">.</span>Album<span class="op">);</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb19-74"><a href="#cb19-74" aria-hidden="true" tabindex="-1"></a>            log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb19-75"><a href="#cb19-75" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb19-76"><a href="#cb19-76" aria-hidden="true" tabindex="-1"></a>        album <span class="op">:=</span> <span class="st">&quot;single&quot;</span></span>
+<span id="cb19-77"><a href="#cb19-77" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> s<span class="op">.</span>Album<span class="op">.</span>Valid <span class="op">{</span></span>
+<span id="cb19-78"><a href="#cb19-78" aria-hidden="true" tabindex="-1"></a>            album <span class="op">=</span> s<span class="op">.</span>Album<span class="op">.</span>V</span>
+<span id="cb19-79"><a href="#cb19-79" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb19-80"><a href="#cb19-80" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%d: %s --- %s (%s)</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> s<span class="op">.</span>ID<span class="op">,</span> s<span class="op">.</span>Title<span class="op">,</span> s<span class="op">.</span>Artist<span class="op">,</span> album<span class="op">)</span></span>
+<span id="cb19-81"><a href="#cb19-81" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-82"><a href="#cb19-82" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">:=</span> rows<span class="op">.</span>Err<span class="op">();</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb19-83"><a href="#cb19-83" aria-hidden="true" tabindex="-1"></a>        log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb19-84"><a href="#cb19-84" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-85"><a href="#cb19-85" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Output:</p>
+<pre><code>1: On My Mama --- Victoria Monét (JAGUAR II)
+2: Coastin&#39; --- Victoria Monét (JAGUAR II)</code></pre>
+<h2 data-number="16.10" id="key-points"><span class="header-section-number">16.10</span> Key Points</h2>
+<ul>
+<li><code>sql.DB</code> is a <strong>connection pool</strong>, not a single connection; create one instance per database and share it across your application.</li>
+<li>Always use the context-aware methods — <code>QueryContext</code>, <code>QueryRowContext</code>, <code>ExecContext</code> — so that queries respect cancellation and timeouts (Chapter 12).</li>
+<li><code>rows.Scan</code> maps column values into Go variables by position; always <code>defer rows.Close()</code> and check <code>rows.Err()</code> after the loop. <strong><em>[no-discard-error]</em></strong></li>
+<li><code>sql.ErrNoRows</code> is the sentinel error from <code>QueryRowContext</code> when no row matches; test with <code>errors.Is</code>.</li>
+<li><code>sql.Null[T]</code> (Go 1.22) wraps nullable column values; <code>Valid</code> is <code>true</code> when the column is not <code>NULL</code>.</li>
+<li><code>sql.Tx</code> groups statements into a transaction; the <strong>deferred rollback pattern</strong> guarantees cleanup on any error path.</li>
+<li><code>db.PrepareContext</code> returns a <code>*sql.Stmt</code>; prepare once, execute many times.</li>
+<li>Driver packages (e.g., <code>github.com/lib/pq</code>) register themselves via <code>init()</code> and must be blank-imported to take effect (Chapter 1).</li>
+<li>For PostgreSQL, prefer <code>pgx/v5</code> (<code>github.com/jackc/pgx/v5</code>) over <code>lib/pq</code>; use the native <code>pgxpool.Pool</code> API for full Postgres feature access, or <code>pgx/v5/stdlib</code> for a <code>database/sql</code>-compatible drop-in.</li>
+</ul>
+<h2 data-number="16.11" id="exercises"><span class="header-section-number">16.11</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> JDBC requires explicit transaction management and connection pooling through a <code>DataSource</code>, usually provided by an application server or a library like HikariCP. Go’s <code>database/sql</code> builds connection pooling directly into <code>sql.DB</code>. What are the tradeoffs of each approach? In what situations might you still want an external connection pool in a Go application?</p></li>
+<li><p><strong>What does this print?</strong></p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;database/sql&quot;</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>    a <span class="op">:=</span> sql<span class="op">.</span>Null<span class="op">[</span><span class="dt">string</span><span class="op">]{</span>V<span class="op">:</span> <span class="st">&quot;Evergreen&quot;</span><span class="op">,</span> Valid<span class="op">:</span> <span class="ot">true</span><span class="op">}</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>    b <span class="op">:=</span> sql<span class="op">.</span>Null<span class="op">[</span><span class="dt">string</span><span class="op">]{</span>V<span class="op">:</span> <span class="st">&quot;Killing Me&quot;</span><span class="op">,</span> Valid<span class="op">:</span> <span class="ot">false</span><span class="op">}</span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>    c <span class="op">:=</span> sql<span class="op">.</span>Null<span class="op">[</span><span class="dt">int64</span><span class="op">]{</span>V<span class="op">:</span> <span class="dv">0</span><span class="op">,</span> Valid<span class="op">:</span> <span class="ot">false</span><span class="op">}</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>a<span class="op">.</span>Valid<span class="op">,</span> a<span class="op">.</span>V<span class="op">)</span></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>b<span class="op">.</span>Valid<span class="op">,</span> b<span class="op">.</span>V<span class="op">)</span></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>c<span class="op">.</span>Valid<span class="op">,</span> c<span class="op">.</span>V<span class="op">)</span></span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> Trace the following transaction sequence and state whether the database ends up with the row inserted or not, and why.</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>tx<span class="op">,</span> _ <span class="op">:=</span> db<span class="op">.</span>BeginTx<span class="op">(</span>ctx<span class="op">,</span> <span class="ot">nil</span><span class="op">)</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> tx<span class="op">.</span>Rollback<span class="op">()</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>_<span class="op">,</span> err <span class="op">:=</span> tx<span class="op">.</span>ExecContext<span class="op">(</span>ctx<span class="op">,</span> <span class="st">&quot;INSERT INTO songs (title, artist) VALUES (?, ?)&quot;</span><span class="op">,</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;On My Mama&quot;</span><span class="op">,</span> <span class="st">&quot;Victoria Monét&quot;</span><span class="op">)</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> err</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="cf">return</span> tx<span class="op">.</span>Commit<span class="op">()</span></span></code></pre></div>
+<p>Case A: <code>ExecContext</code> succeeds and <code>Commit</code> succeeds. Case B: <code>ExecContext</code> succeeds but <code>Commit</code> returns an error. Case C: <code>ExecContext</code> returns an error.</p></li>
+<li><p><strong>Where is the bug?</strong></p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> getArtistSongs<span class="op">(</span>ctx context<span class="op">.</span>Context<span class="op">,</span> db <span class="op">*</span>sql<span class="op">.</span>DB<span class="op">,</span> artist <span class="dt">string</span><span class="op">)</span> <span class="op">([]</span><span class="dt">string</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    rows<span class="op">,</span> err <span class="op">:=</span> db<span class="op">.</span>QueryContext<span class="op">(</span>ctx<span class="op">,</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;SELECT title FROM songs WHERE artist = ?&quot;</span><span class="op">,</span> artist<span class="op">)</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> err</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> titles <span class="op">[]</span><span class="dt">string</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> rows<span class="op">.</span>Next<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>        <span class="kw">var</span> title <span class="dt">string</span></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> err <span class="op">:=</span> rows<span class="op">.</span>Scan<span class="op">(&amp;</span>title<span class="op">);</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> err</span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>        titles <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>titles<span class="op">,</span> title<span class="op">)</span></span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> titles<span class="op">,</span> <span class="ot">nil</span></span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Using <code>database/sql</code> and the <code>github.com/mattn/go-sqlite3</code> driver, write a program that:</p>
+<ul>
+<li>Opens an in-memory SQLite database.</li>
+<li>Creates a <code>playlists</code> table with columns <code>id</code> (integer primary key autoincrement), <code>name</code> (text, not null), and <code>owner</code> (text, not null).</li>
+<li>Inserts at least three rows inside a single transaction using the deferred rollback pattern.</li>
+<li>Queries and prints all rows using <code>QueryContext</code> and <code>Scan</code>.</li>
+<li>Uses <code>sql.Null[string]</code> for at least one nullable column (add a <code>description</code> column that is nullable).</li>
+</ul></li>
+</ol>
+
+{% endraw %}

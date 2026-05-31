@@ -1,0 +1,139 @@
+---
+layout: default
+title: "Appendix F: Go Code Review Rules"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 105
+---
+
+{% raw %}
+<h1 id="go-code-review-rules">Go Code Review Rules</h1>
+<p>  The rules in this appendix are drawn from the official <strong>Go Code Review Comments</strong> wiki maintained by the Go team <span class="citation" data-cites="CodeReviewComments">[@CodeReviewComments]</span>. That document describes the kinds of issues that arise during code review of Go programs — the things that automated tools like <code>gofmt</code> and <code>go vet</code> do not catch. Each rule is numbered <strong>CR-N</strong> with a <strong>short-descriptive-name</strong> so it can be cited precisely from the main text.</p>
+<h2 id="formatting">Formatting</h2>
+<p> </p>
+<p><strong>CR-1. gofmt</strong> Run <code>gofmt</code> (or <code>go fmt</code>) on all code to automatically fix mechanical style issues before review.</p>
+<p><strong>CR-2. goimports</strong> Prefer <code>goimports</code> over <code>gofmt</code>; it is a superset that also organizes import blocks.</p>
+<h2 id="comments">Comments</h2>
+<p></p>
+<p><strong>CR-3. sentence-for-comments</strong> Comments that document declarations must be complete sentences ending with a period.</p>
+<p><strong>CR-4. name-starts-comment</strong> A doc comment should begin with the name of the thing it describes: <code>// Request represents a request to run a command.</code></p>
+<p><strong>CR-5. all-top-comments</strong> All exported top-level names must have doc comments; non-trivial unexported declarations should too.</p>
+<h2 id="context">Context</h2>
+<p></p>
+<p><strong>CR-6. ctx-for-context</strong> Functions that use <code>context.Context</code> should accept it as the first parameter, named <code>ctx</code>.</p>
+<p><strong>CR-7. no-cxt-for-struct</strong> Never store a <code>Context</code> in a struct; pass it as a method parameter instead (exception: signatures forced by third-party interfaces).</p>
+<p><strong>CR-8. pass-ctx-by-default</strong> Prefer passing <code>context.Context</code> even when you think you don’t need it; only use <code>context.Background()</code> with a clear reason.</p>
+<p><strong>CR-9. data-in-params-not-ctx</strong> Keep application data in function parameters, receivers, or globals — not in <code>Context</code> values — unless it genuinely belongs to the request lifecycle.</p>
+<p><strong>CR-10. ctx-safe-for-concurrent</strong> A <code>Context</code> is safe to pass to concurrent calls that share its deadline and cancellation signal.</p>
+<h2 id="copying">Copying</h2>
+<p></p>
+<p><strong>CR-11. no-copy-pointer-type</strong> Do not copy a value of type <code>T</code> if its methods are on <code>*T</code>; copying may cause unexpected aliasing of internal slice or pointer fields.</p>
+<h2 id="cryptographic-randomness">Cryptographic Randomness</h2>
+<p></p>
+<p> <strong>CR-12. crypto-rand-for-keys</strong> Never use <code>math/rand</code> or <code>math/rand/v2</code> to generate keys, tokens, or other security-sensitive values; use <code>crypto/rand.Reader</code>.</p>
+<p> <strong>CR-13. crypto-rand-for-text</strong> For random text output use <code>crypto/rand.Text()</code> or encode <code>crypto/rand.Reader</code> bytes with <code>encoding/hex</code> or <code>encoding/base64</code>.</p>
+<h2 id="declaring-empty-slices">Declaring Empty Slices</h2>
+<p></p>
+<p><strong>CR-14. nil-slice-preferred</strong> Prefer <code>var t []string</code> (nil slice) over <code>t := []string{}</code> (non-nil empty slice); they are functionally equivalent for <code>len</code> and <code>cap</code> but a nil slice encodes to JSON <code>null</code> and is the idiomatic zero value.</p>
+<p><strong>CR-15. no-nil-vs-empty-api</strong> Avoid API designs that distinguish between nil and empty slices; the distinction is subtle and causes bugs.</p>
+<h2 id="error-strings">Error Strings</h2>
+<p></p>
+<p><strong>CR-16. lowercase-error-strings</strong> Error strings must not be capitalized (unless they begin with a proper noun or acronym) and must not end with punctuation, because they are typically embedded in larger messages: <code>fmt.Errorf("something bad")</code> not <code>fmt.Errorf("Something bad.")</code>.</p>
+<h2 id="dont-panic">Don’t Panic</h2>
+<p></p>
+<p><strong>CR-17. errors-not-panic</strong> Normal error handling must use error return values and multiple return values rather than <code>panic</code>.</p>
+<p><strong>CR-18. panic-for-exceptional</strong> Reserve <code>panic</code> for truly exceptional situations that indicate programmer error or unrecoverable state.</p>
+<h2 id="examples">Examples</h2>
+<p><strong>CR-19. include-examples</strong> When adding a new package, include a runnable <code>Example*</code> test function that demonstrates the intended usage.</p>
+<h2 id="goroutine-lifetimes">Goroutine Lifetimes</h2>
+<p> </p>
+<p><strong>CR-20. goroutine-must-exit</strong> When you spawn a goroutine, make it clear when or whether it exits; goroutines that cannot exit are leaks.</p>
+<p><strong>CR-21. leaked-goroutine-grows-memory</strong> Goroutines block garbage collection of the values they close over; a leaked goroutine causes unbounded memory growth.</p>
+<p><strong>CR-22. obvious-goroutine-lifetimes</strong> Keep concurrent code simple enough that goroutine lifetimes are obvious; document lifetime guarantees when simplicity is not achievable.</p>
+<h2 id="handle-errors">Handle Errors</h2>
+<p></p>
+<p><strong>CR-23. no-discard-error</strong> Never discard an error with <code>_</code>; if a function returns an error, check it.</p>
+<p><strong>CR-24. handle-return-or-panic</strong> When you receive an error, either handle it, return it to the caller, or (in truly exceptional cases) panic — never silently ignore it.</p>
+<h2 id="imports">Imports</h2>
+<p></p>
+<p><strong>CR-25. no-rename-imports</strong> Avoid renaming imports; a well-chosen package name should not require renaming at the call site.</p>
+<p><strong>CR-26. rename-local-on-collision</strong> When renaming is unavoidable (name collision), rename the most local or project-specific import, not the standard library one.</p>
+<p><strong>CR-27. group-imports</strong> Organize imports in groups separated by blank lines: standard library first, then third-party, then internal packages.</p>
+<h2 id="import-blank">Import Blank</h2>
+<p></p>
+<p><strong>CR-28. blank-import-main-only</strong> Packages imported only for side effects (<code>import _ "pkg"</code>) belong only in the <code>main</code> package of a program or in tests that require them.</p>
+<h2 id="import-dot">Import Dot</h2>
+<p></p>
+<p><strong>CR-29. no-dot-import</strong> Avoid <code>import .</code>; it makes code harder to read because it is unclear which identifiers come from the imported package. Use it only in tests that have circular dependencies and cannot be part of the tested package.</p>
+<h2 id="in-band-errors">In-Band Errors</h2>
+<p></p>
+<p><strong>CR-30. no-in-band-errors</strong> Do not use in-band error signals (returning <code>-1</code>, <code>""</code>, or <code>nil</code> to indicate failure) when those values are also valid results; use a second return value of type <code>error</code> or <code>bool</code> instead.</p>
+<p><strong>CR-31. in-band-ok-if-unambiguous</strong> An in-band sentinel value is acceptable only when the sentinel is unambiguously not a valid result (e.g., <code>strings.Index</code> returning <code>-1</code> for “not found”).</p>
+<h2 id="indent-error-flow">Indent Error Flow</h2>
+<p></p>
+<p><strong>CR-32. error-first-return-early</strong> Keep the success (normal) code path at the minimum indentation level; handle errors first and return, so readers can scan the happy path without reading error branches.</p>
+<p><strong>CR-33. no-else-after-error</strong> Avoid the <code>if err != nil { ... } else { // success }</code> pattern; invert it so the error branch returns and the success code is unindented.</p>
+<h2 id="initialisms">Initialisms</h2>
+<p></p>
+<p><strong>CR-34. consistent-initialism-case</strong> Acronyms and initialisms must have consistent case throughout: <code>URL</code> not <code>Url</code>, <code>HTTP</code> not <code>Http</code>, <code>ID</code> not <code>Id</code>, <code>ServeHTTP</code> not <code>ServeHttp</code>.</p>
+<p><strong>CR-35. lowercase-leading-initialism</strong> When an initialism begins an unexported name, lowercase the whole initialism: <code>xmlHTTPRequest</code> or <code>urlPony</code>.</p>
+<h2 id="interfaces">Interfaces</h2>
+<p></p>
+<p><strong>CR-36. interface-in-consumer</strong> Define interfaces in the package that <em>uses</em> them, not in the package that implements them; Go’s implicit satisfaction makes this possible and keeps dependencies pointing the right way.</p>
+<p><strong>CR-37. return-concrete-types</strong> Implementing packages should return concrete types (structs or pointers to structs), not interface types; this allows new methods to be added without breaking callers.</p>
+<p><strong>CR-38. no-interface-for-mocking</strong> Do not define an interface solely to support mocking in tests; design your API so it can be tested through its real public surface, or use a consumer-side fake.</p>
+<p><strong>CR-39. no-premature-interface</strong> Do not define an interface before you have a realistic use case; premature interfaces lead to awkward, over-abstract designs.</p>
+<h2 id="line-length">Line Length</h2>
+<p><strong>CR-40. no-hard-line-limit</strong> There is no hard line-length limit; break lines for semantic clarity (a natural pause in the logic), not to satisfy an arbitrary character count.</p>
+<p><strong>CR-41. name-before-wrap</strong> If a line feels too long, first consider whether a better name or a local variable would eliminate the length problem before adding a line break.</p>
+<h2 id="mixed-caps">Mixed Caps</h2>
+<p></p>
+<p><strong>CR-42. mixed-caps-always</strong> Use <code>MixedCaps</code> (or <code>mixedCaps</code>) for multi-word names in all contexts, including constants: <code>maxLength</code> not <code>MAX_LENGTH</code>.</p>
+<h2 id="named-result-parameters">Named Result Parameters</h2>
+<p></p>
+<p><strong>CR-43. name-results-for-clarity</strong> Name result parameters when doing so genuinely clarifies the meaning of multiple same-typed return values: <code>func Location() (lat, long float64, err error)</code>.</p>
+<p><strong>CR-44. no-name-for-naked-return</strong> Do not name result parameters solely to enable naked returns in non-trivial functions; the clarity cost of naked returns in longer functions outweighs the brevity gain.</p>
+<p><strong>CR-45. name-for-deferred-modify</strong> Naming a result parameter is appropriate when a deferred closure needs to modify it (e.g., to capture a close error).</p>
+<h2 id="package-comments">Package Comments</h2>
+<p></p>
+<p><strong>CR-46. comment-adjacent-to-package</strong> Package comments must appear immediately above the <code>package</code> clause with no blank line between them.</p>
+<p><strong>CR-47. package-comment-sentence</strong> Package comments must begin with a capital letter and be complete sentences: <code>// Package math provides basic constants and mathematical functions.</code></p>
+<p><strong>CR-48. main-package-comment-forms</strong> For <code>main</code> packages, acceptable forms include: “Binary seedgen …”, “Command seedgen …”, or “The seedgen command …”.</p>
+<h2 id="package-names">Package Names</h2>
+<p></p>
+<p><strong>CR-49. no-package-name-in-export</strong> Remove the package name from exported identifiers: in package <code>chubby</code>, use <code>File</code> not <code>ChubbyFile</code> (callers write <code>chubby.File</code>).</p>
+<p><strong>CR-50. no-generic-package-names</strong> Avoid generic package names such as <code>util</code>, <code>common</code>, <code>misc</code>, <code>api</code>, <code>types</code>, and <code>interfaces</code>; they communicate nothing about purpose.</p>
+<h2 id="pass-values">Pass Values</h2>
+<p></p>
+<p><strong>CR-51. no-pointer-to-save-bytes</strong> Do not pass a pointer just to save a few bytes; if the function only dereferences <code>*x</code> throughout, the argument should not be a pointer.</p>
+<p><strong>CR-52. no-pointer-to-string-or-iface</strong> Never pass pointers to strings (<code>*string</code>) or interface values (<code>*io.Reader</code>); both are already reference-sized values.</p>
+<p><strong>CR-53. pointer-for-large-structs</strong> Exception: large structs or structs expected to grow should be passed by pointer for efficiency.</p>
+<h2 id="receiver-names">Receiver Names</h2>
+<p></p>
+<p><strong>CR-54. receiver-name-abbreviation</strong> The receiver name should be a short abbreviation of the type name (one or two letters), not <code>this</code>, <code>self</code>, or <code>me</code>.</p>
+<p><strong>CR-55. receiver-name-consistent</strong> The receiver name must be consistent across all methods of a type: if one method uses <code>c</code>, all must use <code>c</code>.</p>
+<h2 id="receiver-type">Receiver Type</h2>
+<p></p>
+<p><strong>CR-56. pointer-receiver-for-mutation</strong> Use a pointer receiver when the method needs to mutate the receiver.</p>
+<p><strong>CR-57. pointer-receiver-for-mutex</strong> Use a pointer receiver when the struct contains a <code>sync.Mutex</code> or similar synchronization field, to avoid copying the lock.</p>
+<p><strong>CR-58. pointer-receiver-for-large</strong> Use a pointer receiver for large structs or arrays where copying on each call would be expensive.</p>
+<p><strong>CR-59. value-receiver-for-immutable</strong> Use a value receiver for small, immutable structs or basic types (integers, strings) that hold no pointers and do not need mutation.</p>
+<p><strong>CR-60. no-mixed-receivers</strong> Do not mix value and pointer receivers on the same type; if any method needs a pointer receiver, use pointer receivers for all methods so the method set is consistent regardless of how the value is stored.</p>
+<p><strong>CR-61. default-pointer-receiver</strong> When in doubt, use a pointer receiver.</p>
+<h2 id="synchronous-functions">Synchronous Functions</h2>
+<p></p>
+<p><strong>CR-62. prefer-synchronous</strong> Prefer synchronous functions — those that return results directly or finish callbacks/channel operations before returning — over asynchronous ones.</p>
+<p><strong>CR-63. caller-adds-concurrency</strong> If callers need concurrency, they can call a synchronous function from a goroutine; removing unnecessary concurrency from an API is much harder after the fact.</p>
+<h2 id="useful-test-failures">Useful Test Failures</h2>
+<p></p>
+<p><strong>CR-64. test-failure-describes-wrong</strong> Test failure messages must describe what was wrong: state the inputs, the actual output, and the expected output.</p>
+<p><strong>CR-65. actual-before-expected</strong> Write failure messages in the order <code>actual != expected</code>: <code>t.Errorf("Foo(%q) = %d; want %d", in, got, want)</code>.</p>
+<p><strong>CR-66. table-driven-tests</strong> Use table-driven tests to reduce repetition and to ensure every case produces an identifiable failure message.</p>
+<p><strong>CR-67. t-helper-for-helpers</strong> Ensure test helpers produce useful failure messages that identify which case failed; use <code>t.Helper()</code> to attribute failures to the call site.</p>
+<h2 id="variable-names">Variable Names</h2>
+<p></p>
+<p><strong>CR-68. short-local-names</strong> Prefer short variable names, especially for local variables with limited scope: <code>c</code> over <code>lineCount</code>, <code>i</code> over <code>sliceIndex</code>.</p>
+<p><strong>CR-69. scope-determines-length</strong> The further a variable’s use is from its declaration, the more descriptive its name must be; single-letter names are appropriate only for very short scopes.</p>
+<p><strong>CR-70. descriptive-global-names</strong> Global variables and variables representing unusual or domain-specific concepts require descriptive names.</p>
+<hr />
+
+{% endraw %}

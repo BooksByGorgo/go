@@ -1,0 +1,439 @@
+---
+layout: default
+title: "10. Goroutines and Channels"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 10
+---
+
+{% raw %}
+<h1 data-number="10" id="goroutines-and-channels"><span class="header-section-number">10</span> Goroutines and Channels</h1>
+<p>  Java programmers think about concurrency in terms of threads, locks, and shared mutable state. Go takes a fundamentally different approach: lightweight goroutines communicate through typed channels instead of fighting over shared memory.  This chapter covers how to launch goroutines with <code>go f()</code>, how channels act as typed conduits with synchronization built in, how <code>select</code> coordinates multiple channels, and the Go proverb that ties it all together.</p>
+<h2 data-number="10.1" id="goroutines"><span class="header-section-number">10.1</span> Goroutines</h2>
+<p> A <strong>goroutine</strong> is a function executing concurrently with the rest of your program. You launch one by placing the <code>go</code> keyword in front of a function call:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="cf">go</span> f<span class="op">()</span>           <span class="co">// launch f in a new goroutine</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="cf">go</span> pkg<span class="op">.</span>Method<span class="op">()</span>  <span class="co">// works with any callable</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span>      <span class="co">// anonymous function launched immediately</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;Earfquake&quot;</span><span class="op">)</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="op">}()</span></span></code></pre></div>
+<p>That is the entire syntax. There is no <code>Thread</code> class, no <code>Runnable</code>, no <code>ExecutorService</code>. There are also no handles to goroutines! That means <strong>you cannot query if a goroutine has completed</strong>. If you need to track the status of goroutines, you have to do it yourself! <strong>sync.WaitGroup</strong>, a common way to do it, is explained in the next chapter.</p>
+<h3 data-number="10.1.1" id="goroutines-vs-java-threads"><span class="header-section-number">10.1.1</span> Goroutines vs Java Threads</h3>
+<p>    Java threads are OS threads under the hood — each one starts with a fixed stack (typically 512 KB to 1 MB) and is managed by the operating system scheduler. Creating tens of thousands of Java threads is impractical because each one reserves a large, fixed block of memory and requires an OS context switch to schedule.</p>
+<p>Goroutines are very different:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th></th>
+<th>Java thread</th>
+<th>Go goroutine</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Starting stack</td>
+<td>512 KB – 1 MB</td>
+<td>~2 KB</td>
+</tr>
+<tr>
+<td>Scheduler</td>
+<td>OS kernel</td>
+<td>Go runtime (user space)</td>
+</tr>
+<tr>
+<td>Context switch</td>
+<td>kernel mode, microseconds</td>
+<td>cooperative + preemptive, nanoseconds</td>
+</tr>
+<tr>
+<td>Practical ceiling</td>
+<td>thousands</td>
+<td>millions</td>
+</tr>
+</tbody>
+</table>
+<p>A Go program can run a million goroutines comfortably on a laptop. The runtime multiplexes them onto a small number of OS threads (<code>GOMAXPROCS</code> threads by default, equal to CPU count). This is called <strong>M:N scheduling</strong> — M goroutines mapped onto N OS threads.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Because goroutines are cheap, Go code often launches a goroutine for every incoming request or every item in a work queue. Java code typically uses a thread pool to amortize the cost of thread creation; in Go that concern largely disappears.</p>
+</div></div>
+<p>Goroutine stacks start small (~2 KB) and <strong>grow automatically</strong> when needed. The runtime detects that the stack is about to overflow and copies the goroutine to a larger allocation. You never set a stack size — it is invisible to your code.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Goroutine stacks can grow and shrink at runtime. This means a pointer into a goroutine’s stack frame may become invalid after the stack is relocated. The Go compiler and runtime manage this transparently — you never see it — but it is why Go does not allow pointer arithmetic (see Chapter 2).</p>
+</div></div>
+<h3 data-number="10.1.2" id="a-simple-goroutine-example"><span class="header-section-number">10.1.2</span> A Simple Goroutine Example</h3>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;time&quot;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> playTrack<span class="op">(</span>title <span class="dt">string</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;Playing:&quot;</span><span class="op">,</span> title<span class="op">)</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> playTrack<span class="op">(</span><span class="st">&quot;Earfquake&quot;</span><span class="op">)</span>  <span class="co">// runs concurrently</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> playTrack<span class="op">(</span><span class="st">&quot;Circles&quot;</span><span class="op">)</span>    <span class="co">// runs concurrently</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    time<span class="op">.</span>Sleep<span class="op">(</span><span class="dv">10</span> <span class="op">*</span> time<span class="op">.</span>Millisecond<span class="op">)</span> <span class="co">// give goroutines time to run</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;done&quot;</span><span class="op">)</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> When <code>main</code> returns, the program exits — even if goroutines are still running. The <code>time.Sleep</code> above is a toy fix; real programs use channels or <code>sync.WaitGroup</code> (Chapter 11) to wait for goroutines to finish. <strong><em>[goroutine-must-exit]</em></strong></p>
+</div></div>
+<h2 data-number="10.2" id="channels"><span class="header-section-number">10.2</span> Channels</h2>
+<p>  A <strong>channel</strong> is a typed conduit through which goroutines send and receive values. The zero value of a channel is <code>nil</code>; use <code>make</code> to create one.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>ch <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">)</span>    <span class="co">// unbuffered channel of strings</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>ch <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">int</span><span class="op">,</span> <span class="dv">10</span><span class="op">)</span>   <span class="co">// buffered channel of ints, capacity 10</span></span></code></pre></div>
+<p>The send operator <code>&lt;-</code> puts a value into the channel. The receive operator <code>&lt;-</code> takes a value out:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>ch <span class="op">&lt;-</span> <span class="st">&quot;rockstar&quot;</span>   <span class="co">// send &quot;rockstar&quot; into ch</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>msg <span class="op">:=</span> <span class="op">&lt;-</span>ch        <span class="co">// receive from ch; assign to msg</span></span></code></pre></div>
+<p>Both the send and receive operators block until the other side is ready, unless the channel is buffered (covered in the next section).</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Channels are first-class values — you can pass them to functions, store them in structs, and return them. The <code>&lt;-</code> operator is the same for send and receive; the position relative to the channel name determines the direction: <code>ch &lt;- v</code> sends, <code>v := &lt;-ch</code> receives.</p>
+</div></div>
+<h3 data-number="10.2.1" id="a-channel-coordinated-goroutine"><span class="header-section-number">10.2.1</span> A Channel-Coordinated Goroutine</h3>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> fetchLyrics<span class="op">(</span>out <span class="kw">chan</span><span class="op">&lt;-</span> <span class="dt">string</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    out <span class="op">&lt;-</span> <span class="st">&quot;I don&#39;t want a Wilder World without you&quot;</span>  <span class="co">// send into channel</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    ch <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">)</span>  <span class="co">// unbuffered channel</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> fetchLyrics<span class="op">(</span>ch<span class="op">)</span>      <span class="co">// goroutine sends one value</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    lyric <span class="op">:=</span> <span class="op">&lt;-</span>ch           <span class="co">// main goroutine receives it</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>lyric<span class="op">)</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Output:</p>
+<pre><code>I don&#39;t want a Wilder World without you</code></pre>
+<p><code>main</code> blocks on <code>&lt;-ch</code> until <code>fetchLyrics</code> sends. There is no mutex, no lock, no explicit signal — the channel synchronizes the two goroutines automatically.</p>
+<h2 data-number="10.3" id="buffered-vs-unbuffered-channels"><span class="header-section-number">10.3</span> Buffered vs Unbuffered Channels</h2>
+<p>  An <strong>unbuffered channel</strong> (<code>make(chan T)</code>) has no internal queue. A send blocks until a receiver is waiting; a receive blocks until a sender is ready. They synchronize at the point of exchange. This is like a relay baton hand-off: both runners must be at the exchange point at the same time.</p>
+<p>A <strong>buffered channel</strong> (<code>make(chan T, n)</code>) has an internal queue of capacity <code>n</code>. A send blocks only when the queue is full; a receive blocks only when the queue is empty.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>ch <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">,</span> <span class="dv">3</span><span class="op">)</span>  <span class="co">// capacity 3</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>ch <span class="op">&lt;-</span> <span class="st">&quot;rockstar&quot;</span>      <span class="co">// queued immediately, no receiver needed</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>ch <span class="op">&lt;-</span> <span class="st">&quot;Circles&quot;</span>       <span class="co">// queued</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>ch <span class="op">&lt;-</span> <span class="st">&quot;Earfquake&quot;</span>     <span class="co">// queued</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(&lt;-</span>ch<span class="op">)</span>  <span class="co">// rockstar</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(&lt;-</span>ch<span class="op">)</span>  <span class="co">// Circles</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(&lt;-</span>ch<span class="op">)</span>  <span class="co">// Earfquake</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Use an unbuffered channel when you want a <strong>synchronization point</strong> — when you need to know that the receiver has received the value. Use a buffered channel when you want to decouple the sender’s pace from the receiver’s pace, up to a known limit.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Sending to a full buffered channel blocks just like sending to an unbuffered channel. A channel with capacity 1 is not the same as “fire and forget.”</p>
+</div></div>
+<h3 data-number="10.3.1" id="directional-channel-types"><span class="header-section-number">10.3.1</span> Directional Channel Types</h3>
+<p>   You can restrict a channel to send-only or receive-only in a function signature:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> produce<span class="op">(</span>out <span class="kw">chan</span><span class="op">&lt;-</span> <span class="dt">string</span><span class="op">)</span> <span class="op">{</span> <span class="co">// out is send-only</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    out <span class="op">&lt;-</span> <span class="st">&quot;Wilder World&quot;</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> consume<span class="op">(</span>in <span class="op">&lt;-</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">)</span> <span class="op">{</span>  <span class="co">// in is receive-only</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(&lt;-</span>in<span class="op">)</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The full bidirectional <code>chan string</code> converts to either directional type automatically. Directional types document intent and prevent bugs: a function that only receives cannot accidentally send and vice versa.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>ch <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">)</span>  <span class="co">// bidirectional</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="cf">go</span> produce<span class="op">(</span>ch<span class="op">)</span>           <span class="co">// ch narrows to chan&lt;- inside produce</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>consume<span class="op">(</span>ch<span class="op">)</span>              <span class="co">// ch narrows to &lt;-chan inside consume</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Always use directional channel types in function parameters. If a function only reads from a channel, declare the parameter as <code>&lt;-chan T</code>. If it only writes, declare it as <code>chan&lt;- T</code>. This is self-documenting and lets the compiler catch mistakes at compile time.</p>
+</div></div>
+<h2 data-number="10.4" id="closing-a-channel"><span class="header-section-number">10.4</span> Closing a Channel</h2>
+<p>  Calling <code>close(ch)</code> marks the channel as closed. After that:</p>
+<ul>
+<li><strong>Receiving</strong> from a closed channel returns immediately. If there are buffered values, they are drained first. Once empty, receives return the zero value of the channel’s element type.</li>
+<li><strong>Sending</strong> to a closed channel panics.</li>
+</ul>
+<p>The idiomatic way to receive from a channel until it is closed is <code>range</code>:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>ch <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">,</span> <span class="dv">3</span><span class="op">)</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>ch <span class="op">&lt;-</span> <span class="st">&quot;Earfquake&quot;</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>ch <span class="op">&lt;-</span> <span class="st">&quot;Wilder World&quot;</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>ch <span class="op">&lt;-</span> <span class="st">&quot;Circles&quot;</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="bu">close</span><span class="op">(</span>ch<span class="op">)</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> msg <span class="op">:=</span> <span class="kw">range</span> ch <span class="op">{</span>  <span class="co">// drains until channel is closed and empty</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>msg<span class="op">)</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Output:</p>
+<pre><code>Earfquake
+Wilder World
+Circles</code></pre>
+<p>You can also use the comma-ok idiom (introduced in Chapter 7 for maps) to detect a closed channel:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>msg<span class="op">,</span> ok <span class="op">:=</span> <span class="op">&lt;-</span>ch  <span class="co">// ok is false when ch is closed and empty</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="op">!</span>ok <span class="op">{</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;channel closed&quot;</span><span class="op">)</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <strong>Only the sender should close a channel.</strong> Closing a channel from the receiver’s side is a data race if the sender is still running. Closing an already-closed channel also panics. The rule is simple: the goroutine that produces values owns the channel and is responsible for closing it.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> You never <em>have</em> to close a channel. Unlike a file, an unclosed channel is not a resource leak — it will be garbage-collected once all goroutines holding a reference to it exit. Close a channel only when you need the receiver to know that no more values are coming. A goroutine that never exits, however, prevents GC of every value it has closed over. <strong><em>[leaked-goroutine-grows-memory]</em></strong></p>
+</div></div>
+<p></p>
+<h3 data-number="10.4.1" id="a-producer-consumer-pipeline"><span class="header-section-number">10.4.1</span> A Producer-Consumer Pipeline</h3>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> generate<span class="op">(</span>tracks <span class="op">[]</span><span class="dt">string</span><span class="op">,</span> out <span class="kw">chan</span><span class="op">&lt;-</span> <span class="dt">string</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> t <span class="op">:=</span> <span class="kw">range</span> tracks <span class="op">{</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>        out <span class="op">&lt;-</span> t  <span class="co">// send each track</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    <span class="bu">close</span><span class="op">(</span>out<span class="op">)</span>    <span class="co">// signal: no more tracks</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>    playlist <span class="op">:=</span> <span class="op">[]</span><span class="dt">string</span><span class="op">{</span><span class="st">&quot;rockstar&quot;</span><span class="op">,</span> <span class="st">&quot;Circles&quot;</span><span class="op">,</span> <span class="st">&quot;Wilder World&quot;</span><span class="op">}</span></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>    ch <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">)</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> generate<span class="op">(</span>playlist<span class="op">,</span> ch<span class="op">)</span></span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> track <span class="op">:=</span> <span class="kw">range</span> ch <span class="op">{</span></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;Playing:&quot;</span><span class="op">,</span> track<span class="op">)</span></span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Output:</p>
+<pre><code>Playing: rockstar
+Playing: Circles
+Playing: Wilder World</code></pre>
+<p><code>generate</code> closes <code>ch</code> when the loop finishes, which causes the <code>range</code> in <code>main</code> to terminate.</p>
+<h2 data-number="10.5" id="the-select-statement"><span class="header-section-number">10.5</span> The <code>select</code> Statement</h2>
+<p> <code>select</code> is to channels what <code>switch</code> is to values: it waits on multiple channel operations and runs the first one that is ready.</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="cf">select</span> <span class="op">{</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> msg <span class="op">:=</span> <span class="op">&lt;-</span>ch1<span class="op">:</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;from ch1:&quot;</span><span class="op">,</span> msg<span class="op">)</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> msg <span class="op">:=</span> <span class="op">&lt;-</span>ch2<span class="op">:</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;from ch2:&quot;</span><span class="op">,</span> msg<span class="op">)</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>If both <code>ch1</code> and <code>ch2</code> are ready simultaneously, Go picks one at <strong>random</strong>. If neither is ready, <code>select</code> blocks until one becomes ready.</p>
+<h3 data-number="10.5.1" id="fan-in"><span class="header-section-number">10.5.1</span> Fan-In</h3>
+<p> <strong>Fan-in</strong> merges multiple channels into one. <code>select</code> makes this straightforward:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;time&quot;</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> source<span class="op">(</span>name<span class="op">,</span> msg <span class="dt">string</span><span class="op">,</span> out <span class="kw">chan</span><span class="op">&lt;-</span> <span class="dt">string</span><span class="op">,</span> delay time<span class="op">.</span>Duration<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>    time<span class="op">.</span>Sleep<span class="op">(</span>delay<span class="op">)</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    out <span class="op">&lt;-</span> name <span class="op">+</span> <span class="st">&quot;: &quot;</span> <span class="op">+</span> msg</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> fanIn<span class="op">(</span>ch1<span class="op">,</span> ch2 <span class="op">&lt;-</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">)</span> <span class="op">&lt;-</span><span class="kw">chan</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>    merged <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">,</span> <span class="dv">2</span><span class="op">)</span></span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> <span class="dv">2</span><span class="op">;</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>            <span class="cf">select</span> <span class="op">{</span></span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>            <span class="cf">case</span> msg <span class="op">:=</span> <span class="op">&lt;-</span>ch1<span class="op">:</span></span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>                merged <span class="op">&lt;-</span> msg</span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>            <span class="cf">case</span> msg <span class="op">:=</span> <span class="op">&lt;-</span>ch2<span class="op">:</span></span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a>                merged <span class="op">&lt;-</span> msg</span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span></span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>        <span class="bu">close</span><span class="op">(</span>merged<span class="op">)</span></span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a>    <span class="op">}()</span></span>
+<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> merged</span>
+<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>    ch1 <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">,</span> <span class="dv">1</span><span class="op">)</span></span>
+<span id="cb16-31"><a href="#cb16-31" aria-hidden="true" tabindex="-1"></a>    ch2 <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">,</span> <span class="dv">1</span><span class="op">)</span></span>
+<span id="cb16-32"><a href="#cb16-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-33"><a href="#cb16-33" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> source<span class="op">(</span><span class="st">&quot;Tyler&quot;</span><span class="op">,</span> <span class="st">&quot;Earfquake&quot;</span><span class="op">,</span> ch1<span class="op">,</span> <span class="dv">10</span><span class="op">*</span>time<span class="op">.</span>Millisecond<span class="op">)</span></span>
+<span id="cb16-34"><a href="#cb16-34" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> source<span class="op">(</span><span class="st">&quot;Post&quot;</span><span class="op">,</span>  <span class="st">&quot;rockstar&quot;</span><span class="op">,</span>  ch2<span class="op">,</span> <span class="dv">5</span><span class="op">*</span>time<span class="op">.</span>Millisecond<span class="op">)</span></span>
+<span id="cb16-35"><a href="#cb16-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-36"><a href="#cb16-36" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> msg <span class="op">:=</span> <span class="kw">range</span> fanIn<span class="op">(</span>ch1<span class="op">,</span> ch2<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb16-37"><a href="#cb16-37" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>msg<span class="op">)</span></span>
+<span id="cb16-38"><a href="#cb16-38" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb16-39"><a href="#cb16-39" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Whichever goroutine sends first will be received first, regardless of declaration order.</p>
+<h3 data-number="10.5.2" id="timeouts"><span class="header-section-number">10.5.2</span> Timeouts</h3>
+<p>  <code>time.After(d)</code> returns a <code>&lt;-chan time.Time</code> that receives a value after duration <code>d</code>. Use it in a <code>select</code> to implement timeouts:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="cf">select</span> <span class="op">{</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> result <span class="op">:=</span> <span class="op">&lt;-</span>workCh<span class="op">:</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;got result:&quot;</span><span class="op">,</span> result<span class="op">)</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="op">&lt;-</span>time<span class="op">.</span>After<span class="op">(</span><span class="dv">500</span> <span class="op">*</span> time<span class="op">.</span>Millisecond<span class="op">):</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;timed out waiting for result&quot;</span><span class="op">)</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Java programmers reach for <code>Future.get(timeout, unit)</code>; in Go you compose <code>select</code> with <code>time.After</code>.</p>
+<h3 data-number="10.5.3" id="non-blocking-send-and-receive"><span class="header-section-number">10.5.3</span> Non-Blocking Send and Receive</h3>
+<p> Adding a <code>default</code> case makes a <code>select</code> non-blocking: if no channel is ready, the <code>default</code> case runs immediately.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="cf">select</span> <span class="op">{</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> msg <span class="op">:=</span> <span class="op">&lt;-</span>ch<span class="op">:</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;received:&quot;</span><span class="op">,</span> msg<span class="op">)</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="cf">default</span><span class="op">:</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;nothing ready, moving on&quot;</span><span class="op">)</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Use <code>default</code> sparingly. A busy-polling loop around a <code>select</code> with <code>default</code> wastes CPU time; channels with a proper blocking <code>select</code> usually express the intent more clearly.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> A common use of the non-blocking pattern is a <strong>done channel</strong> signal combined with a work channel:</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="cf">select</span> <span class="op">{</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> work <span class="op">:=</span> <span class="op">&lt;-</span>workCh<span class="op">:</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    process<span class="op">(</span>work<span class="op">)</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="op">&lt;-</span>doneCh<span class="op">:</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span>  <span class="co">// shut down cleanly</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="cf">default</span><span class="op">:</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">// nothing to do right now</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+</div></div>
+<h2 data-number="10.6" id="share-memory-by-communicating"><span class="header-section-number">10.6</span> Share Memory by Communicating</h2>
+<p> The most famous Go concurrency proverb is:</p>
+<blockquote>
+<p>“Don’t communicate by sharing memory; share memory by communicating.”</p>
+</blockquote>
+<p>In Java, you protect shared state with <code>synchronized</code>, <code>ReentrantLock</code>, <code>volatile</code>, and <code>AtomicInteger</code>. The data lives in a shared heap; the locks prevent conflicting access.</p>
+<p>Go’s channel model inverts this. Instead of several goroutines all reading and writing the same variable while holding a lock, you pass ownership of the data through a channel. At any instant, exactly one goroutine holds the value — the one that last received it from the channel. No lock is needed because the data is never shared simultaneously.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Java style: shared mutable state with a lock</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="co">// mu.Lock(); count++; mu.Unlock()</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Go style: one goroutine owns the state; others send requests</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> command <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>    inc    <span class="dt">bool</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>    result <span class="kw">chan</span><span class="op">&lt;-</span> <span class="dt">int</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> counter<span class="op">(</span>cmds <span class="op">&lt;-</span><span class="kw">chan</span> command<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>    count <span class="op">:=</span> <span class="dv">0</span></span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> cmd <span class="op">:=</span> <span class="kw">range</span> cmds <span class="op">{</span></span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> cmd<span class="op">.</span>inc <span class="op">{</span></span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>            count<span class="op">++</span></span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> cmd<span class="op">.</span>result <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a>            cmd<span class="op">.</span>result <span class="op">&lt;-</span> count</span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Only <code>counter</code> touches <code>count</code>; all other goroutines communicate with it through the <code>cmds</code> channel. There is no lock because there is no shared access.</p>
+<p>This model does not replace mutexes entirely — Chapter 11 covers <code>sync.Mutex</code> and <code>sync.WaitGroup</code> for the cases where channels are the wrong tool.  But for many concurrency problems, especially pipelines and fan-out/fan-in patterns, the channel model is cleaner and less error-prone.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> A goroutine that owns a piece of state and exposes it only through a channel is called an <strong>active object</strong> or <strong>actor</strong>. The <code>counter</code> example above is one. This pattern eliminates data races on the owned state by construction — you cannot accidentally forget to take a lock. Keeping ownership simple also makes it obvious when the goroutine can exit, which is essential for avoiding leaks. <strong><em>[obvious-goroutine-lifetimes]</em></strong></p>
+</div></div>
+<h2 data-number="10.7" id="key-points"><span class="header-section-number">10.7</span> Key Points</h2>
+<ul>
+<li>A goroutine is launched with <code>go f()</code>. Goroutines are cheap (~2 KB initial stack) and multiplexed onto OS threads by the Go runtime.</li>
+<li>Java threads are OS threads with large fixed stacks; Go goroutines are user-space and grow dynamically. You can run millions of goroutines where Java would permit only thousands of threads.</li>
+<li><code>make(chan T)</code> creates an unbuffered channel; <code>make(chan T, n)</code> creates a buffered channel with capacity <code>n</code>.</li>
+<li>An unbuffered send blocks until a receiver is ready; an unbuffered receive blocks until a sender is ready. A buffered send blocks only when the buffer is full.</li>
+<li>Use directional types (<code>chan&lt;- T</code>, <code>&lt;-chan T</code>) in function parameters to document intent and catch mistakes at compile time.</li>
+<li>Only the sender should close a channel. Receiving from a closed channel returns the zero value; sending to a closed channel panics.</li>
+<li>You do not have to close a channel; close it only to signal “no more values.”</li>
+<li><code>range</code> over a channel drains it until it is closed.</li>
+<li><code>select</code> waits on multiple channel operations; the first ready case runs. A <code>default</code> case makes <code>select</code> non-blocking.</li>
+<li>Use <code>time.After</code> in a <code>select</code> case to implement timeouts.</li>
+<li>The Go proverb: “Don’t communicate by sharing memory; share memory by communicating.” Pass ownership of data through channels instead of locking shared variables.</li>
+</ul>
+<h2 data-number="10.8" id="exercises"><span class="header-section-number">10.8</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> Java’s <code>Thread</code> and <code>Runnable</code> model requires you to think about thread pool sizing. Go’s goroutine model mostly frees you from this. Explain the runtime mechanism that makes goroutines cheap enough to use one per task. What cost, if any, do goroutines impose that Java threads do not, and when might you still want to limit the number of running goroutines?</p></li>
+<li><p><strong>What does this print?</strong></p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>    ch <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">int</span><span class="op">,</span> <span class="dv">3</span><span class="op">)</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>    ch <span class="op">&lt;-</span> <span class="dv">7</span></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>    ch <span class="op">&lt;-</span> <span class="dv">13</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>    ch <span class="op">&lt;-</span> <span class="dv">21</span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>    <span class="bu">close</span><span class="op">(</span>ch<span class="op">)</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> v <span class="op">:=</span> <span class="kw">range</span> ch <span class="op">{</span></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>v<span class="op">)</span></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a>    v<span class="op">,</span> ok <span class="op">:=</span> <span class="op">&lt;-</span>ch</span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>v<span class="op">,</span> ok<span class="op">)</span></span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> Consider the following program. Trace its execution and determine the exact output. How many goroutines are alive (other than <code>main</code>) when the final <code>fmt.Println</code> in <code>main</code> runs?</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> double<span class="op">(</span>in <span class="op">&lt;-</span><span class="kw">chan</span> <span class="dt">int</span><span class="op">,</span> out <span class="kw">chan</span><span class="op">&lt;-</span> <span class="dt">int</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> v <span class="op">:=</span> <span class="kw">range</span> in <span class="op">{</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>        out <span class="op">&lt;-</span> v <span class="op">*</span> <span class="dv">2</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>    <span class="bu">close</span><span class="op">(</span>out<span class="op">)</span></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>    src <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">int</span><span class="op">,</span> <span class="dv">3</span><span class="op">)</span></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>    dst <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">int</span><span class="op">,</span> <span class="dv">3</span><span class="op">)</span></span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>    src <span class="op">&lt;-</span> <span class="dv">3</span></span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>    src <span class="op">&lt;-</span> <span class="dv">5</span></span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>    src <span class="op">&lt;-</span> <span class="dv">8</span></span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>    <span class="bu">close</span><span class="op">(</span>src<span class="op">)</span></span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> double<span class="op">(</span>src<span class="op">,</span> dst<span class="op">)</span></span>
+<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> result <span class="op">:=</span> <span class="kw">range</span> dst <span class="op">{</span></span>
+<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>result<span class="op">)</span></span>
+<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;done&quot;</span><span class="op">)</span></span>
+<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Where is the bug?</strong></p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;sync&quot;</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> wg sync<span class="op">.</span>WaitGroup</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    results <span class="op">:=</span> <span class="bu">make</span><span class="op">(</span><span class="kw">chan</span> <span class="dt">string</span><span class="op">,</span> <span class="dv">3</span><span class="op">)</span></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>    tracks <span class="op">:=</span> <span class="op">[]</span><span class="dt">string</span><span class="op">{</span><span class="st">&quot;rockstar&quot;</span><span class="op">,</span> <span class="st">&quot;Circles&quot;</span><span class="op">,</span> <span class="st">&quot;Earfquake&quot;</span><span class="op">}</span></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> t <span class="op">:=</span> <span class="kw">range</span> tracks <span class="op">{</span></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>        wg<span class="op">.</span>Add<span class="op">(</span><span class="dv">1</span><span class="op">)</span></span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>        <span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>            <span class="cf">defer</span> wg<span class="op">.</span>Done<span class="op">()</span></span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>            results <span class="op">&lt;-</span> <span class="st">&quot;Playing: &quot;</span> <span class="op">+</span> t</span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a>        <span class="op">}()</span></span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a>    wg<span class="op">.</span>Wait<span class="op">()</span></span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a>    <span class="bu">close</span><span class="op">(</span>results<span class="op">)</span></span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> r <span class="op">:=</span> <span class="kw">range</span> results <span class="op">{</span></span>
+<span id="cb23-25"><a href="#cb23-25" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>r<span class="op">)</span></span>
+<span id="cb23-26"><a href="#cb23-26" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb23-27"><a href="#cb23-27" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Write a program that launches three goroutines. Each goroutine sleeps for a different duration (use <code>time.Sleep</code> with values like <code>10ms</code>, <code>20ms</code>, <code>30ms</code>) and then sends the string <code>"Post Malone: Circles"</code>, <code>"Tyler: Wilder World"</code>, or <code>"Post Malone: rockstar"</code> on its own channel. In <code>main</code>, use a <code>select</code> loop to receive from all three channels and print each message as it arrives. Also add a <code>time.After(100 * time.Millisecond)</code> case that prints <code>"timeout"</code> and exits the loop if no message arrives within 100 ms of the last received one. Print the messages in the order they actually arrive.</p></li>
+</ol>
+
+{% endraw %}

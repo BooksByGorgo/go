@@ -1,0 +1,411 @@
+---
+layout: default
+title: "13. Packages and Modules"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 13
+---
+
+{% raw %}
+<h1 data-number="13" id="packages-and-modules"><span class="header-section-number">13</span> Packages and Modules</h1>
+<p>  Go’s module system replaces Maven and Gradle with a single tool that is part of the language distribution. Before modules (pre-Go 1.11), Go used a single workspace called <code>GOPATH</code> where all code — yours and every dependency — lived in one directory tree. There were no version numbers: you just got whatever was on <code>main</code> at the time of checkout. Reproducible builds were basically impossible. Modules fixed all of that: a <code>go.mod</code> file defines a self-contained unit with a name, a Go version requirement, and pinned dependency versions. This chapter covers everything you need to organise code into packages, share it across modules, manage dependencies, and control what the compiler sees at build time — from package naming conventions through build tags and embedded files.</p>
+<h2 data-number="13.1" id="package-naming"><span class="header-section-number">13.1</span> Package Naming</h2>
+<p> In Java, package names mirror a reversed domain and tend to be long: <code>com.example.music.catalog</code>. In Go, the convention is the opposite: package names are <strong>short, lowercase, and match their directory name</strong>.</p>
+<pre><code>audio/       → package audio
+catalog/     → package catalog
+httputil/    → package httputil</code></pre>
+<p>No underscores, no <code>camelCase</code>, no reversed domains in the name itself (though the module path can contain a domain prefix — that is separate from the package name).</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> The package name is what callers type before the dot: <code>audio.Track</code>, <code>catalog.Search</code>. If the name is long or awkward to type repeatedly, shorten it. <code>util</code> is a warning sign — it means you have not found the right abstraction yet.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> The directory name and the <code>package</code> declaration at the top of each file <strong>must</strong> match, with one exception: <code>package main</code> lives in any directory. If the directory is <code>catalog</code> but the file says <code>package catlog</code> (a typo), the build breaks with a confusing error.</p>
+</div></div>
+<p>When you import a package, the last segment of the import path is the package name you use in code:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;github.com/zachbryan/lyrics/orange&quot;</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="co">// package name is &quot;orange&quot;, not &quot;lyrics/orange&quot;</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>orange<span class="op">.</span>Verse<span class="op">)</span></span></code></pre></div>
+<p>If two imports have the same last segment, give one an alias:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    nkutil <span class="st">&quot;github.com/noahkahan/stick/util&quot;</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    zbutil <span class="st">&quot;github.com/zachbryan/orange/util&quot;</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
+<h2 data-number="13.2" id="exported-vs-unexported-symbols"><span class="header-section-number">13.2</span> Exported vs Unexported Symbols</h2>
+<p>  Chapter 1 introduced this briefly: uppercase first letter = exported (visible outside the package); lowercase = unexported (visible only inside the package). This section recaps the rule and covers the edge cases that trip up Java programmers.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> catalog</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span>       <span class="co">// exported --- callers can use catalog.Track</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span>         <span class="co">// exported field</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span>         <span class="co">// exported field</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    bpm    <span class="dt">int</span>            <span class="co">// unexported --- callers cannot read or set this</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Search<span class="op">(</span>q <span class="dt">string</span><span class="op">)</span> <span class="op">[]</span>Track <span class="op">{</span> <span class="op">...</span> <span class="op">}</span>   <span class="co">// exported function</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> normalize<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span> <span class="op">{</span> <span class="op">...</span> <span class="op">}</span> <span class="co">// unexported helper</span></span></code></pre></div>
+<p>There is no <code>protected</code>. Unexported means <strong>package-local</strong>, period. A sub-package such as <code>catalog/internal</code> is a separate package and cannot see <code>catalog</code>’s unexported names.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Struct fields are governed by the same rule. A struct literal <code>catalog.Track{Title: "Something in the Orange", bpm: 78}</code> is a compile error outside <code>catalog</code> because <code>bpm</code> is unexported. This is Go’s equivalent of <code>private</code> fields combined with the rule that there is no Java-style <code>public Track(String title, int bpm)</code> constructor — callers must go through exported fields or a constructor function.</p>
+</div></div>
+<p>Use an unexported field with an exported accessor function when you want controlled mutation:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t <span class="op">*</span>Track<span class="op">)</span> BPM<span class="op">()</span> <span class="dt">int</span>         <span class="op">{</span> <span class="cf">return</span> t<span class="op">.</span>bpm <span class="op">}</span>    <span class="co">// pointer receiver: consistent with SetBPM</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t <span class="op">*</span>Track<span class="op">)</span> SetBPM<span class="op">(</span>bpm <span class="dt">int</span><span class="op">)</span>  <span class="op">{</span> t<span class="op">.</span>bpm <span class="op">=</span> bpm <span class="op">}</span>         <span class="co">// pointer receiver: mutates bpm</span></span></code></pre></div>
+<h2 data-number="13.3" id="go.mod-and-go.sum"><span class="header-section-number">13.3</span> <code>go.mod</code> and <code>go.sum</code></h2>
+<p>  A <strong>module</strong> is the unit of versioning and distribution — roughly equivalent to a Maven artifact or a Gradle subproject. A <strong>package</strong> is the unit of code organisation within a module — roughly equivalent to a Java package. One module contains many packages. <code>go.mod</code> sits at the root of a module and tells the Go toolchain the module’s name, which version of Go it requires, and what external modules it depends on. Chapter 1 introduced <code>go mod init</code> and the basic shape of <code>go.mod</code>. This section covers the directives you will encounter in real projects.</p>
+<h3 data-number="13.3.1" id="the-module-directive"><span class="header-section-number">13.3.1</span> The <code>module</code> Directive</h3>
+<p> The first line of every <code>go.mod</code> declares the module path. This is the root import path for every package in the module:</p>
+<pre><code>module github.com/zachbryan/remembereverything
+
+go 1.26</code></pre>
+<p>A package in <code>cmd/server/main.go</code> would belong to <code>github.com/zachbryan/remembereverything/cmd/server</code>.</p>
+<h3 data-number="13.3.2" id="the-require-directive"><span class="header-section-number">13.3.2</span> The <code>require</code> Directive</h3>
+<p> Each <code>require</code> line pins a direct dependency to an exact version:</p>
+<pre><code>require (
+    github.com/noahkahan/stickseason v1.3.0
+    github.com/zachbryan/lyrics v2.1.0+incompatible
+    golang.org/x/text v0.14.0 // indirect
+)</code></pre>
+<p><code>// indirect</code> marks a transitive dependency — one you do not import directly but that your dependencies need. <code>go mod tidy</code> adds and removes <code>// indirect</code> entries automatically.</p>
+<p> Go resolves version conflicts using <strong>Minimum Version Selection (MVS)</strong>: when multiple modules require different minimum versions of the same dependency, Go picks the highest of those minimums — the smallest version that satisfies everyone. Unlike Maven (which picks the nearest version) or npm (which can pull in duplicates), MVS always produces the same build from the same <code>go.mod</code>, with no surprises after a <code>go get</code> on an unrelated package. The trade-off is that MVS never automatically upgrades beyond what someone has explicitly required, so you have to run <code>go get dep@latest</code> intentionally when you want a newer version.</p>
+<h3 data-number="13.3.3" id="the-replace-directive"><span class="header-section-number">13.3.3</span> The <code>replace</code> Directive</h3>
+<p> <code>replace</code> overrides where a module is fetched from. The two common uses are local development with a forked module and pointing at an untagged local directory:</p>
+<pre><code>replace (
+    github.com/noahkahan/stickseason =&gt; ../stickseason             // local fork
+    github.com/some/dep v1.2.0 =&gt; github.com/myfork/dep v1.2.1   // published fork
+)</code></pre>
+<p>This is the Go equivalent of Maven’s <code>&lt;dependency&gt;</code> with <code>&lt;scope&gt;system&lt;/scope&gt;</code> or a Gradle <code>includeBuild</code> composite.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>replace</code> directives are respected only in the <strong>main module</strong> — the one whose <code>go.mod</code> is at the root of your build. If you publish a library with a <code>replace</code> directive, consumers of that library will not see the replacement.</p>
+</div></div>
+<h3 data-number="13.3.4" id="go.sum"><span class="header-section-number">13.3.4</span> <code>go.sum</code></h3>
+<p> <code>go.sum</code> records the cryptographic hash of every module version ever downloaded into the build. Never edit it by hand. Commit it to source control alongside <code>go.mod</code> — it is your dependency lock file, equivalent to <code>package-lock.json</code> or <code>Pipfile.lock</code>.</p>
+<h2 data-number="13.4" id="go-get-go-mod-tidy-go-mod-vendor"><span class="header-section-number">13.4</span> <code>go get</code>, <code>go mod tidy</code>, <code>go mod vendor</code></h2>
+<p>   The typical dependency workflow is: use <code>go get</code> to add or change a specific version, then <code>go mod tidy</code> to clean up any entries that are now unused or missing. <code>go mod vendor</code> is for teams that want all dependencies checked in to the repo — useful when the build environment has no network access.</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>go get pkg@v1.2.3</code></td>
+<td>Adds or upgrades a dependency to the specified version; updates <code>go.mod</code> and <code>go.sum</code></td>
+</tr>
+<tr>
+<td><code>go get pkg@latest</code></td>
+<td>Upgrades to the latest tagged release</td>
+</tr>
+<tr>
+<td><code>go get pkg@none</code></td>
+<td>Removes the dependency</td>
+</tr>
+<tr>
+<td><code>go mod tidy</code></td>
+<td>Adds missing and removes unused <code>require</code> entries; updates <code>go.sum</code></td>
+</tr>
+<tr>
+<td><code>go mod vendor</code></td>
+<td>Copies all dependencies into a <code>vendor/</code> directory for offline or audited builds</td>
+</tr>
+</tbody>
+</table>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Run <code>go mod tidy</code> before every commit. It is the Go equivalent of <code>mvn dependency:resolve</code> followed by removing the entries you no longer use.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> <code>go mod vendor</code> is useful in environments where the module proxy is not accessible — CI pipelines with restricted network access, for example. Once the <code>vendor/</code> directory exists, pass <code>-mod=vendor</code> to any <code>go</code> command to use it instead of the module cache.</p>
+</div></div>
+<h2 data-number="13.5" id="internal-packages"><span class="header-section-number">13.5</span> Internal Packages</h2>
+<p>  A common problem when publishing a library is that users start importing your private helper packages even though you never intended them to be public. Once that happens you are stuck: changing the helpers is a breaking change. Go solves this with the <code>internal/</code> directory. Any package whose import path contains <code>internal</code> as a path segment can <strong>only</strong> be imported by code rooted at the parent of <code>internal</code>.</p>
+<pre><code>myapp/
+├── go.mod
+├── cmd/
+│   └── server/
+│       └── main.go     // can import myapp/internal/db
+├── internal/
+│   └── db/
+│       └── db.go       // package db
+└── api/
+    └── handler.go      // can import myapp/internal/db</code></pre>
+<p>An external module that tries <code>import "myapp/internal/db"</code> gets a compile error:</p>
+<pre><code>use of internal package myapp/internal/db not allowed</code></pre>
+<p>This is enforced by the compiler — no workaround exists. It is stronger than Java’s package-private (<code>default</code> access) because it enforces a module-level boundary, not just a package boundary.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Use <code>internal/</code> for packages that are implementation details of your module: database helpers, configuration parsers, shared types that are not part of your public API. This lets you refactor freely without worrying about breaking external callers.</p>
+</div></div>
+<h2 data-number="13.6" id="standard-project-layout"><span class="header-section-number">13.6</span> Standard Project Layout</h2>
+<p>  Go does not mandate a directory structure, but a widely adopted layout for applications looks like this:</p>
+<pre><code>myapp/
+├── go.mod
+├── go.sum
+├── cmd/
+│   ├── server/
+│   │   └── main.go         // binary: the HTTP server
+│   └── worker/
+│       └── main.go         // binary: the background worker
+├── internal/
+│   ├── catalog/
+│   │   └── catalog.go      // private business logic
+│   └── db/
+│       └── db.go           // private database layer
+└── pkg/
+    └── audio/
+        └── audio.go        // public library code other modules may import</code></pre>
+<p><code>cmd/</code> holds one directory per executable, each with its own <code>main.go</code>. <code>internal/</code> holds packages that must not leak outside this module. <code>pkg/</code> (optional) holds packages that are intentionally public — libraries other modules can import.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> If you have only one binary, skip <code>cmd/</code> and put <code>main.go</code> at the root. Add <code>cmd/</code> only when you have multiple executables. If you never intend to be imported as a library, skip <code>pkg/</code> too.</p>
+</div></div>
+<p>Compare this to a Maven multi-module project: <code>cmd/server</code> is like a Maven module with <code>&lt;packaging&gt;jar&lt;/packaging&gt;</code> and a <code>main</code> class; <code>internal/catalog</code> is like a module that is <code>&lt;scope&gt;provided&lt;/scope&gt;</code> but not published to a repository.</p>
+<h2 data-number="13.7" id="go-workspaces"><span class="header-section-number">13.7</span> Go Workspaces</h2>
+<p>  Suppose you are developing two modules side by side: the main application <code>myapp</code> and a library <code>mylibrary</code> that it imports. Without workspaces you would add a <code>replace</code> directive to <code>myapp/go.mod</code> pointing at the local <code>mylibrary</code> directory, and remember to remove it before pushing. Go workspaces, introduced in Go 1.18, eliminate this dance.</p>
+<p>Create a <code>go.work</code> file at the root of your checkout:</p>
+<pre><code>go work init ./myapp ./mylibrary</code></pre>
+<p>This generates:</p>
+<pre><code>go 1.26
+
+use (
+    ./myapp
+    ./mylibrary
+)</code></pre>
+<p>Now any <code>go</code> command run from anywhere inside that directory tree resolves <code>mylibrary</code> from the local disk, with no changes to either module’s <code>go.mod</code>. When you are done, delete or ignore <code>go.work</code> — the individual modules are unaffected.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Add <code>go.work</code> and <code>go.work.sum</code> to your <code>.gitignore</code> at the repository root. Workspaces are a local developer convenience; they should not be checked into source control for shared repositories.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>go.work</code> takes priority over <code>replace</code> directives. If both exist, the workspace wins. When sharing a repo, make sure <code>go.work</code> is gitignored so collaborators are not surprised.</p>
+</div></div>
+<h2 data-number="13.8" id="major-version-suffixes"><span class="header-section-number">13.8</span> Major Version Suffixes</h2>
+<p>  Go follows semantic versioning. Versions <code>v0.x.x</code> and <code>v1.x.x</code> have the same module path. Starting at <code>v2</code>, the module path must end with the major version number:</p>
+<pre><code>module github.com/noahkahan/attitude/v2
+
+go 1.26</code></pre>
+<p>Every import of that module must include <code>/v2</code>:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;github.com/noahkahan/attitude/v2/northern&quot;</span></span></code></pre></div>
+<p>This is intentional: a <code>v2</code> module is a <strong>different module</strong> from <code>v1</code>. Your application can import both at the same time if different dependencies require different major versions.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> This surprises Java programmers. In Maven, upgrading from <code>1.x</code> to <code>2.x</code> means changing the version number in <code>pom.xml</code>; the artifact ID stays the same. In Go, upgrading from <code>v1</code> to <code>v2</code> means updating every import statement in your codebase. The rationale is that <code>v2</code> is API-incompatible by definition, so the change should be visible everywhere it matters.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> If you are maintaining a library and want to publish a <code>v2</code>, the easiest path is to create a <code>v2/</code> subdirectory at the module root, copy the code there, update the <code>module</code> line to end in <code>/v2</code>, and maintain both versions side by side. The alternative is to tag the root module at <code>v2.0.0</code> and update the <code>go.mod</code> there, but the subdirectory approach keeps the history clean.</p>
+</div></div>
+<h2 data-number="13.9" id="build-tags"><span class="header-section-number">13.9</span> Build Tags</h2>
+<p>  A <strong>build tag</strong> (also called a build constraint) tells the Go compiler to include or exclude a file from a build. The most common uses are platform-specific code, feature flags, and separating integration tests from unit tests.</p>
+<h3 data-number="13.9.1" id="syntax"><span class="header-section-number">13.9.1</span> Syntax</h3>
+<p> Place the constraint on the <strong>first line</strong> of the file, before the <code>package</code> clause, with a blank line between them:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co">//go:build linux</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> platform</span></code></pre></div>
+<p>The expression can use <code>&amp;&amp;</code>, <code>||</code>, and <code>!</code>:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co">//go:build linux &amp;&amp; amd64</span></span></code></pre></div>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co">//go:build !windows</span></span></code></pre></div>
+<h3 data-number="13.9.2" id="predefined-tags"><span class="header-section-number">13.9.2</span> Predefined Tags</h3>
+<p> The Go toolchain defines tags automatically:</p>
+<table>
+<thead>
+<tr>
+<th>Tag</th>
+<th>When true</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>linux</code>, <code>darwin</code>, <code>windows</code></td>
+<td>GOOS matches</td>
+</tr>
+<tr>
+<td><code>amd64</code>, <code>arm64</code></td>
+<td>GOARCH matches</td>
+</tr>
+<tr>
+<td><code>go1.21</code>, <code>go1.22</code>, …</td>
+<td>Go version is at least that release</td>
+</tr>
+<tr>
+<td><code>cgo</code></td>
+<td>cgo is enabled</td>
+</tr>
+</tbody>
+</table>
+<h3 data-number="13.9.3" id="custom-tags"><span class="header-section-number">13.9.3</span> Custom Tags</h3>
+<p> Define your own tags by passing <code>-tags</code> to the <code>go</code> command:</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co">//go:build integration</span></span></code></pre></div>
+<pre><code>go test -tags=integration ./...</code></pre>
+<p>Files without the tag are excluded from that build. This is how integration tests are kept separate from unit tests without putting them in a different directory.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Use build tags to separate slow integration tests from fast unit tests. Name the tag <code>integration</code> and document it in your README. Your CI pipeline can run <code>go test ./...</code> for fast tests on every commit and <code>go test -tags=integration ./...</code> on a slower schedule.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Before Go 1.17 the syntax was <code>// +build linux</code> (a comment, not a directive). You may still encounter this in older code. The old syntax is still accepted for compatibility, but <code>//go:build</code> is the modern form. Do not mix them in the same file.</p>
+</div></div>
+<h2 data-number="13.10" id="goembed"><span class="header-section-number">13.10</span> <code>//go:embed</code></h2>
+<p>  Before Go 1.16, embedding static assets — HTML templates, SQL schemas, configuration files — in a binary required third-party code generators or reading files at runtime. <code>//go:embed</code> makes this a first-class language feature.</p>
+<h3 data-number="13.10.1" id="embedding-a-single-file"><span class="header-section-number">13.10.1</span> Embedding a Single File</h3>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> lyrics</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> _ <span class="st">&quot;embed&quot;</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="co">//go:embed orange.txt</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> orangeLyrics <span class="dt">string</span></span></code></pre></div>
+<p>At compile time, the contents of <code>orange.txt</code> are baked into the binary and assigned to <code>orangeLyrics</code>. No file I/O at runtime.</p>
+<h3 data-number="13.10.2" id="embedding-multiple-files"><span class="header-section-number">13.10.2</span> Embedding Multiple Files</h3>
+<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> web</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;embed&quot;</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="co">//go:embed static/*.html static/*.css</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> webFiles embed<span class="op">.</span>FS</span></code></pre></div>
+<p><code>embed.FS</code> is a read-only filesystem rooted at the directory containing the <code>.go</code> file. It satisfies <code>fs.FS</code>, so it works with <code>http.FS</code>, <code>template.ParseFS</code>, and any other function that accepts an <code>fs.FS</code>.</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>http<span class="op">.</span>Handle<span class="op">(</span><span class="st">&quot;/static/&quot;</span><span class="op">,</span> http<span class="op">.</span>StripPrefix<span class="op">(</span><span class="st">&quot;/static/&quot;</span><span class="op">,</span> http<span class="op">.</span>FileServer<span class="op">(</span>http<span class="op">.</span>FS<span class="op">(</span>webFiles<span class="op">))))</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> The <code>//go:embed</code> directive must appear immediately before the variable declaration, with no blank line between them. When embedding into a <code>string</code> or <code>[]byte</code> variable, the <code>embed</code> package must be imported for its side effect — use <code>import _ "embed"</code> because you are not naming anything from the package. When embedding into <code>embed.FS</code>, use a normal <code>import "embed"</code> because you reference <code>embed.FS</code> by name.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Glob patterns in <code>//go:embed</code> do not match files or directories whose names begin with <code>.</code> or <code>_</code>. If you want to embed a <code>.gitignore</code> or <code>_headers</code> file, name it without the leading dot or underscore, or use <code>embed.FS</code> with an explicit path.</p>
+</div></div>
+<p>The compile-time inclusion is the key difference from Java’s <code>getClass().getResourceAsStream()</code>; with <code>//go:embed</code> there is no path to get wrong at runtime.</p>
+<h2 data-number="13.11" id="key-points"><span class="header-section-number">13.11</span> Key Points</h2>
+<ul>
+<li>Package names are short, lowercase, match their directory, and no underscores.</li>
+<li>Capitalization controls visibility: uppercase = exported, lowercase = unexported; there is no <code>protected</code>.</li>
+<li>A module is the unit of versioning (one <code>go.mod</code>); a package is the unit of code organisation within a module.</li>
+<li><code>go.mod</code> declares the module path and pins dependencies with <code>require</code>; <code>replace</code> overrides the source of a module for local development or forks.</li>
+<li>Go uses Minimum Version Selection (MVS): the highest minimum version required by any module in the build graph wins — reproducible by design.</li>
+<li><code>go.sum</code> is the lock file; commit it alongside <code>go.mod</code>.</li>
+<li><code>go get</code> adds/upgrades/removes dependencies; <code>go mod tidy</code> keeps <code>go.mod</code> clean; <code>go mod vendor</code> copies dependencies locally.</li>
+<li><code>internal/</code> packages are enforced by the compiler: only code rooted at the parent of <code>internal</code> may import them.</li>
+<li>The standard layout uses <code>cmd/</code> for executables and <code>internal/</code> for private packages.</li>
+<li>Go workspaces (<code>go work</code>) let you develop multiple modules side by side without <code>replace</code> directives.</li>
+<li>Modules at <code>v2</code> or higher must include the major version in the module path and every import.</li>
+<li>Build tags (<code>//go:build</code>) include or exclude files based on OS, architecture, Go version, or custom tags passed with <code>-tags</code>.</li>
+<li><code>//go:embed</code> bakes files into the binary at compile time; use <code>string</code>, <code>[]byte</code>, or <code>embed.FS</code> as the variable type.</li>
+</ul>
+<h2 data-number="13.12" id="exercises"><span class="header-section-number">13.12</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> Maven and Gradle resolve transitive dependencies automatically and let two artifacts declare conflicting version requirements for the same library. They use a strategy (nearest-wins in Maven, highest-requested in Gradle) to pick a single version at build time. Go’s module system takes a different approach called Minimum Version Selection (MVS): it always picks the minimum version that satisfies all requirements. Compare these two philosophies. What problems does MVS avoid? What does it make harder? When might the Go approach cause a surprise after running <code>go get pkg@latest</code>?</p></li>
+<li><p><strong>What does this print?</strong></p>
+<p>Given the following three files in a module <code>github.com/zachbryan/demo</code>:</p>
+<p>File <code>lyrics/lyrics.go</code>:</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> lyrics</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Print<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;something in the orange&quot;</span><span class="op">)</span></span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>File <code>lyrics/internal/detail/detail.go</code>:</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> detail</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Show<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;internal detail&quot;</span><span class="op">)</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>File <code>main.go</code>:</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;github.com/zachbryan/demo/lyrics&quot;</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;github.com/zachbryan/demo/lyrics/internal/detail&quot;</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>    lyrics<span class="op">.</span>Print<span class="op">()</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>    detail<span class="op">.</span>Show<span class="op">()</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>What happens when you run <code>go build</code>? If the build succeeds, what does the program print? If not, explain why.</p></li>
+<li><p><strong>Calculation:</strong> A module’s <code>go.mod</code> contains the following:</p>
+<pre><code>module github.com/noahkahan/app
+
+go 1.26
+
+require (
+    github.com/noahkahan/audio v1.4.0
+    github.com/noahkahan/catalog v0.9.2
+    golang.org/x/text v0.14.0 // indirect
+)</code></pre>
+<p><code>github.com/noahkahan/audio v1.4.0</code> itself requires <code>golang.org/x/text v0.12.0</code>. <code>github.com/noahkahan/catalog v0.9.2</code> requires <code>golang.org/x/text v0.14.0</code>.</p>
+<p>Under Go’s Minimum Version Selection, which version of <code>golang.org/x/text</code> will the final build use? Explain why. Now suppose you add a new dependency that requires <code>golang.org/x/text v0.16.0</code>. What version will MVS select then?</p></li>
+<li><p><strong>Where is the bug?</strong> The following module has this layout and code:</p>
+<pre><code>northernattitude/
+├── go.mod           (module github.com/noahkahan/northernattitude)
+├── main.go
+└── internal/
+    └── config/
+        └── config.go</code></pre>
+<p><code>main.go</code>:</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;github.com/noahkahan/northernattitude/internal/config&quot;</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>config<span class="op">.</span>DefaultRegion<span class="op">)</span></span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>A second module lives alongside it:</p>
+<pre><code>player/
+├── go.mod           (module github.com/noahkahan/player)
+└── main.go</code></pre>
+<p><code>player/main.go</code>:</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;github.com/noahkahan/northernattitude/internal/config&quot;</span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>config<span class="op">.</span>DefaultRegion<span class="op">)</span></span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>What happens when you run <code>go build ./...</code> inside the <code>player/</code> module? Identify the bug and describe how to fix it without moving the <code>config</code> package out of <code>internal/</code>.</p></li>
+<li><p><strong>Write a program:</strong> Create a small multi-package module with the following layout:</p>
+<pre><code>stickseason/
+├── go.mod           (module github.com/noahkahan/stickseason)
+├── main.go
+├── tracks/
+│   └── tracks.go
+└── internal/
+    └── format/
+        └── format.go</code></pre>
+<p><code>tracks.go</code> should define an exported <code>Track</code> struct with <code>Title</code> and <code>Artist</code> string fields and a slice <code>Catalog</code> containing at least two entries. <code>format.go</code> should define an unexported-to-outside but exported-within-module function <code>Label(t tracks.Track) string</code> that returns <code>"Title by Artist"</code>. <code>main.go</code> should import both <code>tracks</code> and <code>internal/format</code>, iterate over <code>tracks.Catalog</code>, and print the label for each track using <code>format.Label</code>. Build and run the program with <code>go run ./...</code> (or <code>go run main.go</code>) and confirm it prints the expected output.</p></li>
+</ol>
+
+{% endraw %}

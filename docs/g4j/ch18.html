@@ -1,0 +1,348 @@
+---
+layout: default
+title: "18. Testing"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 18
+---
+
+{% raw %}
+<h1 data-number="18" id="testing"><span class="header-section-number">18</span> Testing</h1>
+<p> Go’s <code>testing</code> package is deliberately minimal: no annotations, no test runner configuration files, no assertion library.  What it lacks in ceremony it makes up for in power — table-driven tests, subtests, benchmarks, and a built-in fuzzer all ship with the standard library. If you are used to JUnit 5, most concepts will map cleanly; the idioms are just different.</p>
+<h2 data-number="18.1" id="the-testing.t-type"><span class="header-section-number">18.1</span> The <code>testing.T</code> Type</h2>
+<p>  Every test function takes a single argument of type <code>*testing.T</code>. The naming rule is strict: a test function must be named <code>TestXxx</code> where <code>Xxx</code> begins with an uppercase letter, and it must live in a file whose name ends in <code>_test.go</code>.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> music_test</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;testing&quot;</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TestAboutDamnTime<span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    got <span class="op">:=</span> normalize<span class="op">(</span><span class="st">&quot;about damn time&quot;</span><span class="op">)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    want <span class="op">:=</span> <span class="st">&quot;About Damn Time&quot;</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> got <span class="op">!=</span> want <span class="op">{</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>        t<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;normalize(%q) = %q, want %q&quot;</span><span class="op">,</span> <span class="st">&quot;about damn time&quot;</span><span class="op">,</span> got<span class="op">,</span> want<span class="op">)</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Go discovers and runs test files automatically with <code>go test</code>. There is no <code>@Test</code> annotation, no test class — just a naming convention.</p>
+<h3 data-number="18.1.1" id="t.error-t.fatal-and-t.log"><span class="header-section-number">18.1.1</span> <code>t.Error</code>, <code>t.Fatal</code>, and <code>t.Log</code></h3>
+<p>   The three methods you will reach for most often are:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t <span class="op">*</span>T<span class="op">)</span> Error<span class="op">(</span>args <span class="op">...</span><span class="dt">any</span><span class="op">)</span>                 <span class="co">// mark test failed; continue running</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t <span class="op">*</span>T<span class="op">)</span> Errorf<span class="op">(</span>format <span class="dt">string</span><span class="op">,</span> args <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="co">// mark test failed with formatted message; continue running</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t <span class="op">*</span>T<span class="op">)</span> Fatal<span class="op">(</span>args <span class="op">...</span><span class="dt">any</span><span class="op">)</span>                 <span class="co">// mark test failed; stop this test immediately</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t <span class="op">*</span>T<span class="op">)</span> Fatalf<span class="op">(</span>format <span class="dt">string</span><span class="op">,</span> args <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="co">// mark test failed with formatted message; stop immediately</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t <span class="op">*</span>T<span class="op">)</span> Log<span class="op">(</span>args <span class="op">...</span><span class="dt">any</span><span class="op">)</span>                   <span class="co">// record a message; only printed on failure (or with -v)</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t <span class="op">*</span>T<span class="op">)</span> Logf<span class="op">(</span>format <span class="dt">string</span><span class="op">,</span> args <span class="op">...</span><span class="dt">any</span><span class="op">)</span>   <span class="co">// record a formatted message</span></span></code></pre></div>
+<p>The key difference between <code>Error</code> and <code>Fatal</code> mirrors the difference between a recoverable and an unrecoverable condition. <code>t.Error</code> marks the test as failed but lets it keep running, which is useful when you want to report multiple independent failures in one pass.  <code>t.Fatal</code> marks the test as failed and stops the current test function immediately.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Use <code>t.Fatal</code> when subsequent checks depend on a previous one passing. If you set up a database connection in a test and it fails, there is no point running the 20 assertions that follow — use <code>t.Fatal</code> to stop early. Use <code>t.Error</code> when each check is independent and you want a full picture of all failures.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>t.Fatal</code> calls <code>runtime.Goexit()</code> under the hood, which unwinds deferred functions in the current goroutine. If you call <code>t.Fatal</code> from a goroutine that is not the test’s own goroutine, it will <strong>not</strong> stop the test — it will stop only that goroutine. Call <code>t.Fatal</code> only from the goroutine that received <code>t</code> directly (the test function itself or a helper called from it, not a spawned goroutine).</p>
+</div></div>
+<p>In Java with JUnit 5, you use <code>Assertions.assertEquals</code>, <code>Assertions.assertTrue</code>, and <code>Assertions.assertAll</code>. Go has no assertion library in the standard library. The idiomatic style is a plain <code>if</code> that calls <code>t.Error</code> or <code>t.Fatal</code>. Third-party libraries like <code>github.com/stretchr/testify/assert</code> exist, but many Go teams prefer the standard approach. Whichever you use, your failure messages should state the input, the actual result, and the expected result so that a reader can diagnose the failure without re-running the test. <strong><em>[test-failure-describes-wrong]</em></strong></p>
+<h2 data-number="18.2" id="table-driven-tests"><span class="header-section-number">18.2</span> Table-Driven Tests</h2>
+<p> Table-driven tests are Go’s answer to JUnit 5’s <code>@ParameterizedTest</code>. Instead of writing one test function per case, you define a slice of structs — each struct is a test case — and loop over them. <strong><em>[table-driven-tests]</em></strong></p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> music_test</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;testing&quot;</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TestGoodAsHell<span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    cases <span class="op">:=</span> <span class="op">[]</span><span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>        name  <span class="dt">string</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>        input <span class="dt">int</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>        want  <span class="dt">string</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">}{</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>name<span class="op">:</span> <span class="st">&quot;zero&quot;</span><span class="op">,</span>     input<span class="op">:</span> <span class="dv">0</span><span class="op">,</span>   want<span class="op">:</span> <span class="st">&quot;zero stars&quot;</span><span class="op">},</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>name<span class="op">:</span> <span class="st">&quot;one star&quot;</span><span class="op">,</span> input<span class="op">:</span> <span class="dv">1</span><span class="op">,</span>   want<span class="op">:</span> <span class="st">&quot;one star&quot;</span><span class="op">},</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>name<span class="op">:</span> <span class="st">&quot;max&quot;</span><span class="op">,</span>      input<span class="op">:</span> <span class="dv">5</span><span class="op">,</span>   want<span class="op">:</span> <span class="st">&quot;five stars&quot;</span><span class="op">},</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>name<span class="op">:</span> <span class="st">&quot;negative&quot;</span><span class="op">,</span> input<span class="op">:</span> <span class="op">-</span><span class="dv">1</span><span class="op">,</span>  want<span class="op">:</span> <span class="st">&quot;zero stars&quot;</span><span class="op">},</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> tc <span class="op">:=</span> <span class="kw">range</span> cases <span class="op">{</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>        t<span class="op">.</span>Run<span class="op">(</span>tc<span class="op">.</span>name<span class="op">,</span> <span class="kw">func</span><span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>            got <span class="op">:=</span> starRating<span class="op">(</span>tc<span class="op">.</span>input<span class="op">)</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> got <span class="op">!=</span> tc<span class="op">.</span>want <span class="op">{</span></span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>                t<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;starRating(%d) = %q, want %q&quot;</span><span class="op">,</span> tc<span class="op">.</span>input<span class="op">,</span> got<span class="op">,</span> tc<span class="op">.</span>want<span class="op">)</span></span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span></span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>        <span class="op">})</span></span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The outer test function iterates over the cases and calls <code>t.Run</code> for each one. <code>t.Run</code> creates a <strong>subtest</strong>: a named, independently tracked test run.</p>
+<h3 data-number="18.2.1" id="t.run-subtests"><span class="header-section-number">18.2.1</span> <code>t.Run</code> Subtests</h3>
+<p>  <code>t.Run(name, func(t *testing.T))</code> registers and runs a named subtest.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t <span class="op">*</span>T<span class="op">)</span> Run<span class="op">(</span>name <span class="dt">string</span><span class="op">,</span> f <span class="kw">func</span><span class="op">(</span>t <span class="op">*</span>T<span class="op">))</span> <span class="dt">bool</span>  <span class="co">// run f as a named subtest; returns true if f passes</span></span></code></pre></div>
+<p>Each subtest:</p>
+<ul>
+<li>Has its own pass/fail state.</li>
+<li>Can be run individually with <code>-run TestFoo/subtest_name</code>.</li>
+<li>Appears in failure output as <code>TestFoo/subtest_name</code>, making it easy to identify which case failed.</li>
+</ul>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Name your test cases with a <code>name</code> field and pass it as the first argument to <code>t.Run</code>. When a case fails, the output shows <code>--- FAIL: TestGoodAsHell/negative (0.00s)</code> so you immediately know which row broke. Without subtests you would only see <code>--- FAIL: TestGoodAsHell</code> and have to dig through the output to find which input caused it.</p>
+</div></div>
+<p>In JUnit 5, parameterized tests use <code>@ParameterizedTest</code> with <code>@MethodSource</code> or <code>@CsvSource</code>. Go’s table-driven approach with <code>t.Run</code> is more explicit — you write a slice literal and a loop — but it gives you the same per-case naming and isolation. Format each <code>t.Errorf</code> call with the actual result before the expected result: <code>got %q, want %q</code>. <strong><em>[actual-before-expected]</em></strong></p>
+<h2 data-number="18.3" id="t.helper"><span class="header-section-number">18.3</span> <code>t.Helper()</code></h2>
+<p>  When you extract repeated assertion logic into a helper function, Go’s test output points to the <strong>helper</strong> as the failure site rather than the call site in the test. That is rarely what you want. <code>t.Helper()</code> fixes this: calling it at the top of a helper function tells the testing framework to attribute any failure in that function to the <strong>caller</strong>.</p>
+<p>Without <code>t.Helper()</code>:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">// checkEqual reports whether got == want, but failure points to this line, not the caller.</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> checkEqual<span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">,</span> got<span class="op">,</span> want <span class="dt">string</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> got <span class="op">!=</span> want <span class="op">{</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>        t<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;got %q, want %q&quot;</span><span class="op">,</span> got<span class="op">,</span> want<span class="op">)</span>  <span class="co">// file:line points here</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>With <code>t.Helper()</code>:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">// checkEqual reports whether got == want.</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> checkEqual<span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">,</span> got<span class="op">,</span> want <span class="dt">string</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    t<span class="op">.</span>Helper<span class="op">()</span>  <span class="co">// attribute failures to the caller, not this function</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> got <span class="op">!=</span> want <span class="op">{</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>        t<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;got %q, want %q&quot;</span><span class="op">,</span> got<span class="op">,</span> want<span class="op">)</span>  <span class="co">// file:line now points to the caller</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Now when <code>checkEqual</code> fails, the reported line is the line in your test function that called <code>checkEqual</code>, not the line inside <code>checkEqual</code> itself.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TestWoman<span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    checkEqual<span class="op">(</span>t<span class="op">,</span> normalize<span class="op">(</span><span class="st">&quot;woman&quot;</span><span class="op">),</span> <span class="st">&quot;Woman&quot;</span><span class="op">)</span>  <span class="co">// failure reported here</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    checkEqual<span class="op">(</span>t<span class="op">,</span> normalize<span class="op">(</span><span class="st">&quot;GOLDEN&quot;</span><span class="op">),</span> <span class="st">&quot;Golden&quot;</span><span class="op">)</span> <span class="co">// failure reported here</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Any function that calls <code>t.Error</code>, <code>t.Fatal</code>, <code>t.Log</code>, or another helper should call <code>t.Helper()</code> as its first statement. Forgetting <code>t.Helper</code> is a common oversight that makes failure output point to the wrong file and line. <strong><em>[t-helper-for-helpers]</em></strong></p>
+</div></div>
+<h2 data-number="18.4" id="benchmarks"><span class="header-section-number">18.4</span> Benchmarks</h2>
+<p>  A benchmark measures the performance of a piece of code. Benchmarks follow the same file convention as tests — <code>_test.go</code> — but the function name starts with <code>Benchmark</code> and the argument is <code>*testing.B</code>.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> BenchmarkNormalize<span class="op">(</span>b <span class="op">*</span>testing<span class="op">.</span>B<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="kw">range</span> b<span class="op">.</span>N <span class="op">{</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>        normalize<span class="op">(</span><span class="st">&quot;about damn time&quot;</span><span class="op">)</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>  <code>b.N</code> is the number of iterations the framework chooses. The benchmark runner starts with a small <code>N</code> and increases it until the total run time is stable enough to report a reliable per-operation time. You do not set <code>b.N</code>; the framework sets it for you.</p>
+<p>Run benchmarks with <code>-bench</code>:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test <span class="at">-bench</span><span class="op">=</span>. <span class="at">-benchmem</span> ./...</span></code></pre></div>
+<p>The <code>-benchmem</code> flag adds allocation counts to the output.</p>
+<h3 data-number="18.4.1" id="b.resettimer"><span class="header-section-number">18.4.1</span> <code>b.ResetTimer</code></h3>
+<p> If your benchmark has expensive setup before the measured loop, use <code>b.ResetTimer()</code> to exclude the setup time from the measurement.</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> BenchmarkGolden<span class="op">(</span>b <span class="op">*</span>testing<span class="op">.</span>B<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    data <span class="op">:=</span> buildLargePlaylist<span class="op">(</span><span class="dv">10_000</span><span class="op">)</span>  <span class="co">// expensive setup</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    b<span class="op">.</span>ResetTimer<span class="op">()</span>                      <span class="co">// start timing only from here</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="kw">range</span> b<span class="op">.</span>N <span class="op">{</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>        _ <span class="op">=</span> findTopTrack<span class="op">(</span>data<span class="op">)</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>b.ResetTimer</code> zeroes the elapsed time and allocation counters so that only the measured loop is included in the reported numbers.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Always call <code>b.ResetTimer()</code> after any setup that you do not want included in the benchmark. Without it, a slow setup inflates the per-operation time, making the benchmark misleading.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Do not run benchmarks with <code>go test ./...</code> by default. Benchmarks only run when you pass <code>-bench=&lt;pattern&gt;</code>. Without <code>-bench</code>, benchmark functions are compiled but not executed.</p>
+</div></div>
+<p>In JUnit 5, there is no built-in benchmarking; you need JMH or similar. Go ships a benchmarking harness in the standard library.</p>
+<h2 data-number="18.5" id="fuzzing"><span class="header-section-number">18.5</span> Fuzzing</h2>
+<p>  Fuzzing automatically generates inputs to find crashes and panics.  A fuzz test is a function named <code>FuzzXxx</code> that takes <code>*testing.F</code>.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> FuzzGoodAsHell<span class="op">(</span>f <span class="op">*</span>testing<span class="op">.</span>F<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    f<span class="op">.</span>Add<span class="op">(</span><span class="st">&quot;Good as Hell&quot;</span><span class="op">)</span>   <span class="co">// seed corpus: start from known inputs</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    f<span class="op">.</span>Add<span class="op">(</span><span class="st">&quot;&quot;</span><span class="op">)</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    f<span class="op">.</span>Add<span class="op">(</span><span class="st">&quot;ABOUT DAMN TIME&quot;</span><span class="op">)</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    f<span class="op">.</span>Fuzz<span class="op">(</span><span class="kw">func</span><span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">,</span> s <span class="dt">string</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>        result <span class="op">:=</span> normalize<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="bu">len</span><span class="op">(</span>result<span class="op">)</span> <span class="op">&gt;</span> <span class="dv">0</span> <span class="op">&amp;&amp;</span> result<span class="op">[</span><span class="dv">0</span><span class="op">]</span> <span class="op">&gt;=</span> <span class="ch">&#39;a&#39;</span> <span class="op">&amp;&amp;</span> result<span class="op">[</span><span class="dv">0</span><span class="op">]</span> <span class="op">&lt;=</span> <span class="ch">&#39;z&#39;</span> <span class="op">{</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>            t<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;normalize(%q) starts with lowercase: %q&quot;</span><span class="op">,</span> s<span class="op">,</span> result<span class="op">)</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">})</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>  <code>f.Add</code> seeds the fuzzer with known inputs. The fuzzer uses those seeds as a starting point and then mutates them to generate new inputs.</p>
+<p> <code>f.Fuzz</code> registers the function that is called for each generated input. The first argument is always <code>*testing.T</code>; the remaining arguments match the types passed to <code>f.Add</code>.</p>
+<p>Run fuzzing with <code>-fuzz</code>:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test <span class="at">-fuzz</span><span class="op">=</span>FuzzGoodAsHell <span class="at">-fuzztime</span><span class="op">=</span>30s ./...</span></code></pre></div>
+<p>Without <code>-fuzz</code>, a fuzz test runs only the seed corpus — just like a regular test. With <code>-fuzz</code>, the engine runs indefinitely (or until <code>-fuzztime</code> elapses) mutating inputs until it finds a failure. When a failure is found, the engine writes the failing input to <code>testdata/fuzz/FuzzXxx/</code> so you can reproduce it.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Fuzz tests double as regression tests. The seed corpus (<code>f.Add</code> calls) runs every time <code>go test</code> runs — no <code>-fuzz</code> flag needed. Add the <code>testdata/fuzz/</code> directory to version control so that previously found failures are always checked.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Fuzzing is not available as a built-in in JUnit 5; you need a separate library. Go 1.18 added native fuzzing to the standard toolchain.</p>
+</div></div>
+<h2 data-number="18.6" id="race-detector"><span class="header-section-number">18.6</span> Race Detector</h2>
+<p>  Chapter 11 introduced the race detector briefly. Here is how to use it in tests.</p>
+<p>Run <code>go test -race</code> to enable the race detector:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test <span class="at">-race</span> ./...</span></code></pre></div>
+<p>The race detector instruments the binary to track every memory access. If two goroutines access the same variable concurrently and at least one of them is a write, the detector prints a detailed report showing the goroutine stacks at both access sites.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Run <code>go test -race</code> in CI on every push. The race detector has a small runtime cost (typically 2–20x slowdown), which is acceptable in CI but may be too slow for production. The cost of finding a race in production is far higher than the cost of running a slower test suite.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> The race detector only catches races that <strong>actually occur at runtime</strong>. It cannot prove the absence of races. A test suite with low concurrency coverage might miss a race that the detector would catch under higher load. Write tests that exercise concurrent code paths.</p>
+</div></div>
+<p>Here is a concise example of a race the detector will catch:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TestCounterRace<span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> count <span class="dt">int</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> wg sync<span class="op">.</span>WaitGroup</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="op">:=</span> <span class="dv">0</span><span class="op">;</span> i <span class="op">&lt;</span> <span class="dv">100</span><span class="op">;</span> i<span class="op">++</span> <span class="op">{</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>        wg<span class="op">.</span>Add<span class="op">(</span><span class="dv">1</span><span class="op">)</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>            <span class="cf">defer</span> wg<span class="op">.</span>Done<span class="op">()</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>            count<span class="op">++</span>  <span class="co">// data race: concurrent unsynchronized write</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>        <span class="op">}()</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>    wg<span class="op">.</span>Wait<span class="op">()</span></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>    t<span class="op">.</span>Log<span class="op">(</span><span class="st">&quot;count:&quot;</span><span class="op">,</span> count<span class="op">)</span></span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Run this with <code>go test -race</code> and the detector reports the race immediately.</p>
+<h2 data-number="18.7" id="goroutine-leak-detection"><span class="header-section-number">18.7</span> Goroutine Leak Detection</h2>
+<p>  Chapter 12 covered goroutine leaks in depth: what causes them, how to prevent them with context cancellation and <code>done</code> channels, and how <code>go.uber.org/goleak</code> detects them in tests. Every goroutine you spawn should have a clear exit path; if it has none, it is a leak. <strong><em>[goroutine-must-exit]</em></strong> The testing-specific summary: place <code>goleak.VerifyTestMain(m)</code> in <code>TestMain</code> to check every test in the package, or <code>defer goleak.VerifyNone(t)</code> in individual tests.</p>
+<p></p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Check all tests in the package --- preferred.</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TestMain<span class="op">(</span>m <span class="op">*</span>testing<span class="op">.</span>M<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    goleak<span class="op">.</span>VerifyTestMain<span class="op">(</span>m<span class="op">)</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Check a single test --- use when you cannot modify TestMain.</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TestAboutDamnTimeStream<span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> goleak<span class="op">.</span>VerifyNone<span class="op">(</span>t<span class="op">)</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> <code>TestMain</code> is Go’s equivalent of JUnit 5’s <code>@BeforeAll</code> / <code>@AfterAll</code> at the package level. It runs once per test binary rather than once per test function — the right place for global setup such as opening a shared database connection or installing goleak.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> <code>goleak.VerifyTestMain</code> calls <code>m.Run()</code> internally. Do not call <code>m.Run()</code> yourself before passing <code>m</code> to it — the tests would run twice.</p>
+</div></div>
+<h2 data-number="18.8" id="integration-tests-and-build-tags"><span class="header-section-number">18.8</span> Integration Tests and Build Tags</h2>
+<p>   Unit tests run quickly and need no external dependencies. Integration tests talk to real databases, real HTTP servers, or real message queues — they are slower and require infrastructure. Build tags let you separate the two so that <code>go test ./...</code> runs only the fast unit tests by default.</p>
+<p>A build tag is a comment at the very top of a file, before the package declaration:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co">//go:build integration</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> music_test</span></code></pre></div>
+<p>This file is excluded from the build unless the <code>integration</code> tag is provided. To run integration tests:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test <span class="at">-tags</span><span class="op">=</span>integration ./...</span></code></pre></div>
+<p>To run unit tests only:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test ./...</span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Use separate CI pipeline stages: one stage runs <code>go test ./...</code> on every commit (fast, no infrastructure), and a second stage runs <code>go test -tags=integration ./...</code> before merging to main (slower, requires a test database or test container).</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> In Go 1.17 and earlier, build tags used a different syntax: <code>// +build integration</code> (a comment, not a <code>//go:build</code> directive). Go 1.17 introduced the <code>//go:build</code> form, which is now the standard. <code>gofmt</code> will add the <code>//go:build</code> form for you if you only write the old form. Both can coexist in the same file for backward compatibility.</p>
+</div></div>
+<h2 data-number="18.9" id="running-tests"><span class="header-section-number">18.9</span> Running Tests</h2>
+<p> The <code>go test</code> command is the entry point for all test-related tasks.</p>
+<h3 data-number="18.9.1" id="go-test-...."><span class="header-section-number">18.9.1</span> <code>go test ./...</code></h3>
+<p>Run all tests in the current module:</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test ./...</span></code></pre></div>
+<p>The <code>./...</code> pattern matches the current directory and all subdirectories.</p>
+<h3 data-number="18.9.2" id="count1-disable-caching"><span class="header-section-number">18.9.2</span> <code>-count=1</code> (Disable Caching)</h3>
+<p> Go caches test results. If the test sources and dependencies have not changed, <code>go test</code> reuses the cached result rather than re-running the tests. This is usually helpful, but sometimes you want to force a fresh run — for example, when testing code that depends on external state.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test <span class="at">-count</span><span class="op">=</span>1 ./...</span></code></pre></div>
+<p><code>-count=1</code> tells the test runner to run each test exactly once and bypass the cache.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Use <code>-count=1</code> in CI to guarantee that tests always run, even when nothing has changed in the source. Cached test results in CI can hide flaky tests.</p>
+</div></div>
+<h3 data-number="18.9.3" id="timeout"><span class="header-section-number">18.9.3</span> <code>-timeout</code></h3>
+<p> By default <code>go test</code> applies a 10-minute timeout to the entire test binary. You can override this:</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test <span class="at">-timeout</span><span class="op">=</span>30s ./...</span></code></pre></div>
+<p>Set a tight timeout in CI so that a hanging test (for example, a goroutine waiting on a channel that is never closed) fails fast rather than blocking your pipeline for 10 minutes.</p>
+<h3 data-number="18.9.4" id="run-and--bench"><span class="header-section-number">18.9.4</span> <code>-run</code> and <code>-bench</code></h3>
+<p>  <code>-run</code> filters which test functions run by matching against a regular expression. <code>-bench</code> does the same for benchmarks.</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test <span class="at">-run</span><span class="op">=</span>TestGoodAsHell ./...           <span class="co"># run only tests matching &quot;TestGoodAsHell&quot;</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test <span class="at">-run</span><span class="op">=</span>TestGoodAsHell/zero ./...      <span class="co"># run only the &quot;zero&quot; subtest</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test <span class="at">-bench</span><span class="op">=</span>BenchmarkNormalize ./...     <span class="co"># run only this benchmark</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test <span class="at">-bench</span><span class="op">=</span>. <span class="at">-benchmem</span> ./...           <span class="co"># run all benchmarks with allocation stats</span></span></code></pre></div>
+<h3 data-number="18.9.5" id="a-typical-ci-invocation"><span class="header-section-number">18.9.5</span> A Typical CI Invocation</h3>
+<p>A minimal, correct CI test command:</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> test <span class="at">-race</span> <span class="at">-count</span><span class="op">=</span>1 <span class="at">-timeout</span><span class="op">=</span>120s ./...</span></code></pre></div>
+<p>This runs all tests with the race detector, bypasses the cache, and fails if anything takes more than two minutes.</p>
+<h2 data-number="18.10" id="key-points"><span class="header-section-number">18.10</span> Key Points</h2>
+<ul>
+<li>Test functions are named <code>TestXxx</code> and live in <code>_test.go</code> files; no annotations required.</li>
+<li><code>t.Error</code> marks a failure and continues; <code>t.Fatal</code> marks a failure and stops the test immediately.</li>
+<li>Table-driven tests use a slice of anonymous structs; <code>t.Run</code> creates named subtests for each case.</li>
+<li><code>t.Helper()</code> must be called at the top of any helper function so that failure output points to the call site, not the helper.</li>
+<li>Benchmarks are named <code>BenchmarkXxx</code> and receive <code>*testing.B</code>; <code>b.N</code> is the iteration count set by the framework.</li>
+<li>Call <code>b.ResetTimer()</code> after setup to exclude setup time from benchmark measurements.</li>
+<li>Fuzz tests are named <code>FuzzXxx</code> and receive <code>*testing.F</code>; <code>f.Add</code> seeds the corpus, <code>f.Fuzz</code> registers the test body.</li>
+<li>Without <code>-fuzz</code>, a fuzz test runs only the seed corpus, acting as a standard test.</li>
+<li>Run <code>go test -race</code> in CI on every push to catch data races; the race detector only reports races that actually occur.</li>
+<li><code>goleak.VerifyTestMain(m)</code> in <code>TestMain</code> detects goroutine leaks after the test suite finishes.</li>
+<li>Use <code>//go:build integration</code> to gate slow integration tests; run them with <code>-tags=integration</code>.</li>
+<li><code>go test ./...</code> runs all tests; <code>-count=1</code> disables caching; <code>-timeout</code> caps the run time.</li>
+</ul>
+<h2 data-number="18.11" id="exercises"><span class="header-section-number">18.11</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> JUnit 5’s <code>@ParameterizedTest</code> with <code>@CsvSource</code> and Go’s table-driven tests with <code>t.Run</code> both let you run the same logic against many inputs. Describe two concrete advantages that Go’s table-driven approach gives you over <code>@CsvSource</code>. Then explain the key behavioral difference between <code>t.Fatal</code> and <code>t.Error</code> inside a subtest, and describe a scenario where you would deliberately choose <code>t.Error</code> over <code>t.Fatal</code>.</p></li>
+<li><p><strong>What does this print?</strong> Trace the output when this test is run with <code>go test -v</code>.</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> music_test</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;testing&quot;</span></span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> checkPositive<span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">,</span> n <span class="dt">int</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> n <span class="op">&lt;=</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>        t<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;expected positive, got %d&quot;</span><span class="op">,</span> n<span class="op">)</span></span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TestGolden<span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>    checkPositive<span class="op">(</span>t<span class="op">,</span> <span class="dv">1</span><span class="op">)</span></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>    t<span class="op">.</span>Log<span class="op">(</span><span class="st">&quot;checked 1&quot;</span><span class="op">)</span></span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>    checkPositive<span class="op">(</span>t<span class="op">,</span> <span class="op">-</span><span class="dv">1</span><span class="op">)</span></span>
+<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a>    t<span class="op">.</span>Log<span class="op">(</span><span class="st">&quot;checked -1&quot;</span><span class="op">)</span></span>
+<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a>    checkPositive<span class="op">(</span>t<span class="op">,</span> <span class="dv">2</span><span class="op">)</span></span>
+<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a>    t<span class="op">.</span>Log<span class="op">(</span><span class="st">&quot;checked 2&quot;</span><span class="op">)</span></span>
+<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> A benchmark function has the following structure:</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> BenchmarkWoman<span class="op">(</span>b <span class="op">*</span>testing<span class="op">.</span>B<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="kw">range</span> b<span class="op">.</span>N <span class="op">{</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>        _ <span class="op">=</span> processTrack<span class="op">(</span><span class="st">&quot;Woman&quot;</span><span class="op">)</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>On the first probe the framework sets <code>b.N = 1</code> and measures elapsed time. It then sets <code>b.N = 100</code>, then <code>b.N = 10_000</code>, then <code>b.N = 1_000_000</code>. The framework stops when the total elapsed time exceeds one second. If <code>processTrack</code> takes exactly 500 ns per call, at which value of <code>b.N</code> does the total elapsed time first exceed one second? What is the reported ns/op value?</p></li>
+<li><p><strong>Where is the bug?</strong> The following test helper is supposed to make failure output point to the call site in <code>TestAboutDamnTime</code>, but it does not. Identify the bug and show the fix.</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> music_test</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;testing&quot;</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> assertNormalized<span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">,</span> input<span class="op">,</span> want <span class="dt">string</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>    got <span class="op">:=</span> normalize<span class="op">(</span>input<span class="op">)</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> got <span class="op">!=</span> want <span class="op">{</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>        t<span class="op">.</span>Fatalf<span class="op">(</span><span class="st">&quot;normalize(%q): got %q, want %q&quot;</span><span class="op">,</span> input<span class="op">,</span> got<span class="op">,</span> want<span class="op">)</span></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TestAboutDamnTime<span class="op">(</span>t <span class="op">*</span>testing<span class="op">.</span>T<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>    assertNormalized<span class="op">(</span>t<span class="op">,</span> <span class="st">&quot;about damn time&quot;</span><span class="op">,</span> <span class="st">&quot;About Damn Time&quot;</span><span class="op">)</span></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a>    assertNormalized<span class="op">(</span>t<span class="op">,</span> <span class="st">&quot;good as hell&quot;</span><span class="op">,</span>    <span class="st">&quot;Good as Hell&quot;</span><span class="op">)</span></span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Write a table-driven test for the following function. Your test must include at least five cases covering normal input, empty string, all-caps input, and a multi-word title. Use <code>t.Run</code> for each case and <code>t.Helper</code> in any helper you write.</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co">// TitleCase converts a string to title case.</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="co">// Each word&#39;s first letter is uppercased; the rest are lowercased.</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="co">// Words are separated by spaces.</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TitleCase<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span></span></code></pre></div></li>
+</ol>
+
+{% endraw %}

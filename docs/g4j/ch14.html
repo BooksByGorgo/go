@@ -1,0 +1,831 @@
+---
+layout: default
+title: "14. Essential Standard Library"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 14
+---
+
+{% raw %}
+<h1 data-number="14" id="essential-standard-library"><span class="header-section-number">14</span> Essential Standard Library</h1>
+<p> Go’s standard library covers most of what you reach for in daily backend work — I/O, file access, time, logging, CLI flags, and pattern matching — without pulling in external dependencies. This chapter walks through the packages every Go programmer uses constantly, with Java comparisons where the mental model transfer is non-obvious.</p>
+<h2 data-number="14.1" id="fmt-revisited"><span class="header-section-number">14.1</span> <code>fmt</code> — Revisited</h2>
+<p> Chapter 1 introduced <code>fmt.Println</code>, <code>fmt.Printf</code>, and <code>fmt.Sprintf</code>. This section adds the verbs and writer-directed functions you will use daily.</p>
+<h3 data-number="14.1.1" id="diagnostic-verbs"><span class="header-section-number">14.1.1</span> Diagnostic Verbs</h3>
+<p>  </p>
+<p>Three verbs are especially useful for debugging:</p>
+<table>
+<thead>
+<tr>
+<th>Verb</th>
+<th>Output</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>%v</code></td>
+<td>Default format — values only</td>
+</tr>
+<tr>
+<td><code>%+v</code></td>
+<td>Struct with field names</td>
+</tr>
+<tr>
+<td><code>%#v</code></td>
+<td>Go-syntax representation; can paste back in code</td>
+</tr>
+<tr>
+<td><code>%T</code></td>
+<td>Go type name</td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    BPM    <span class="dt">int</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>t <span class="op">:=</span> Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;positions&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Ariana Grande&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">114</span><span class="op">}</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%v</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span>  t<span class="op">)</span>   <span class="co">// {positions Ariana Grande 114}</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%+v</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> t<span class="op">)</span>   <span class="co">// {Title:positions Artist:Ariana Grande BPM:114}</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%#v</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> t<span class="op">)</span>   <span class="co">// main.Track{Title:&quot;positions&quot;, Artist:&quot;Ariana Grande&quot;, BPM:114}</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%T</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span>  t<span class="op">)</span>   <span class="co">// main.Track</span></span></code></pre></div>
+<p><code>%+v</code> is your first move when inspecting an unknown struct value. <code>%#v</code> gives you a snippet you can paste directly into a test or a <code>var</code> declaration.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> <code>%#v</code> on a slice prints <code>[]int{1, 2, 3}</code> rather than <code>[1 2 3]</code>. It is more verbose but unambiguous — very useful in test failure messages.</p>
+</div></div>
+<h3 data-number="14.1.2" id="fmt.fprintf-to-any-io.writer"><span class="header-section-number">14.1.2</span> <code>fmt.Fprintf</code> to Any <code>io.Writer</code></h3>
+<p></p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Fprintf<span class="op">(</span>w io<span class="op">.</span>Writer<span class="op">,</span> format <span class="dt">string</span><span class="op">,</span> a <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
+<p><code>fmt.Printf(format, args...)</code> is simply <code>fmt.Fprintf(os.Stdout, format, args...)</code>. Passing any <code>io.Writer</code> redirects the output:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Fprintf<span class="op">(</span>os<span class="op">.</span>Stderr<span class="op">,</span> <span class="st">&quot;warn: retrying in %v</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> delay<span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Fprintf<span class="op">(</span>logFile<span class="op">,</span> <span class="st">&quot;[INFO] loaded %d tracks</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> n<span class="op">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Fprintf<span class="op">(&amp;</span>buf<span class="op">,</span> <span class="st">&quot;SELECT * FROM tracks WHERE bpm &gt; %d&quot;</span><span class="op">,</span> minBPM<span class="op">)</span></span></code></pre></div>
+<p>Because <code>*os.File</code>, <code>*bytes.Buffer</code>, <code>*strings.Builder</code>, <code>net.Conn</code>, and <code>http.ResponseWriter</code> all satisfy <code>io.Writer</code>, a single <code>Fprintf</code> call works with any of them.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> In Java you might have separate <code>PrintStream</code>, <code>PrintWriter</code>, and <code>StringBuilder.append</code> paths. In Go there is one path: accept an <code>io.Writer</code>, call <code>fmt.Fprintf</code>.</p>
+</div></div>
+<h2 data-number="14.2" id="io-the-glue-of-go-io"><span class="header-section-number">14.2</span> <code>io</code> — The Glue of Go I/O</h2>
+<p> The <code>io</code> package defines the core interfaces that tie all I/O in Go together. You saw <code>io.Reader</code> and <code>io.Writer</code> in Chapter 8; this section covers the functions that compose them.</p>
+<h3 data-number="14.2.1" id="io.readall-and-io.copy"><span class="header-section-number">14.2.1</span> <code>io.ReadAll</code> and <code>io.Copy</code></h3>
+<p> </p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> ReadAll<span class="op">(</span>r Reader<span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span>              <span class="co">// read r until EOF; return all bytes</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Copy<span class="op">(</span>dst Writer<span class="op">,</span> src Reader<span class="op">)</span> <span class="op">(</span><span class="dt">int64</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span>    <span class="co">// copy src to dst until EOF or error</span></span></code></pre></div>
+<p><code>io.ReadAll</code> is the Go equivalent of Java’s <code>InputStream.readAllBytes()</code> (Java 9+). Use it when you need the entire contents in memory:</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>data<span class="op">,</span> err <span class="op">:=</span> io<span class="op">.</span>ReadAll<span class="op">(</span>resp<span class="op">.</span>Body<span class="op">)</span></span></code></pre></div>
+<p><code>io.Copy</code> streams from a <code>Reader</code> to a <code>Writer</code> without loading everything into memory at once. It is Go’s answer to Java’s <code>InputStream.transferTo(OutputStream)</code>:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> err <span class="op">:=</span> io<span class="op">.</span>Copy<span class="op">(</span>dst<span class="op">,</span> src<span class="op">)</span>  <span class="co">// n is the number of bytes copied</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>io.ReadAll</code> on a large HTTP response body allocates the entire response in memory. For large or unbounded responses, prefer <code>io.Copy</code> to stream directly to a file or another writer.</p>
+</div></div>
+<h3 data-number="14.2.2" id="composing-readers-and-writers"><span class="header-section-number">14.2.2</span> Composing Readers and Writers</h3>
+<p>    </p>
+<p>The <code>io</code> package provides several functions that wrap and combine readers and writers without copying data:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> MultiReader<span class="op">(</span>readers <span class="op">...</span>Reader<span class="op">)</span> Reader                 <span class="co">// reads from each reader in sequence</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> MultiWriter<span class="op">(</span>writers <span class="op">...</span>Writer<span class="op">)</span> Writer                 <span class="co">// writes to all writers simultaneously</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> TeeReader<span class="op">(</span>r Reader<span class="op">,</span> w Writer<span class="op">)</span> Reader                  <span class="co">// returns reader that copies to w as it reads</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> LimitReader<span class="op">(</span>r Reader<span class="op">,</span> n <span class="dt">int64</span><span class="op">)</span> Reader                 <span class="co">// reads at most n bytes from r</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Pipe<span class="op">()</span> <span class="op">(*</span>PipeReader<span class="op">,</span> <span class="op">*</span>PipeWriter<span class="op">)</span>                     <span class="co">// creates synchronous in-memory pipe</span></span></code></pre></div>
+<p><code>MultiReader</code> is like Java’s <code>SequenceInputStream</code>. <code>MultiWriter</code> is like Java’s <code>TeeOutputStream</code> but for any number of writers. <code>TeeReader</code> is useful for logging raw bytes while processing them:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Read from r and simultaneously write everything read to log.</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>logged <span class="op">:=</span> io<span class="op">.</span>TeeReader<span class="op">(</span>r<span class="op">,</span> log<span class="op">)</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>io<span class="op">.</span>Copy<span class="op">(</span>processor<span class="op">,</span> logged<span class="op">)</span></span></code></pre></div>
+<p><code>LimitReader</code> prevents reading past a byte budget:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>limited <span class="op">:=</span> io<span class="op">.</span>LimitReader<span class="op">(</span>req<span class="op">.</span>Body<span class="op">,</span> <span class="dv">1</span><span class="op">&lt;&lt;</span><span class="dv">20</span><span class="op">)</span> <span class="co">// never read more than 1 MiB</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>data<span class="op">,</span> err <span class="op">:=</span> io<span class="op">.</span>ReadAll<span class="op">(</span>limited<span class="op">)</span></span></code></pre></div>
+<p><code>io.Pipe</code> creates a synchronous in-memory pipe: writes to the <code>PipeWriter</code> block until the <code>PipeReader</code> consumes them. It connects a producer goroutine to a consumer that expects an <code>io.Reader</code>, without a buffer:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>pr<span class="op">,</span> pw <span class="op">:=</span> io<span class="op">.</span>Pipe<span class="op">()</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Fprintln<span class="op">(</span>pw<span class="op">,</span> <span class="st">&quot;thank u, next&quot;</span><span class="op">)</span>  <span class="co">// Ariana Grande</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    pw<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="op">}()</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>data<span class="op">,</span> _ <span class="op">:=</span> io<span class="op">.</span>ReadAll<span class="op">(</span>pr<span class="op">)</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="dt">string</span><span class="op">(</span>data<span class="op">))</span>  <span class="co">// thank u, next</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> The <code>io</code> composition functions never allocate a large intermediate buffer. They are building blocks for streaming pipelines: <code>LimitReader</code> guards against oversized input, <code>TeeReader</code> adds tap-style logging, and <code>MultiWriter</code> fans out to several sinks.</p>
+</div></div>
+<h3 data-number="14.2.3" id="other-io-signatures"><span class="header-section-number">14.2.3</span> Other <code>io</code> Signatures</h3>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> ReadFull<span class="op">(</span>r Reader<span class="op">,</span> buf <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span>    <span class="co">// reads exactly len(buf) bytes</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> WriteString<span class="op">(</span>w Writer<span class="op">,</span> s <span class="dt">string</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span>   <span class="co">// writes a string to w</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span>  Discard io<span class="op">.</span>Writer                                     <span class="co">// discards all writes; useful in tests</span></span></code></pre></div>
+<p><code>io.Discard</code> is a writer that throws data away — handy in tests when you want to drain a reader without storing the bytes.</p>
+<h2 data-number="14.3" id="bufio-buffered-io"><span class="header-section-number">14.3</span> <code>bufio</code> — Buffered I/O</h2>
+<p> Raw <code>io.Reader</code> and <code>io.Writer</code> operations may call the OS for every byte. <code>bufio</code> wraps any reader or writer in a userspace buffer, batching syscalls for performance. The Java equivalent is <code>BufferedReader</code> / <code>BufferedWriter</code>.</p>
+<h3 data-number="14.3.1" id="bufio.scanner"><span class="header-section-number">14.3.1</span> <code>bufio.Scanner</code></h3>
+<p></p>
+<p><code>Scanner</code> is the idiomatic way to read text line by line (or word by word, or any custom token):</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewScanner<span class="op">(</span>r io<span class="op">.</span>Reader<span class="op">)</span> <span class="op">*</span>Scanner</span></code></pre></div>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>scanner <span class="op">:=</span> bufio<span class="op">.</span>NewScanner<span class="op">(</span>os<span class="op">.</span>Stdin<span class="op">)</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> scanner<span class="op">.</span>Scan<span class="op">()</span> <span class="op">{</span>          <span class="co">// Scan returns false at EOF or error</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    line <span class="op">:=</span> scanner<span class="op">.</span>Text<span class="op">()</span>    <span class="co">// current line, no trailing newline</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>line<span class="op">)</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">:=</span> scanner<span class="op">.</span>Err<span class="op">();</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The loop pattern — <code>for scanner.Scan()</code> — is the Go equivalent of Java’s <code>BufferedReader.readLine() != null</code>.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Always check <code>scanner.Err()</code> after the loop. <code>Scan</code> returns <code>false</code> both at EOF (no error) and on a read error. Skipping the check silently drops I/O errors. <strong><em>[no-discard-error]</em></strong></p>
+</div></div>
+<p>By default <code>Scanner</code> splits on newlines. You can change the split function:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>scanner<span class="op">.</span>Split<span class="op">(</span>bufio<span class="op">.</span>ScanWords<span class="op">)</span>   <span class="co">// split on whitespace</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>scanner<span class="op">.</span>Split<span class="op">(</span>bufio<span class="op">.</span>ScanBytes<span class="op">)</span>   <span class="co">// one byte at a time</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>scanner<span class="op">.</span>Split<span class="op">(</span>bufio<span class="op">.</span>ScanRunes<span class="op">)</span>   <span class="co">// one UTF-8 rune at a time</span></span></code></pre></div>
+<p><code>Scanner</code> has a default buffer of 64 KiB per token. For very long lines, call <code>scanner.Buffer(make([]byte, cap), cap)</code> before the first <code>Scan</code>.</p>
+<h3 data-number="14.3.2" id="bufio.newreader-and-bufio.newwriter"><span class="header-section-number">14.3.2</span> <code>bufio.NewReader</code> and <code>bufio.NewWriter</code></h3>
+<p> </p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewReader<span class="op">(</span>rd io<span class="op">.</span>Reader<span class="op">)</span> <span class="op">*</span>Reader    <span class="co">// wraps rd in a 4096-byte read buffer</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewWriter<span class="op">(</span>w io<span class="op">.</span>Writer<span class="op">)</span> <span class="op">*</span>Writer     <span class="co">// wraps w in a 4096-byte write buffer</span></span></code></pre></div>
+<p>Use <code>bufio.NewReader</code> when you need <code>ReadString</code>, <code>ReadByte</code>, or <code>Peek</code> on an existing <code>io.Reader</code>:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>br <span class="op">:=</span> bufio<span class="op">.</span>NewReader<span class="op">(</span>conn<span class="op">)</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>header<span class="op">,</span> err <span class="op">:=</span> br<span class="op">.</span>ReadString<span class="op">(</span><span class="ch">&#39;\n&#39;</span><span class="op">)</span>  <span class="co">// read up to and including the newline</span></span></code></pre></div>
+<p>Use <code>bufio.NewWriter</code> to batch small writes to an expensive underlying writer (a file or network connection). You <strong>must</strong> call <code>Flush</code> when done or buffered data will be silently discarded:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>bw <span class="op">:=</span> bufio<span class="op">.</span>NewWriter<span class="op">(</span>file<span class="op">)</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Fprintln<span class="op">(</span>bw<span class="op">,</span> <span class="st">&quot;Don&#39;t Start Now&quot;</span><span class="op">)</span>   <span class="co">// Dua Lipa --- written to buffer, not file yet</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>bw<span class="op">.</span>Flush<span class="op">()</span>                             <span class="co">// now the data reaches the file</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Forgetting <code>bw.Flush()</code> is one of the most common Go I/O bugs. Use <code>defer bw.Flush()</code> immediately after creating the <code>bufio.Writer</code> so you cannot forget it.</p>
+</div></div>
+<h2 data-number="14.4" id="os-files-and-the-process-environment"><span class="header-section-number">14.4</span> <code>os</code> — Files and the Process Environment</h2>
+<p></p>
+<h3 data-number="14.4.1" id="opening-and-creating-files"><span class="header-section-number">14.4.1</span> Opening and Creating Files</h3>
+<p>   </p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Open<span class="op">(</span>name <span class="dt">string</span><span class="op">)</span> <span class="op">(*</span>File<span class="op">,</span> <span class="dt">error</span><span class="op">)</span>                          <span class="co">// open for reading only</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Create<span class="op">(</span>name <span class="dt">string</span><span class="op">)</span> <span class="op">(*</span>File<span class="op">,</span> <span class="dt">error</span><span class="op">)</span>                        <span class="co">// create or truncate, read/write</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> OpenFile<span class="op">(</span>name <span class="dt">string</span><span class="op">,</span> flag <span class="dt">int</span><span class="op">,</span> perm FileMode<span class="op">)</span> <span class="op">(*</span>File<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="co">// full control over flags/permissions</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> ReadFile<span class="op">(</span>name <span class="dt">string</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span>                     <span class="co">// read entire file into memory</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> WriteFile<span class="op">(</span>name <span class="dt">string</span><span class="op">,</span> data <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> perm FileMode<span class="op">)</span> <span class="dt">error</span>  <span class="co">// write entire file, creating if needed</span></span></code></pre></div>
+<p>For most file operations you need just two patterns:</p>
+<p><strong>Read the whole thing:</strong></p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>data<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>ReadFile<span class="op">(</span><span class="st">&quot;playlist.json&quot;</span><span class="op">)</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;reading playlist: %w&quot;</span><span class="op">,</span> err<span class="op">)</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><strong>Stream a large file:</strong></p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>f<span class="op">,</span> err <span class="op">:=</span> os<span class="op">.</span>Open<span class="op">(</span><span class="st">&quot;tracks.csv&quot;</span><span class="op">)</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> err</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> f<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>scanner <span class="op">:=</span> bufio<span class="op">.</span>NewScanner<span class="op">(</span>f<span class="op">)</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> scanner<span class="op">.</span>Scan<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>    process<span class="op">(</span>scanner<span class="op">.</span>Text<span class="op">())</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>*os.File</code> satisfies both <code>io.Reader</code> and <code>io.Writer</code>, so it plugs directly into any function that accepts those interfaces.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Always <code>defer f.Close()</code> immediately after a successful <code>os.Open</code> or <code>os.Create</code>. A file left open leaks an OS file descriptor. Go does not close files when they go out of scope the way Java’s try-with-resources does.</p>
+</div></div>
+<p><code>os.WriteFile</code> is the simplest way to atomically replace a small file:</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>err <span class="op">:=</span> os<span class="op">.</span>WriteFile<span class="op">(</span><span class="st">&quot;config.json&quot;</span><span class="op">,</span> data<span class="op">,</span> <span class="bn">0o644</span><span class="op">)</span></span></code></pre></div>
+<h3 data-number="14.4.2" id="process-environment"><span class="header-section-number">14.4.2</span> Process Environment</h3>
+<p>    </p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> Args <span class="op">[]</span><span class="dt">string</span>                     <span class="co">// command-line arguments; Args[0] is the program name</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> Stdin  <span class="op">*</span>File                      <span class="co">// standard input</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> Stdout <span class="op">*</span>File                      <span class="co">// standard output</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> Stderr <span class="op">*</span>File                      <span class="co">// standard error</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Getenv<span class="op">(</span>key <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span>        <span class="co">// returns the value of an environment variable</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> LookupEnv<span class="op">(</span>key <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">string</span><span class="op">,</span> <span class="dt">bool</span><span class="op">)</span> <span class="co">// like Getenv but distinguishes missing from empty</span></span></code></pre></div>
+<p><code>os.Stdin</code>, <code>os.Stdout</code>, and <code>os.Stderr</code> are ordinary <code>*os.File</code> values that satisfy <code>io.Reader</code> / <code>io.Writer</code>. That is why <code>fmt.Fprintln(os.Stderr, msg)</code> works without any special cast.</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>token <span class="op">:=</span> os<span class="op">.</span>Getenv<span class="op">(</span><span class="st">&quot;API_TOKEN&quot;</span><span class="op">)</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> token <span class="op">==</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Fprintln<span class="op">(</span>os<span class="op">.</span>Stderr<span class="op">,</span> <span class="st">&quot;API_TOKEN not set&quot;</span><span class="op">)</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>    os<span class="op">.</span>Exit<span class="op">(</span><span class="dv">1</span><span class="op">)</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>os.Args[0]</code> is the program name; <code>os.Args[1:]</code> are the user-supplied arguments — identical to Java’s <code>String[] args</code> but global. For real CLI tools, use the <code>flag</code> package (see below) rather than parsing <code>os.Args</code> by hand.</p>
+<h2 data-number="14.5" id="osexec-running-subprocesses"><span class="header-section-number">14.5</span> <code>os/exec</code> — Running Subprocesses</h2>
+<p> </p>
+<p>The <code>os/exec</code> package runs external programs. The Java counterpart is <code>ProcessBuilder</code>.</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Command<span class="op">(</span>name <span class="dt">string</span><span class="op">,</span> arg <span class="op">...</span><span class="dt">string</span><span class="op">)</span> <span class="op">*</span>Cmd   <span class="co">// builds a Cmd ready to run</span></span></code></pre></div>
+<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Run a command and capture its combined output.</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>out<span class="op">,</span> err <span class="op">:=</span> exec<span class="op">.</span>Command<span class="op">(</span><span class="st">&quot;git&quot;</span><span class="op">,</span> <span class="st">&quot;rev-parse&quot;</span><span class="op">,</span> <span class="st">&quot;--short&quot;</span><span class="op">,</span> <span class="st">&quot;HEAD&quot;</span><span class="op">).</span>Output<span class="op">()</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;commit: %s&quot;</span><span class="op">,</span> out<span class="op">)</span></span></code></pre></div>
+<p><code>Cmd.Output()</code> runs the command, waits for it to finish, and returns stdout as a <code>[]byte</code>. Use <code>Cmd.Run()</code> when you do not need the output:</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>cmd <span class="op">:=</span> exec<span class="op">.</span>Command<span class="op">(</span><span class="st">&quot;gofmt&quot;</span><span class="op">,</span> <span class="st">&quot;-w&quot;</span><span class="op">,</span> <span class="st">&quot;main.go&quot;</span><span class="op">)</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>cmd<span class="op">.</span>Stdout <span class="op">=</span> os<span class="op">.</span>Stdout   <span class="co">// forward subprocess stdout to our stdout</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>cmd<span class="op">.</span>Stderr <span class="op">=</span> os<span class="op">.</span>Stderr   <span class="co">// forward subprocess stderr to our stderr</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">:=</span> cmd<span class="op">.</span>Run<span class="op">();</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatalf<span class="op">(</span><span class="st">&quot;gofmt failed: %v&quot;</span><span class="op">,</span> err<span class="op">)</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 data-number="14.5.1" id="piping-stdio"><span class="header-section-number">14.5.1</span> Piping stdio</h3>
+<p>  </p>
+<p><code>Cmd.Stdin</code>, <code>Cmd.Stdout</code>, and <code>Cmd.Stderr</code> are <code>io.Reader</code> / <code>io.Writer</code> fields. Assign any compatible value:</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>cmd <span class="op">:=</span> exec<span class="op">.</span>Command<span class="op">(</span><span class="st">&quot;sort&quot;</span><span class="op">)</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>cmd<span class="op">.</span>Stdin  <span class="op">=</span> strings<span class="op">.</span>NewReader<span class="op">(</span><span class="st">&quot;banana</span><span class="ch">\n</span><span class="st">apple</span><span class="ch">\n</span><span class="st">cherry</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">)</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>cmd<span class="op">.</span>Stdout <span class="op">=</span> os<span class="op">.</span>Stdout</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>cmd<span class="op">.</span>Run<span class="op">()</span></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a><span class="co">// apple</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a><span class="co">// banana</span></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="co">// cherry</span></span></code></pre></div>
+<p>For a pipeline, connect one command’s stdout to another’s stdin using <code>io.Pipe</code> or <code>cmd.StdoutPipe()</code>:</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>c1 <span class="op">:=</span> exec<span class="op">.</span>Command<span class="op">(</span><span class="st">&quot;cat&quot;</span><span class="op">,</span> <span class="st">&quot;tracks.txt&quot;</span><span class="op">)</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>c2 <span class="op">:=</span> exec<span class="op">.</span>Command<span class="op">(</span><span class="st">&quot;grep&quot;</span><span class="op">,</span> <span class="st">&quot;pop&quot;</span><span class="op">)</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>c2<span class="op">.</span>Stdin<span class="op">,</span> _ <span class="op">=</span> c1<span class="op">.</span>StdoutPipe<span class="op">()</span>   <span class="co">// c2 reads from c1&#39;s stdout</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>c2<span class="op">.</span>Stdout <span class="op">=</span> os<span class="op">.</span>Stdout</span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>c2<span class="op">.</span>Start<span class="op">()</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>c1<span class="op">.</span>Run<span class="op">()</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>c2<span class="op">.</span>Wait<span class="op">()</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>exec.Command</code> does not invoke a shell. <code>exec.Command("ls -la")</code> does <strong>not</strong> work — it looks for a program literally named <code>"ls -la"</code>. Pass each argument separately: <code>exec.Command("ls", "-la")</code>.</p>
+</div></div>
+<h2 data-number="14.6" id="flag-cli-flag-parsing"><span class="header-section-number">14.6</span> <code>flag</code> — CLI Flag Parsing</h2>
+<p></p>
+<p>The <code>flag</code> package parses command-line flags in the style of Go tools themselves. The Java equivalent is Apache Commons CLI or picocli, but <code>flag</code> is built in and needs no dependency.</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Bool<span class="op">(</span>name <span class="dt">string</span><span class="op">,</span> value <span class="dt">bool</span><span class="op">,</span> usage <span class="dt">string</span><span class="op">)</span> <span class="op">*</span><span class="dt">bool</span>      <span class="co">// define a boolean flag</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Int<span class="op">(</span>name <span class="dt">string</span><span class="op">,</span> value <span class="dt">int</span><span class="op">,</span> usage <span class="dt">string</span><span class="op">)</span> <span class="op">*</span><span class="dt">int</span>         <span class="co">// define an integer flag</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> String<span class="op">(</span>name <span class="dt">string</span><span class="op">,</span> value <span class="dt">string</span><span class="op">,</span> usage <span class="dt">string</span><span class="op">)</span> <span class="op">*</span><span class="dt">string</span> <span class="co">// define a string flag</span></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Parse<span class="op">()</span>                                                 <span class="co">// parse os.Args[1:]</span></span></code></pre></div>
+<div class="sourceCode" id="cb30"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> <span class="op">(</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>    port    <span class="op">=</span> flag<span class="op">.</span>Int<span class="op">(</span><span class="st">&quot;port&quot;</span><span class="op">,</span> <span class="dv">8080</span><span class="op">,</span> <span class="st">&quot;HTTP port to listen on&quot;</span><span class="op">)</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>    verbose <span class="op">=</span> flag<span class="op">.</span>Bool<span class="op">(</span><span class="st">&quot;verbose&quot;</span><span class="op">,</span> <span class="ot">false</span><span class="op">,</span> <span class="st">&quot;enable verbose logging&quot;</span><span class="op">)</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>    output  <span class="op">=</span> flag<span class="op">.</span>String<span class="op">(</span><span class="st">&quot;output&quot;</span><span class="op">,</span> <span class="st">&quot;stdout&quot;</span><span class="op">,</span> <span class="st">&quot;output file path&quot;</span><span class="op">)</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a>    flag<span class="op">.</span>Parse<span class="op">()</span>  <span class="co">// must call before reading flag values</span></span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;starting on :%d (verbose=%v)</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> <span class="op">*</span>port<span class="op">,</span> <span class="op">*</span>verbose<span class="op">)</span></span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Running <code>./app -port 9090 -verbose</code> sets <code>*port</code> to <code>9090</code> and <code>*verbose</code> to <code>true</code>. Running <code>./app -help</code> prints the usage string automatically.</p>
+<p>Non-flag arguments (positional arguments after all flags) are available via <code>flag.Args()</code>.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Call <code>flag.Parse()</code> in <code>main</code>, not in <code>init</code>. Calling it from <code>init</code> makes testing harder because <code>init</code> runs before your test code can set up the argument list.</p>
+</div></div>
+<p>For more complex sub-command CLIs, the third-party <code>cobra</code> library (used by kubectl, Docker, and the Go CLI itself) builds on top of <code>flag</code> idioms.</p>
+<h2 data-number="14.7" id="time-clocks-durations-and-timers"><span class="header-section-number">14.7</span> <code>time</code> — Clocks, Durations, and Timers</h2>
+<p></p>
+<h3 data-number="14.7.1" id="time.duration-and-time.time"><span class="header-section-number">14.7.1</span> <code>time.Duration</code> and <code>time.Time</code></h3>
+<p> </p>
+<p><code>time.Duration</code> is an <code>int64</code> counting nanoseconds. Named constants give you human-readable literals:</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="kw">const</span> <span class="op">(</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>    Nanosecond  Duration <span class="op">=</span> <span class="dv">1</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>    Microsecond          <span class="op">=</span> <span class="dv">1000</span> <span class="op">*</span> Nanosecond</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>    Millisecond          <span class="op">=</span> <span class="dv">1000</span> <span class="op">*</span> Microsecond</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>    Second               <span class="op">=</span> <span class="dv">1000</span> <span class="op">*</span> Millisecond</span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>    Minute               <span class="op">=</span> <span class="dv">60</span> <span class="op">*</span> Second</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>    Hour                 <span class="op">=</span> <span class="dv">60</span> <span class="op">*</span> Minute</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
+<p>You write durations as arithmetic:</p>
+<div class="sourceCode" id="cb32"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>timeout <span class="op">:=</span> <span class="dv">30</span> <span class="op">*</span> time<span class="op">.</span>Second   <span class="co">// 30s</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>jitter  <span class="op">:=</span> <span class="dv">500</span> <span class="op">*</span> time<span class="op">.</span>Millisecond</span></code></pre></div>
+<p>In Java you use <code>Duration.ofSeconds(30)</code> and <code>TimeUnit.MILLISECONDS</code>. Go’s arithmetic on named constants is more concise.</p>
+<p><code>time.Time</code> represents an instant in time with nanosecond precision. The zero value (<code>time.Time{}</code>) is January 1, year 1, UTC — not <code>null</code>.</p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>now <span class="op">:=</span> time<span class="op">.</span>Now<span class="op">()</span>                          <span class="co">// current local time</span></span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>now<span class="op">.</span>Format<span class="op">(</span>time<span class="op">.</span>RFC3339<span class="op">))</span>      <span class="co">// 2024-11-22T15:04:05-08:00</span></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>now<span class="op">.</span>UTC<span class="op">().</span>Format<span class="op">(</span>time<span class="op">.</span>RFC3339<span class="op">))</span> <span class="co">// same instant, UTC offset</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> Go’s reference time for layout strings is <code>Mon Jan 2 15:04:05 MST 2006</code> — a specific instant, not placeholder tokens like Java’s <code>yyyy-MM-dd</code>. <code>time.RFC3339</code> is the constant <code>"2006-01-02T15:04:05Z07:00"</code>. If your format string looks wrong, check that you used the reference digits (month=01, day=02, hour=15, minute=04, second=05, year=2006).</p>
+</div></div>
+<h3 data-number="14.7.2" id="time.now-time.since-and-time.after"><span class="header-section-number">14.7.2</span> <code>time.Now</code>, <code>time.Since</code>, and <code>time.After</code></h3>
+<p>  </p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Now<span class="op">()</span> Time                           <span class="co">// current time</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Since<span class="op">(</span>t Time<span class="op">)</span> Duration               <span class="co">// elapsed time since t; equivalent to Now().Sub(t)</span></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> After<span class="op">(</span>d Duration<span class="op">)</span> <span class="op">&lt;-</span><span class="kw">chan</span> Time         <span class="co">// returns a channel that receives after duration d</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Sleep<span class="op">(</span>d Duration<span class="op">)</span>                    <span class="co">// blocks the calling goroutine for d</span></span></code></pre></div>
+<div class="sourceCode" id="cb35"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>start <span class="op">:=</span> time<span class="op">.</span>Now<span class="op">()</span></span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>doWork<span class="op">()</span></span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;finished in %v</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> time<span class="op">.</span>Since<span class="op">(</span>start<span class="op">))</span></span></code></pre></div>
+<p><code>time.After</code> is the idiomatic timeout in a <code>select</code>:</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a><span class="cf">select</span> <span class="op">{</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> result <span class="op">:=</span> <span class="op">&lt;-</span>work<span class="op">:</span></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;got result:&quot;</span><span class="op">,</span> result<span class="op">)</span></span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="op">&lt;-</span>time<span class="op">.</span>After<span class="op">(</span><span class="dv">5</span> <span class="op">*</span> time<span class="op">.</span>Second<span class="op">):</span></span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;timed out&quot;</span><span class="op">)</span></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 data-number="14.7.3" id="time.ticker-and-time.timer"><span class="header-section-number">14.7.3</span> <code>time.Ticker</code> and <code>time.Timer</code></h3>
+<p> </p>
+<div class="sourceCode" id="cb37"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewTicker<span class="op">(</span>d Duration<span class="op">)</span> <span class="op">*</span>Ticker  <span class="co">// fires every d; Ticker.C is the receive channel</span></span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewTimer<span class="op">(</span>d Duration<span class="op">)</span> <span class="op">*</span>Timer    <span class="co">// fires once after d; Timer.C is the receive channel</span></span></code></pre></div>
+<p><code>time.Ticker</code> delivers a tick on its channel at every interval — the same concept as Java’s <code>ScheduledExecutorService.scheduleAtFixedRate</code>.</p>
+<div class="sourceCode" id="cb38"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>ticker <span class="op">:=</span> time<span class="op">.</span>NewTicker<span class="op">(</span><span class="dv">1</span> <span class="op">*</span> time<span class="op">.</span>Second<span class="op">)</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> ticker<span class="op">.</span>Stop<span class="op">()</span>  <span class="co">// stop the ticker when you are done or it leaks a goroutine</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="kw">range</span> ticker<span class="op">.</span>C <span class="op">{</span></span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;tick:&quot;</span><span class="op">,</span> time<span class="op">.</span>Now<span class="op">().</span>Format<span class="op">(</span>time<span class="op">.</span>TimeOnly<span class="op">))</span></span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>time.Timer</code> fires once after a delay. If you do not need the channel — you just want to pause — use <code>time.Sleep</code> instead.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Always call <code>ticker.Stop()</code> (or <code>timer.Stop()</code>) when you are done with a Ticker or Timer. Failing to stop them leaks the internal goroutine that drives the channel.</p>
+</div></div>
+<h2 data-number="14.8" id="pathfilepath-cross-platform-path-manipulation"><span class="header-section-number">14.8</span> <code>path/filepath</code> — Cross-Platform Path Manipulation</h2>
+<p></p>
+<p><code>path/filepath</code> handles OS path separators correctly (<code>\</code> on Windows, <code>/</code> on Unix), unlike the <code>path</code> package which is hardcoded to forward slashes. The Java equivalent is <code>java.nio.file.Path</code>.</p>
+<div class="sourceCode" id="cb39"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Join<span class="op">(</span>elem <span class="op">...</span><span class="dt">string</span><span class="op">)</span> <span class="dt">string</span>        <span class="co">// joins path elements with the OS separator</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Dir<span class="op">(</span>path <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span>            <span class="co">// returns all but the last element of path</span></span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Base<span class="op">(</span>path <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span>           <span class="co">// returns the last element of path</span></span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Ext<span class="op">(</span>path <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span>            <span class="co">// returns the file name extension including the dot</span></span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Abs<span class="op">(</span>path <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">string</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span>   <span class="co">// returns the absolute path</span></span>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Walk<span class="op">(</span>root <span class="dt">string</span><span class="op">,</span> fn WalkFunc<span class="op">)</span> <span class="dt">error</span>           <span class="co">// walks the file tree (pre-order)</span></span>
+<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> WalkDir<span class="op">(</span>root <span class="dt">string</span><span class="op">,</span> fn fs<span class="op">.</span>WalkDirFunc<span class="op">)</span> <span class="dt">error</span>  <span class="co">// like Walk but more efficient; preferred</span></span></code></pre></div>
+<div class="sourceCode" id="cb40"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>p <span class="op">:=</span> filepath<span class="op">.</span>Join<span class="op">(</span><span class="st">&quot;music&quot;</span><span class="op">,</span> <span class="st">&quot;pop&quot;</span><span class="op">,</span> <span class="st">&quot;positions.flac&quot;</span><span class="op">)</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>filepath<span class="op">.</span>Dir<span class="op">(</span>p<span class="op">))</span>   <span class="co">// music/pop</span></span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>filepath<span class="op">.</span>Base<span class="op">(</span>p<span class="op">))</span>  <span class="co">// positions.flac</span></span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>filepath<span class="op">.</span>Ext<span class="op">(</span>p<span class="op">))</span>   <span class="co">// .flac</span></span></code></pre></div>
+<p><code>filepath.WalkDir</code> recursively visits every file in a tree:</p>
+<div class="sourceCode" id="cb41"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>filepath<span class="op">.</span>WalkDir<span class="op">(</span><span class="st">&quot;.&quot;</span><span class="op">,</span> <span class="kw">func</span><span class="op">(</span>path <span class="dt">string</span><span class="op">,</span> d fs<span class="op">.</span>DirEntry<span class="op">,</span> err <span class="dt">error</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> err</span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="op">!</span>d<span class="op">.</span>IsDir<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>path<span class="op">)</span></span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ot">nil</span></span>
+<span id="cb41-9"><a href="#cb41-9" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Use <code>filepath.Join</code> instead of string concatenation for paths. It handles leading/trailing separators, double slashes, and platform differences automatically. <code>filepath.Join("music/", "/pop")</code> returns <code>"music/pop"</code>, not <code>"music//pop"</code>.</p>
+</div></div>
+<h2 data-number="14.9" id="logslog-structured-logging"><span class="header-section-number">14.9</span> <code>log/slog</code> — Structured Logging</h2>
+<p>  </p>
+<p>Go’s classic <code>log</code> package writes plain text lines: great for a quick script, hopeless in production. When your service runs on twenty containers and emits ten thousand lines per minute, you need to search by field, not by regex. <strong>Structured logging</strong> — attaching typed key-value pairs to every log record — makes that possible. Go 1.21 added <code>log/slog</code> as the standard structured logger. The Java equivalent is SLF4J + Logback or Log4j2 with a JSON appender, but <code>slog</code> is simpler to configure and ships with the standard library.</p>
+<h3 data-number="14.9.1" id="handlers-and-output-formats"><span class="header-section-number">14.9.1</span> Handlers and Output Formats</h3>
+<p>  </p>
+<p>A <strong>handler</strong> controls where and how records are written. <code>slog</code> ships two:</p>
+<div class="sourceCode" id="cb42"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="co">// logfmt-style text --- readable in a terminal</span></span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>logger <span class="op">:=</span> slog<span class="op">.</span>New<span class="op">(</span>slog<span class="op">.</span>NewTextHandler<span class="op">(</span>os<span class="op">.</span>Stderr<span class="op">,</span> <span class="ot">nil</span><span class="op">))</span></span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a><span class="co">// time=2026-05-30T15:04:05Z level=INFO msg=&quot;track loaded&quot; title=Physical bpm=130</span></span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a><span class="co">// JSON --- machine-readable; use in production services</span></span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a>logger <span class="op">:=</span> slog<span class="op">.</span>New<span class="op">(</span>slog<span class="op">.</span>NewJSONHandler<span class="op">(</span>os<span class="op">.</span>Stderr<span class="op">,</span> <span class="ot">nil</span><span class="op">))</span></span>
+<span id="cb42-7"><a href="#cb42-7" aria-hidden="true" tabindex="-1"></a><span class="co">// {&quot;time&quot;:&quot;2026-05-30T15:04:05Z&quot;,&quot;level&quot;:&quot;INFO&quot;,&quot;msg&quot;:&quot;track loaded&quot;,&quot;title&quot;:&quot;Physical&quot;,&quot;bpm&quot;:130}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Use <code>TextHandler</code> during development (it’s readable in a terminal) and <code>JSONHandler</code> in production (log aggregators like Datadog, Loki, and Cloud Logging parse it automatically). Switch by reading an environment variable at startup.</p>
+</div></div>
+<h3 data-number="14.9.2" id="log-levels"><span class="header-section-number">14.9.2</span> Log Levels</h3>
+<p> <code>slog</code> has four built-in levels in increasing severity:</p>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th>Use for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Debug</code></td>
+<td>Detailed internal state; off in production</td>
+</tr>
+<tr>
+<td><code>Info</code></td>
+<td>Normal events: requests handled, tasks completed</td>
+</tr>
+<tr>
+<td><code>Warn</code></td>
+<td>Recoverable anomalies: retried operations, degraded mode</td>
+</tr>
+<tr>
+<td><code>Error</code></td>
+<td>Failures that need attention but did not crash the process</td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb43"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>logger<span class="op">.</span>Debug<span class="op">(</span><span class="st">&quot;cache miss&quot;</span><span class="op">,</span> slog<span class="op">.</span>String<span class="op">(</span><span class="st">&quot;key&quot;</span><span class="op">,</span> key<span class="op">))</span></span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>logger<span class="op">.</span>Info<span class="op">(</span><span class="st">&quot;track loaded&quot;</span><span class="op">,</span> slog<span class="op">.</span>String<span class="op">(</span><span class="st">&quot;title&quot;</span><span class="op">,</span> <span class="st">&quot;Physical&quot;</span><span class="op">))</span></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a>logger<span class="op">.</span>Warn<span class="op">(</span><span class="st">&quot;rate limit approaching&quot;</span><span class="op">,</span> slog<span class="op">.</span>Int<span class="op">(</span><span class="st">&quot;remaining&quot;</span><span class="op">,</span> <span class="dv">5</span><span class="op">))</span></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>logger<span class="op">.</span>Error<span class="op">(</span><span class="st">&quot;database query failed&quot;</span><span class="op">,</span> slog<span class="op">.</span>Any<span class="op">(</span><span class="st">&quot;err&quot;</span><span class="op">,</span> err<span class="op">))</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Do not log and then return an error for the same event. Either log it (at the point where you handle it) or return it (so the caller can decide whether to log), never both. Doubling up fills logs with duplicate noise and makes it hard to tell where a problem actually originated.</p>
+</div></div>
+<h3 data-number="14.9.3" id="configuring-the-log-level"><span class="header-section-number">14.9.3</span> Configuring the Log Level</h3>
+<p> </p>
+<p><code>slog.HandlerOptions</code> controls the minimum level and whether source file locations are included:</p>
+<div class="sourceCode" id="cb44"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a>opts <span class="op">:=</span> <span class="op">&amp;</span>slog<span class="op">.</span>HandlerOptions<span class="op">{</span></span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>    Level<span class="op">:</span>     slog<span class="op">.</span>LevelDebug<span class="op">,</span> <span class="co">// log everything</span></span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a>    AddSource<span class="op">:</span> <span class="ot">true</span><span class="op">,</span>            <span class="co">// include file:line in every record</span></span>
+<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb44-5"><a href="#cb44-5" aria-hidden="true" tabindex="-1"></a>logger <span class="op">:=</span> slog<span class="op">.</span>New<span class="op">(</span>slog<span class="op">.</span>NewJSONHandler<span class="op">(</span>os<span class="op">.</span>Stderr<span class="op">,</span> opts<span class="op">))</span></span></code></pre></div>
+<p>For a level you can change at runtime without restarting, use <code>slog.LevelVar</code>:</p>
+<div class="sourceCode" id="cb45"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> logLevel slog<span class="op">.</span>LevelVar <span class="co">// defaults to Info</span></span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> os<span class="op">.</span>Getenv<span class="op">(</span><span class="st">&quot;DEBUG&quot;</span><span class="op">)</span> <span class="op">!=</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb45-5"><a href="#cb45-5" aria-hidden="true" tabindex="-1"></a>        logLevel<span class="op">.</span>Set<span class="op">(</span>slog<span class="op">.</span>LevelDebug<span class="op">)</span></span>
+<span id="cb45-6"><a href="#cb45-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb45-7"><a href="#cb45-7" aria-hidden="true" tabindex="-1"></a>    logger <span class="op">:=</span> slog<span class="op">.</span>New<span class="op">(</span>slog<span class="op">.</span>NewJSONHandler<span class="op">(</span>os<span class="op">.</span>Stderr<span class="op">,</span> <span class="op">&amp;</span>slog<span class="op">.</span>HandlerOptions<span class="op">{</span></span>
+<span id="cb45-8"><a href="#cb45-8" aria-hidden="true" tabindex="-1"></a>        Level<span class="op">:</span> <span class="op">&amp;</span>logLevel<span class="op">,</span></span>
+<span id="cb45-9"><a href="#cb45-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}))</span></span>
+<span id="cb45-10"><a href="#cb45-10" aria-hidden="true" tabindex="-1"></a>    slog<span class="op">.</span>SetDefault<span class="op">(</span>logger<span class="op">)</span></span>
+<span id="cb45-11"><a href="#cb45-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<h3 data-number="14.9.4" id="setting-the-default-logger"><span class="header-section-number">14.9.4</span> Setting the Default Logger</h3>
+<p></p>
+<p><code>slog.SetDefault(logger)</code> installs your configured logger as the process-wide default. After this call, the package-level functions <code>slog.Info(...)</code>, <code>slog.Error(...)</code>, etc. all use your handler. This lets library code call <code>slog.Info(...)</code> without knowing which handler the application chose.</p>
+<div class="sourceCode" id="cb46"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a>    logger <span class="op">:=</span> slog<span class="op">.</span>New<span class="op">(</span>slog<span class="op">.</span>NewJSONHandler<span class="op">(</span>os<span class="op">.</span>Stderr<span class="op">,</span> <span class="ot">nil</span><span class="op">))</span></span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a>    slog<span class="op">.</span>SetDefault<span class="op">(</span>logger<span class="op">)</span> <span class="co">// all subsequent slog.* calls use this logger</span></span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Call <code>slog.SetDefault</code> once, early in <code>main</code>, before starting any goroutines. Libraries should never call <code>slog.SetDefault</code> — that is the application’s job.</p>
+</div></div>
+<h3 data-number="14.9.5" id="typed-attributes"><span class="header-section-number">14.9.5</span> Typed Attributes</h3>
+<p></p>
+<p>Always use the typed constructors rather than bare strings:</p>
+<div class="sourceCode" id="cb47"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> String<span class="op">(</span>key<span class="op">,</span> value <span class="dt">string</span><span class="op">)</span> Attr      <span class="co">// string attribute</span></span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Int<span class="op">(</span>key <span class="dt">string</span><span class="op">,</span> v <span class="dt">int</span><span class="op">)</span> Attr         <span class="co">// int attribute</span></span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Float64<span class="op">(</span>key <span class="dt">string</span><span class="op">,</span> v <span class="dt">float64</span><span class="op">)</span> Attr</span>
+<span id="cb47-4"><a href="#cb47-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Bool<span class="op">(</span>key <span class="dt">string</span><span class="op">,</span> v <span class="dt">bool</span><span class="op">)</span> Attr</span>
+<span id="cb47-5"><a href="#cb47-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Duration<span class="op">(</span>key <span class="dt">string</span><span class="op">,</span> v time<span class="op">.</span>Duration<span class="op">)</span> Attr</span>
+<span id="cb47-6"><a href="#cb47-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Any<span class="op">(</span>key <span class="dt">string</span><span class="op">,</span> value <span class="dt">any</span><span class="op">)</span> Attr     <span class="co">// escape hatch for custom types</span></span></code></pre></div>
+<div class="sourceCode" id="cb48"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a>logger<span class="op">.</span>Info<span class="op">(</span><span class="st">&quot;track loaded&quot;</span><span class="op">,</span></span>
+<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>    slog<span class="op">.</span>String<span class="op">(</span><span class="st">&quot;title&quot;</span><span class="op">,</span> <span class="st">&quot;Physical&quot;</span><span class="op">),</span>    <span class="co">// Dua Lipa</span></span>
+<span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a>    slog<span class="op">.</span>Int<span class="op">(</span><span class="st">&quot;bpm&quot;</span><span class="op">,</span> <span class="dv">130</span><span class="op">),</span></span>
+<span id="cb48-4"><a href="#cb48-4" aria-hidden="true" tabindex="-1"></a>    slog<span class="op">.</span>Duration<span class="op">(</span><span class="st">&quot;elapsed&quot;</span><span class="op">,</span> time<span class="op">.</span>Since<span class="op">(</span>start<span class="op">)),</span></span>
+<span id="cb48-5"><a href="#cb48-5" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Keep attribute key names lowercase with underscores (<code>request_id</code>, <code>user_email</code>, <code>elapsed_ms</code>). Consistent naming means you can write the same query in your log aggregator regardless of which service emitted the record. Treat your log schema like an API — it has consumers.</p>
+</div></div>
+<h3 data-number="14.9.6" id="logger.with-per-request-context"><span class="header-section-number">14.9.6</span> <code>logger.With</code> — Per-Request Context</h3>
+<p></p>
+<p><code>logger.With(attrs...)</code> returns a <strong>child logger</strong> that includes the given attributes on every record it emits. Use it to stamp every log line in a request handler with the request ID and user, so you can filter all lines for one request in one query:</p>
+<div class="sourceCode" id="cb49"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> handleUpload<span class="op">(</span>w http<span class="op">.</span>ResponseWriter<span class="op">,</span> r <span class="op">*</span>http<span class="op">.</span>Request<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>    log <span class="op">:=</span> slog<span class="op">.</span>Default<span class="op">().</span>With<span class="op">(</span></span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>        slog<span class="op">.</span>String<span class="op">(</span><span class="st">&quot;request_id&quot;</span><span class="op">,</span> r<span class="op">.</span>Header<span class="op">.</span>Get<span class="op">(</span><span class="st">&quot;X-Request-ID&quot;</span><span class="op">)),</span></span>
+<span id="cb49-4"><a href="#cb49-4" aria-hidden="true" tabindex="-1"></a>        slog<span class="op">.</span>String<span class="op">(</span><span class="st">&quot;user&quot;</span><span class="op">,</span> userFromContext<span class="op">(</span>r<span class="op">.</span>Context<span class="op">())),</span></span>
+<span id="cb49-5"><a href="#cb49-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">)</span></span>
+<span id="cb49-6"><a href="#cb49-6" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Info<span class="op">(</span><span class="st">&quot;upload started&quot;</span><span class="op">)</span></span>
+<span id="cb49-7"><a href="#cb49-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... do work ...</span></span>
+<span id="cb49-8"><a href="#cb49-8" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Info<span class="op">(</span><span class="st">&quot;upload complete&quot;</span><span class="op">,</span> slog<span class="op">.</span>Int64<span class="op">(</span><span class="st">&quot;bytes&quot;</span><span class="op">,</span> n<span class="op">))</span></span>
+<span id="cb49-9"><a href="#cb49-9" aria-hidden="true" tabindex="-1"></a>    <span class="co">// both lines carry request_id and user automatically</span></span>
+<span id="cb49-10"><a href="#cb49-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>This is the Go equivalent of SLF4J’s MDC (Mapped Diagnostic Context), but without thread-local storage — the context travels with the logger value, not with the goroutine.</p>
+<h3 data-number="14.9.7" id="slog.group-nested-attributes"><span class="header-section-number">14.9.7</span> <code>slog.Group</code> — Nested Attributes</h3>
+<p></p>
+<p><code>slog.Group</code> nests attributes under a named key. JSON handlers render it as a nested object; text handlers join the names with a dot:</p>
+<div class="sourceCode" id="cb50"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a>logger<span class="op">.</span>Info<span class="op">(</span><span class="st">&quot;upload complete&quot;</span><span class="op">,</span></span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>    slog<span class="op">.</span>Group<span class="op">(</span><span class="st">&quot;file&quot;</span><span class="op">,</span></span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>        slog<span class="op">.</span>String<span class="op">(</span><span class="st">&quot;name&quot;</span><span class="op">,</span> <span class="st">&quot;tracks.csv&quot;</span><span class="op">),</span></span>
+<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>        slog<span class="op">.</span>Int64<span class="op">(</span><span class="st">&quot;bytes&quot;</span><span class="op">,</span> <span class="dv">204800</span><span class="op">),</span></span>
+<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">),</span></span>
+<span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a><span class="co">// JSON: {&quot;msg&quot;:&quot;upload complete&quot;,&quot;file&quot;:{&quot;name&quot;:&quot;tracks.csv&quot;,&quot;bytes&quot;:204800}}</span></span>
+<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a><span class="co">// text: msg=&quot;upload complete&quot; file.name=tracks.csv file.bytes=204800</span></span></code></pre></div>
+<h3 data-number="14.9.8" id="context-aware-logging"><span class="header-section-number">14.9.8</span> Context-Aware Logging</h3>
+<p></p>
+<p>Every log method has a <code>*Context</code> variant that accepts a <code>context.Context</code> as its first argument:</p>
+<div class="sourceCode" id="cb51"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>logger<span class="op">.</span>InfoContext<span class="op">(</span>ctx<span class="op">,</span> <span class="st">&quot;query executed&quot;</span><span class="op">,</span> slog<span class="op">.</span>Duration<span class="op">(</span><span class="st">&quot;elapsed&quot;</span><span class="op">,</span> elapsed<span class="op">))</span></span></code></pre></div>
+<p>Custom handlers can extract trace IDs or span IDs from the context and include them automatically in every record — essential for correlating logs with distributed traces. Even if you do not implement this today, using <code>*Context</code> methods now means you can add trace correlation later without changing every log call site.</p>
+<h2 data-number="14.10" id="regexp-regular-expressions"><span class="header-section-number">14.10</span> <code>regexp</code> — Regular Expressions</h2>
+<p></p>
+<p>Go’s <code>regexp</code> package uses RE2 syntax, which is a strict subset of the PCRE patterns you may know from Java’s <code>java.util.regex</code>. RE2 guarantees linear-time matching — no catastrophic backtracking — by prohibiting backreferences and look-arounds.</p>
+<h3 data-number="14.10.1" id="compile-once-use-many-times"><span class="header-section-number">14.10.1</span> Compile Once, Use Many Times</h3>
+<p> </p>
+<div class="sourceCode" id="cb52"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Compile<span class="op">(</span>expr <span class="dt">string</span><span class="op">)</span> <span class="op">(*</span>Regexp<span class="op">,</span> <span class="dt">error</span><span class="op">)</span>   <span class="co">// compile; returns error on bad syntax</span></span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> MustCompile<span class="op">(</span>expr <span class="dt">string</span><span class="op">)</span> <span class="op">*</span>Regexp        <span class="co">// compile; panics on bad syntax; use for package-level vars</span></span></code></pre></div>
+<p>The critical pattern: compile the expression once (at package level or in an <code>init</code> function) and reuse the <code>*Regexp</code> value for every match. Compiling on every call is expensive — the equivalent of calling <code>Pattern.compile(regex)</code> inside a loop in Java.</p>
+<div class="sourceCode" id="cb53"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="co">// At package level: compiled once when the program starts.</span></span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> titleRE <span class="op">=</span> regexp<span class="op">.</span>MustCompile<span class="op">(</span><span class="st">`^[A-Z][a-z]+ \w+$`</span><span class="op">)</span></span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> isValidTitle<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">bool</span> <span class="op">{</span></span>
+<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> titleRE<span class="op">.</span>MatchString<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb53-6"><a href="#cb53-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Never call <code>regexp.MustCompile</code> (or <code>regexp.Compile</code>) inside a function that is called repeatedly. Each call re-parses and re-compiles the pattern — orders of magnitude slower than reusing a compiled <code>*Regexp</code>.</p>
+</div></div>
+<h3 data-number="14.10.2" id="common-regexp-methods"><span class="header-section-number">14.10.2</span> Common <code>*Regexp</code> Methods</h3>
+<p>    </p>
+<div class="sourceCode" id="cb54"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>re <span class="op">*</span>Regexp<span class="op">)</span> MatchString<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">bool</span>                      <span class="co">// reports whether s matches</span></span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>re <span class="op">*</span>Regexp<span class="op">)</span> FindString<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span>                     <span class="co">// returns leftmost match, or &quot;&quot;</span></span>
+<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>re <span class="op">*</span>Regexp<span class="op">)</span> FindAllString<span class="op">(</span>s <span class="dt">string</span><span class="op">,</span> n <span class="dt">int</span><span class="op">)</span> <span class="op">[]</span><span class="dt">string</span>         <span class="co">// all matches; n=-1 means all</span></span>
+<span id="cb54-4"><a href="#cb54-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>re <span class="op">*</span>Regexp<span class="op">)</span> FindStringSubmatch<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="op">[]</span><span class="dt">string</span>           <span class="co">// match + capture groups</span></span>
+<span id="cb54-5"><a href="#cb54-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>re <span class="op">*</span>Regexp<span class="op">)</span> ReplaceAllString<span class="op">(</span>src<span class="op">,</span> repl <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span>       <span class="co">// replace all matches</span></span>
+<span id="cb54-6"><a href="#cb54-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>re <span class="op">*</span>Regexp<span class="op">)</span> ReplaceAllStringFunc<span class="op">(</span>src <span class="dt">string</span><span class="op">,</span> f <span class="kw">func</span><span class="op">(</span><span class="dt">string</span><span class="op">)</span> <span class="dt">string</span><span class="op">)</span> <span class="dt">string</span> <span class="co">// replace with function</span></span></code></pre></div>
+<div class="sourceCode" id="cb55"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> isbnRE <span class="op">=</span> regexp<span class="op">.</span>MustCompile<span class="op">(</span><span class="st">`\d{3}-\d{10}`</span><span class="op">)</span></span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>isbnRE<span class="op">.</span>MatchString<span class="op">(</span><span class="st">&quot;978-0135182789&quot;</span><span class="op">))</span>  <span class="co">// true</span></span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>isbnRE<span class="op">.</span>FindString<span class="op">(</span><span class="st">&quot;isbn: 978-0135182789 end&quot;</span><span class="op">))</span>  <span class="co">// 978-0135182789</span></span>
+<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> versionRE <span class="op">=</span> regexp<span class="op">.</span>MustCompile<span class="op">(</span><span class="st">`(\d+)\.(\d+)\.(\d+)`</span><span class="op">)</span></span>
+<span id="cb55-7"><a href="#cb55-7" aria-hidden="true" tabindex="-1"></a>m <span class="op">:=</span> versionRE<span class="op">.</span>FindStringSubmatch<span class="op">(</span><span class="st">&quot;version 1.21.0 released&quot;</span><span class="op">)</span></span>
+<span id="cb55-8"><a href="#cb55-8" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>m<span class="op">[</span><span class="dv">0</span><span class="op">],</span> m<span class="op">[</span><span class="dv">1</span><span class="op">],</span> m<span class="op">[</span><span class="dv">2</span><span class="op">],</span> m<span class="op">[</span><span class="dv">3</span><span class="op">])</span>  <span class="co">// 1.21.0  1  21  0</span></span></code></pre></div>
+<p><code>FindStringSubmatch</code> returns a slice where <code>m[0]</code> is the whole match and <code>m[1]</code>, <code>m[2]</code>, … are the capture groups — the same model as Java’s <code>Matcher.group(0)</code>, <code>group(1)</code>, etc.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Go’s RE2 does not support backreferences (<code>\1</code>) or lookaheads (<code>(?=...)</code>). If you are porting a Java pattern that uses these, you will need to restructure the logic, typically by splitting the match into multiple passes or using <code>FindStringSubmatch</code> with post-processing.</p>
+</div></div>
+<h2 data-number="14.11" id="cmp-and-maps-comparison-and-map-utilities"><span class="header-section-number">14.11</span> <code>cmp</code> and <code>maps</code> — Comparison and Map Utilities</h2>
+<p>  Go 1.21 added the <code>cmp</code> and <code>maps</code> packages with generic utilities that complement the collections and sorting functions already covered.</p>
+<h3 data-number="14.11.1" id="cmp-three-way-comparison"><span class="header-section-number">14.11.1</span> <code>cmp</code> — Three-Way Comparison</h3>
+<p>   Go 1.21 added the <code>cmp</code> package in the standard library. It provides generic comparison utilities that are useful when sorting slices of structs.</p>
+<div class="sourceCode" id="cb56"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="co">// package cmp</span></span>
+<span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Compare<span class="op">[</span>T Ordered<span class="op">](</span>x<span class="op">,</span> y T<span class="op">)</span> <span class="dt">int</span> <span class="co">// -1 if x &lt; y, 0 if x == y, +1 if x &gt; y</span></span></code></pre></div>
+<p><code>cmp.Ordered</code> is a type constraint satisfied by all integer types, floating-point types, and <code>string</code>.</p>
+<p>The practical use case is sorting a slice of structs by a numeric or string field:</p>
+<div class="sourceCode" id="cb57"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;cmp&quot;</span></span>
+<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb57-4"><a href="#cb57-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;slices&quot;</span></span>
+<span id="cb57-5"><a href="#cb57-5" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb57-6"><a href="#cb57-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb57-7"><a href="#cb57-7" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb57-8"><a href="#cb57-8" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb57-9"><a href="#cb57-9" aria-hidden="true" tabindex="-1"></a>    BPM    <span class="dt">int</span></span>
+<span id="cb57-10"><a href="#cb57-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb57-11"><a href="#cb57-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb57-12"><a href="#cb57-12" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb57-13"><a href="#cb57-13" aria-hidden="true" tabindex="-1"></a>    playlist <span class="op">:=</span> <span class="op">[]</span>Track<span class="op">{</span></span>
+<span id="cb57-14"><a href="#cb57-14" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Gata Only&quot;</span><span class="op">,</span>        BPM<span class="op">:</span> <span class="dv">170</span><span class="op">},</span></span>
+<span id="cb57-15"><a href="#cb57-15" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Starboy&quot;</span><span class="op">,</span>          BPM<span class="op">:</span> <span class="dv">186</span><span class="op">},</span></span>
+<span id="cb57-16"><a href="#cb57-16" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Golden Hour&quot;</span><span class="op">,</span>      BPM<span class="op">:</span> <span class="dv">136</span><span class="op">},</span></span>
+<span id="cb57-17"><a href="#cb57-17" aria-hidden="true" tabindex="-1"></a>        <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Until I Found You&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">124</span><span class="op">},</span></span>
+<span id="cb57-18"><a href="#cb57-18" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb57-19"><a href="#cb57-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb57-20"><a href="#cb57-20" aria-hidden="true" tabindex="-1"></a>    slices<span class="op">.</span>SortFunc<span class="op">(</span>playlist<span class="op">,</span> <span class="kw">func</span><span class="op">(</span>a<span class="op">,</span> b Track<span class="op">)</span> <span class="dt">int</span> <span class="op">{</span></span>
+<span id="cb57-21"><a href="#cb57-21" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> cmp<span class="op">.</span>Compare<span class="op">(</span>a<span class="op">.</span>BPM<span class="op">,</span> b<span class="op">.</span>BPM<span class="op">)</span></span>
+<span id="cb57-22"><a href="#cb57-22" aria-hidden="true" tabindex="-1"></a>    <span class="op">})</span></span>
+<span id="cb57-23"><a href="#cb57-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb57-24"><a href="#cb57-24" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> t <span class="op">:=</span> <span class="kw">range</span> playlist <span class="op">{</span></span>
+<span id="cb57-25"><a href="#cb57-25" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%s: %d</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> t<span class="op">.</span>Title<span class="op">,</span> t<span class="op">.</span>BPM<span class="op">)</span></span>
+<span id="cb57-26"><a href="#cb57-26" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb57-27"><a href="#cb57-27" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb57-28"><a href="#cb57-28" aria-hidden="true" tabindex="-1"></a><span class="co">// Until I Found You: 124</span></span>
+<span id="cb57-29"><a href="#cb57-29" aria-hidden="true" tabindex="-1"></a><span class="co">// Golden Hour: 136</span></span>
+<span id="cb57-30"><a href="#cb57-30" aria-hidden="true" tabindex="-1"></a><span class="co">// Gata Only: 170</span></span>
+<span id="cb57-31"><a href="#cb57-31" aria-hidden="true" tabindex="-1"></a><span class="co">// Starboy: 186</span></span></code></pre></div>
+<p><code>cmp.Compare</code> replaces the classic three-way comparison pattern and is safe for floats (it handles NaN consistently).</p>
+<h3 data-number="14.11.2" id="maps-map-utilities"><span class="header-section-number">14.11.2</span> <code>maps</code> — Map Utilities</h3>
+<p> Go 1.21 added the <code>maps</code> package to the standard library with utility functions for working with maps.</p>
+<div class="sourceCode" id="cb58"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;maps&quot;</span></span>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Keys<span class="op">[</span>Map <span class="op">~</span><span class="kw">map</span><span class="op">[</span>K<span class="op">]</span>V<span class="op">,</span> K <span class="dt">comparable</span><span class="op">,</span> V <span class="dt">any</span><span class="op">](</span>m Map<span class="op">)</span> iter<span class="op">.</span>Seq<span class="op">[</span>K<span class="op">]</span>     <span class="co">// yields each key</span></span>
+<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Values<span class="op">[</span>Map <span class="op">~</span><span class="kw">map</span><span class="op">[</span>K<span class="op">]</span>V<span class="op">,</span> K <span class="dt">comparable</span><span class="op">,</span> V <span class="dt">any</span><span class="op">](</span>m Map<span class="op">)</span> iter<span class="op">.</span>Seq<span class="op">[</span>V<span class="op">]</span>   <span class="co">// yields each value</span></span>
+<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Clone<span class="op">[</span>Map <span class="op">~</span><span class="kw">map</span><span class="op">[</span>K<span class="op">]</span>V<span class="op">,</span> K <span class="dt">comparable</span><span class="op">,</span> V <span class="dt">any</span><span class="op">](</span>m Map<span class="op">)</span> Map            <span class="co">// shallow copy of m</span></span></code></pre></div>
+<p>The most common use is combining <code>maps.Keys</code> with <code>slices.Sorted</code> to iterate a map in sorted key order without manually building a key slice:</p>
+<div class="sourceCode" id="cb59"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;maps&quot;</span></span>
+<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;slices&quot;</span></span>
+<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb59-6"><a href="#cb59-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-7"><a href="#cb59-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb59-8"><a href="#cb59-8" aria-hidden="true" tabindex="-1"></a>    bpm <span class="op">:=</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span><span class="dt">int</span><span class="op">{</span></span>
+<span id="cb59-9"><a href="#cb59-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;amapiano&quot;</span><span class="op">:</span> <span class="dv">112</span><span class="op">,</span></span>
+<span id="cb59-10"><a href="#cb59-10" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;hyperpop&quot;</span><span class="op">:</span> <span class="dv">160</span><span class="op">,</span></span>
+<span id="cb59-11"><a href="#cb59-11" aria-hidden="true" tabindex="-1"></a>        <span class="st">&quot;lo-fi&quot;</span><span class="op">:</span>    <span class="dv">85</span><span class="op">,</span></span>
+<span id="cb59-12"><a href="#cb59-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb59-13"><a href="#cb59-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-14"><a href="#cb59-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> genre <span class="op">:=</span> <span class="kw">range</span> slices<span class="op">.</span>Sorted<span class="op">(</span>maps<span class="op">.</span>Keys<span class="op">(</span>bpm<span class="op">))</span> <span class="op">{</span></span>
+<span id="cb59-15"><a href="#cb59-15" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%s: %d</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> genre<span class="op">,</span> bpm<span class="op">[</span>genre<span class="op">])</span></span>
+<span id="cb59-16"><a href="#cb59-16" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb59-17"><a href="#cb59-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb59-18"><a href="#cb59-18" aria-hidden="true" tabindex="-1"></a><span class="co">// amapiano: 112</span></span>
+<span id="cb59-19"><a href="#cb59-19" aria-hidden="true" tabindex="-1"></a><span class="co">// hyperpop: 160</span></span>
+<span id="cb59-20"><a href="#cb59-20" aria-hidden="true" tabindex="-1"></a><span class="co">// lo-fi: 85</span></span></code></pre></div>
+<p><code>maps.Clone</code> makes a shallow copy of a map — useful when you want to mutate a map without affecting the original.</p>
+<h2 data-number="14.12" id="encodingbase64-base64-encoding"><span class="header-section-number">14.12</span> <code>encoding/base64</code> — Base64 Encoding</h2>
+<p> <code>encoding/base64</code> encodes and decodes binary data as printable ASCII — essential whenever you need to store or transmit raw bytes in a text context (HTTP headers, JSON fields, URLs).</p>
+<div class="sourceCode" id="cb60"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewEncoder<span class="op">(</span>enc <span class="op">*</span>Encoding<span class="op">,</span> w io<span class="op">.</span>Writer<span class="op">)</span> io<span class="op">.</span>WriteCloser <span class="co">// streaming encoder</span></span>
+<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewDecoder<span class="op">(</span>enc <span class="op">*</span>Encoding<span class="op">,</span> r io<span class="op">.</span>Reader<span class="op">)</span> io<span class="op">.</span>Reader      <span class="co">// streaming decoder</span></span>
+<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>enc <span class="op">*</span>Encoding<span class="op">)</span> EncodeToString<span class="op">(</span>src <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="dt">string</span>     <span class="co">// encode bytes to string</span></span>
+<span id="cb60-4"><a href="#cb60-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>enc <span class="op">*</span>Encoding<span class="op">)</span> DecodeString<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="co">// decode string to bytes</span></span></code></pre></div>
+<p>The package provides four standard encodings:</p>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Encoding</th>
+<th>Use case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base64.StdEncoding</code></td>
+<td>MIME (e-mail, PEM) — uses <code>+</code> and <code>/</code>, padded with <code>=</code></td>
+</tr>
+<tr>
+<td><code>base64.URLEncoding</code></td>
+<td>URL and filename-safe — uses <code>-</code> and <code>_</code>, padded</td>
+</tr>
+<tr>
+<td><code>base64.RawStdEncoding</code></td>
+<td>Like StdEncoding but no padding</td>
+</tr>
+<tr>
+<td><code>base64.RawURLEncoding</code></td>
+<td>URL-safe, no padding — the most common choice for tokens</td>
+</tr>
+</tbody>
+</table>
+<div class="sourceCode" id="cb61"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a>data <span class="op">:=</span> <span class="op">[]</span><span class="dt">byte</span><span class="op">(</span><span class="st">&quot;something in the orange&quot;</span><span class="op">)</span></span>
+<span id="cb61-2"><a href="#cb61-2" aria-hidden="true" tabindex="-1"></a>encoded <span class="op">:=</span> base64<span class="op">.</span>StdEncoding<span class="op">.</span>EncodeToString<span class="op">(</span>data<span class="op">)</span></span>
+<span id="cb61-3"><a href="#cb61-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>encoded<span class="op">)</span> <span class="co">// c29tZXRoaW5nIGluIHRoZSBvcmFuZ2U=</span></span>
+<span id="cb61-4"><a href="#cb61-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb61-5"><a href="#cb61-5" aria-hidden="true" tabindex="-1"></a>decoded<span class="op">,</span> err <span class="op">:=</span> base64<span class="op">.</span>StdEncoding<span class="op">.</span>DecodeString<span class="op">(</span>encoded<span class="op">)</span></span>
+<span id="cb61-6"><a href="#cb61-6" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="dt">string</span><span class="op">(</span>decoded<span class="op">))</span> <span class="co">// something in the orange</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>StdEncoding</code> and <code>URLEncoding</code> produce different output for the same input. Always use the same encoding for encoding and decoding — a <code>+</code> in <code>StdEncoding</code> output becomes <code>%2B</code> in a URL, which a <code>URLEncoding</code> decoder will reject.</p>
+</div></div>
+<h2 data-number="14.13" id="cryptorand-and-mathrandv2-random-numbers"><span class="header-section-number">14.13</span> <code>crypto/rand</code> and <code>math/rand/v2</code> — Random Numbers</h2>
+<p>  Go has two random number packages for two very different purposes.</p>
+<p><code>crypto/rand</code> produces <strong>cryptographically secure</strong> random bytes suitable for secrets, tokens, and keys. It reads from the OS entropy source (<code>/dev/urandom</code> on Linux, <code>CryptGenRandom</code> on Windows).</p>
+<div class="sourceCode" id="cb62"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Read<span class="op">(</span>b <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span> <span class="co">// fill b with random bytes; never errors in practice</span></span></code></pre></div>
+<div class="sourceCode" id="cb63"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;crypto/rand&quot;</span></span>
+<span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;encoding/base64&quot;</span></span>
+<span id="cb63-3"><a href="#cb63-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb63-4"><a href="#cb63-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> generateToken<span class="op">(</span>n <span class="dt">int</span><span class="op">)</span> <span class="op">(</span><span class="dt">string</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb63-5"><a href="#cb63-5" aria-hidden="true" tabindex="-1"></a>    b <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> n<span class="op">)</span></span>
+<span id="cb63-6"><a href="#cb63-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> _<span class="op">,</span> err <span class="op">:=</span> rand<span class="op">.</span>Read<span class="op">(</span>b<span class="op">);</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb63-7"><a href="#cb63-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">&quot;&quot;</span><span class="op">,</span> err</span>
+<span id="cb63-8"><a href="#cb63-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb63-9"><a href="#cb63-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> base64<span class="op">.</span>RawURLEncoding<span class="op">.</span>EncodeToString<span class="op">(</span>b<span class="op">),</span> <span class="ot">nil</span></span>
+<span id="cb63-10"><a href="#cb63-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>math/rand/v2</code> (Go 1.22+) is the <strong>fast, non-cryptographic</strong> package for simulations, shuffles, random sampling, and tests. It is not suitable for security-sensitive code.</p>
+<div class="sourceCode" id="cb64"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> N<span class="op">[</span>I constraints<span class="op">.</span>Integer<span class="op">](</span>n I<span class="op">)</span> I  <span class="co">// uniform random int in [0, n)</span></span>
+<span id="cb64-2"><a href="#cb64-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Float64<span class="op">()</span> <span class="dt">float64</span>                <span class="co">// uniform float in [0.0, 1.0)</span></span>
+<span id="cb64-3"><a href="#cb64-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Shuffle<span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> swap <span class="kw">func</span><span class="op">(</span>i<span class="op">,</span> j <span class="dt">int</span><span class="op">))</span> <span class="co">// shuffle a slice</span></span></code></pre></div>
+<div class="sourceCode" id="cb65"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;math/rand/v2&quot;</span></span>
+<span id="cb65-2"><a href="#cb65-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb65-3"><a href="#cb65-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>rand<span class="op">.</span>N<span class="op">(</span><span class="dv">100</span><span class="op">))</span>             <span class="co">// random int in [0, 100)</span></span>
+<span id="cb65-4"><a href="#cb65-4" aria-hidden="true" tabindex="-1"></a>rand<span class="op">.</span>Shuffle<span class="op">(</span><span class="bu">len</span><span class="op">(</span>tracks<span class="op">),</span> <span class="kw">func</span><span class="op">(</span>i<span class="op">,</span> j <span class="dt">int</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb65-5"><a href="#cb65-5" aria-hidden="true" tabindex="-1"></a>    tracks<span class="op">[</span>i<span class="op">],</span> tracks<span class="op">[</span>j<span class="op">]</span> <span class="op">=</span> tracks<span class="op">[</span>j<span class="op">],</span> tracks<span class="op">[</span>i<span class="op">]</span></span>
+<span id="cb65-6"><a href="#cb65-6" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Never use <code>math/rand</code> (or <code>math/rand/v2</code>) for passwords, tokens, session IDs, or encryption keys. Use <code>crypto/rand</code> for anything security-sensitive. The fast package is predictable given the seed — a bad actor who knows the seed can predict every value you generate.</p>
+</div></div>
+<h2 data-number="14.14" id="cryptosha256-cryptoaes-cryptocipher-hashing-and-encryption"><span class="header-section-number">14.14</span> <code>crypto/sha256</code>, <code>crypto/aes</code>, <code>crypto/cipher</code> — Hashing and Encryption</h2>
+<p>   Go’s <code>crypto</code> subtree provides production-grade primitives. Java programmers familiar with <code>javax.crypto</code> and <code>java.security.MessageDigest</code> will find the same patterns here.</p>
+<h3 data-number="14.14.1" id="hashing-with-cryptosha256"><span class="header-section-number">14.14.1</span> Hashing with <code>crypto/sha256</code></h3>
+<p>SHA-256 produces a 32-byte digest — useful for checksums, password hashing (with a proper KDF on top), and HMAC signatures.</p>
+<div class="sourceCode" id="cb66"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;crypto/sha256&quot;</span></span>
+<span id="cb66-2"><a href="#cb66-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb66-3"><a href="#cb66-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Sum256<span class="op">(</span>data <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">[</span><span class="dv">32</span><span class="op">]</span><span class="dt">byte</span>            <span class="co">// one-shot hash</span></span>
+<span id="cb66-4"><a href="#cb66-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> New<span class="op">()</span> hash<span class="op">.</span>Hash                         <span class="co">// streaming hash (implements io.Writer)</span></span></code></pre></div>
+<div class="sourceCode" id="cb67"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb67-1"><a href="#cb67-1" aria-hidden="true" tabindex="-1"></a>digest <span class="op">:=</span> sha256<span class="op">.</span>Sum256<span class="op">([]</span><span class="dt">byte</span><span class="op">(</span><span class="st">&quot;something in the orange&quot;</span><span class="op">))</span></span>
+<span id="cb67-2"><a href="#cb67-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%x</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> digest<span class="op">)</span> <span class="co">// hex-encoded 64-character string</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> SHA-256 alone is not suitable for storing passwords. Use <code>golang.org/x/crypto/bcrypt</code> or <code>golang.org/x/crypto/argon2</code> which are designed to be intentionally slow and include a salt. SHA-256 is fast by design, which makes it easy to brute-force.</p>
+</div></div>
+<h3 data-number="14.14.2" id="symmetric-encryption-with-cryptoaes-and-cryptocipher"><span class="header-section-number">14.14.2</span> Symmetric Encryption with <code>crypto/aes</code> and <code>crypto/cipher</code></h3>
+<p>AES-256-GCM is the standard choice for symmetric encryption in Go: authenticated, fast, and supported by hardware acceleration on most CPUs.</p>
+<div class="sourceCode" id="cb68"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb68-2"><a href="#cb68-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;crypto/aes&quot;</span></span>
+<span id="cb68-3"><a href="#cb68-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;crypto/cipher&quot;</span></span>
+<span id="cb68-4"><a href="#cb68-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;crypto/rand&quot;</span></span>
+<span id="cb68-5"><a href="#cb68-5" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb68-6"><a href="#cb68-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb68-7"><a href="#cb68-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> encrypt<span class="op">(</span>key<span class="op">,</span> plaintext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb68-8"><a href="#cb68-8" aria-hidden="true" tabindex="-1"></a>    block<span class="op">,</span> err <span class="op">:=</span> aes<span class="op">.</span>NewCipher<span class="op">(</span>key<span class="op">)</span>      <span class="co">// key must be 16, 24, or 32 bytes</span></span>
+<span id="cb68-9"><a href="#cb68-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb68-10"><a href="#cb68-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> err</span>
+<span id="cb68-11"><a href="#cb68-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb68-12"><a href="#cb68-12" aria-hidden="true" tabindex="-1"></a>    gcm<span class="op">,</span> err <span class="op">:=</span> cipher<span class="op">.</span>NewGCM<span class="op">(</span>block<span class="op">)</span>      <span class="co">// GCM mode: authenticated encryption</span></span>
+<span id="cb68-13"><a href="#cb68-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb68-14"><a href="#cb68-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> err</span>
+<span id="cb68-15"><a href="#cb68-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb68-16"><a href="#cb68-16" aria-hidden="true" tabindex="-1"></a>    nonce <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> gcm<span class="op">.</span>NonceSize<span class="op">())</span> <span class="co">// 12 bytes; must be unique per message</span></span>
+<span id="cb68-17"><a href="#cb68-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> _<span class="op">,</span> err <span class="op">:=</span> rand<span class="op">.</span>Read<span class="op">(</span>nonce<span class="op">);</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb68-18"><a href="#cb68-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> err</span>
+<span id="cb68-19"><a href="#cb68-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb68-20"><a href="#cb68-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> gcm<span class="op">.</span>Seal<span class="op">(</span>nonce<span class="op">,</span> nonce<span class="op">,</span> plaintext<span class="op">,</span> <span class="ot">nil</span><span class="op">),</span> <span class="ot">nil</span> <span class="co">// nonce prepended to ciphertext</span></span>
+<span id="cb68-21"><a href="#cb68-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb68-22"><a href="#cb68-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb68-23"><a href="#cb68-23" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> decrypt<span class="op">(</span>key<span class="op">,</span> ciphertext <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb68-24"><a href="#cb68-24" aria-hidden="true" tabindex="-1"></a>    block<span class="op">,</span> _ <span class="op">:=</span> aes<span class="op">.</span>NewCipher<span class="op">(</span>key<span class="op">)</span></span>
+<span id="cb68-25"><a href="#cb68-25" aria-hidden="true" tabindex="-1"></a>    gcm<span class="op">,</span> _ <span class="op">:=</span> cipher<span class="op">.</span>NewGCM<span class="op">(</span>block<span class="op">)</span></span>
+<span id="cb68-26"><a href="#cb68-26" aria-hidden="true" tabindex="-1"></a>    nonce<span class="op">,</span> ct <span class="op">:=</span> ciphertext<span class="op">[:</span>gcm<span class="op">.</span>NonceSize<span class="op">()],</span> ciphertext<span class="op">[</span>gcm<span class="op">.</span>NonceSize<span class="op">():]</span></span>
+<span id="cb68-27"><a href="#cb68-27" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> gcm<span class="op">.</span>Open<span class="op">(</span><span class="ot">nil</span><span class="op">,</span> nonce<span class="op">,</span> ct<span class="op">,</span> <span class="ot">nil</span><span class="op">)</span>  <span class="co">// authenticates and decrypts</span></span>
+<span id="cb68-28"><a href="#cb68-28" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The <code>gcm.Seal</code> / <code>gcm.Open</code> pair handles authentication automatically — if the ciphertext is tampered with, <code>Open</code> returns an error. This is called <strong>authenticated encryption with associated data (AEAD)</strong>.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> A 32-byte key gives you AES-256. Generate keys with <code>crypto/rand</code> and store them in environment variables or a secrets manager — never hard-code them. The nonce must never be reused with the same key; a fresh random nonce per message guarantees this.</p>
+</div></div>
+<h2 data-number="14.15" id="key-points"><span class="header-section-number">14.15</span> Key Points</h2>
+<ul>
+<li><code>%+v</code> adds field names to struct output; <code>%#v</code> gives Go-syntax output you can paste back into code.</li>
+<li><code>fmt.Fprintf</code> writes to any <code>io.Writer</code> — a file, a buffer, a network connection, a test recorder.</li>
+<li><code>io.Copy</code> streams without buffering the entire input; <code>io.ReadAll</code> loads everything into memory.</li>
+<li><code>io.TeeReader</code>, <code>io.MultiWriter</code>, <code>io.LimitReader</code>, and <code>io.Pipe</code> compose readers and writers without intermediate allocations.</li>
+<li><code>bufio.Scanner</code> is the idiomatic line-by-line reader; always check <code>scanner.Err()</code> after the loop.</li>
+<li>Always <code>defer bw.Flush()</code> after creating a <code>bufio.Writer</code> or buffered data will be silently lost.</li>
+<li>Always <code>defer f.Close()</code> after opening a file — Go has no try-with-resources.</li>
+<li><code>exec.Command</code> takes separate arguments, not a shell string; use <code>exec.Command("ls", "-la")</code>, not <code>exec.Command("ls -la")</code>.</li>
+<li><code>flag.Parse()</code> must be called before reading any flag values; call it from <code>main</code>, not <code>init</code>.</li>
+<li><code>time.Duration</code> is an <code>int64</code> nanoseconds; write durations as <code>30 * time.Second</code>, not <code>time.Duration(30)</code>.</li>
+<li>Go’s <code>time.Format</code> uses reference-time constants (<code>2006-01-02</code>), not pattern tokens like Java’s <code>yyyy-MM-dd</code>.</li>
+<li>Always <code>defer ticker.Stop()</code> to avoid goroutine leaks.</li>
+<li><code>log/slog</code> (Go 1.21) provides structured logging; use <code>JSONHandler</code> in production, <code>TextHandler</code> in development.</li>
+<li>Call <code>slog.SetDefault</code> once in <code>main</code>; use <code>slog.LevelVar</code> for a runtime-adjustable level.</li>
+<li>Use <code>logger.With</code> to stamp per-request attributes on every log line without repeating them.</li>
+<li>Use <code>*Context</code> log methods so custom handlers can inject trace IDs automatically.</li>
+<li>Don’t log and return the same error — pick one.</li>
+<li>Compile <code>regexp.MustCompile</code> once at package level; never inside a hot function.</li>
+<li><code>base64.RawURLEncoding</code> is the most common choice for URL-safe tokens; always encode and decode with the same variant.</li>
+<li>Use <code>crypto/rand</code> for secrets and tokens; use <code>math/rand/v2</code> for simulations and shuffles — never the reverse.</li>
+<li><code>crypto/sha256</code> produces a 32-byte digest; use <code>golang.org/x/crypto/bcrypt</code> for passwords.</li>
+<li>AES-256-GCM (<code>crypto/aes</code> + <code>cipher.NewGCM</code>) provides authenticated encryption; use a fresh random nonce per message.</li>
+</ul>
+<h2 data-number="14.16" id="exercises"><span class="header-section-number">14.16</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> In Java, <code>InputStream</code>, <code>OutputStream</code>, <code>Reader</code>, and <code>Writer</code> are four separate abstract class hierarchies. Go has two interfaces — <code>io.Reader</code> and <code>io.Writer</code> — and a set of composition functions. What design decision makes Go’s two-interface model work where Java needed four base classes? What would be harder to express cleanly in Go’s model?</p></li>
+<li><p><strong>What does this print?</strong></p>
+<div class="sourceCode" id="cb69"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb69-2"><a href="#cb69-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb69-3"><a href="#cb69-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb69-4"><a href="#cb69-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;bufio&quot;</span></span>
+<span id="cb69-5"><a href="#cb69-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb69-6"><a href="#cb69-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;log/slog&quot;</span></span>
+<span id="cb69-7"><a href="#cb69-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;os&quot;</span></span>
+<span id="cb69-8"><a href="#cb69-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;strings&quot;</span></span>
+<span id="cb69-9"><a href="#cb69-9" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;time&quot;</span></span>
+<span id="cb69-10"><a href="#cb69-10" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb69-11"><a href="#cb69-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb69-12"><a href="#cb69-12" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb69-13"><a href="#cb69-13" aria-hidden="true" tabindex="-1"></a>    logger <span class="op">:=</span> slog<span class="op">.</span>New<span class="op">(</span>slog<span class="op">.</span>NewTextHandler<span class="op">(</span>os<span class="op">.</span>Stdout<span class="op">,</span> <span class="op">&amp;</span>slog<span class="op">.</span>HandlerOptions<span class="op">{</span></span>
+<span id="cb69-14"><a href="#cb69-14" aria-hidden="true" tabindex="-1"></a>        ReplaceAttr<span class="op">:</span> <span class="kw">func</span><span class="op">(</span>groups <span class="op">[]</span><span class="dt">string</span><span class="op">,</span> a slog<span class="op">.</span>Attr<span class="op">)</span> slog<span class="op">.</span>Attr <span class="op">{</span></span>
+<span id="cb69-15"><a href="#cb69-15" aria-hidden="true" tabindex="-1"></a>            <span class="cf">if</span> a<span class="op">.</span>Key <span class="op">==</span> slog<span class="op">.</span>TimeKey <span class="op">{</span></span>
+<span id="cb69-16"><a href="#cb69-16" aria-hidden="true" tabindex="-1"></a>                <span class="cf">return</span> slog<span class="op">.</span>Attr<span class="op">{}</span>  <span class="co">// suppress the timestamp</span></span>
+<span id="cb69-17"><a href="#cb69-17" aria-hidden="true" tabindex="-1"></a>            <span class="op">}</span></span>
+<span id="cb69-18"><a href="#cb69-18" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> a</span>
+<span id="cb69-19"><a href="#cb69-19" aria-hidden="true" tabindex="-1"></a>        <span class="op">},</span></span>
+<span id="cb69-20"><a href="#cb69-20" aria-hidden="true" tabindex="-1"></a>    <span class="op">}))</span></span>
+<span id="cb69-21"><a href="#cb69-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb69-22"><a href="#cb69-22" aria-hidden="true" tabindex="-1"></a>    input <span class="op">:=</span> <span class="st">&quot;Physical</span><span class="ch">\n</span><span class="st">Don&#39;t Start Now</span><span class="ch">\n</span><span class="st">Positions</span><span class="ch">\n</span><span class="st">&quot;</span></span>
+<span id="cb69-23"><a href="#cb69-23" aria-hidden="true" tabindex="-1"></a>    scanner <span class="op">:=</span> bufio<span class="op">.</span>NewScanner<span class="op">(</span>strings<span class="op">.</span>NewReader<span class="op">(</span>input<span class="op">))</span></span>
+<span id="cb69-24"><a href="#cb69-24" aria-hidden="true" tabindex="-1"></a>    count <span class="op">:=</span> <span class="dv">0</span></span>
+<span id="cb69-25"><a href="#cb69-25" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> scanner<span class="op">.</span>Scan<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb69-26"><a href="#cb69-26" aria-hidden="true" tabindex="-1"></a>        count<span class="op">++</span></span>
+<span id="cb69-27"><a href="#cb69-27" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb69-28"><a href="#cb69-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb69-29"><a href="#cb69-29" aria-hidden="true" tabindex="-1"></a>    logger<span class="op">.</span>Info<span class="op">(</span><span class="st">&quot;scan complete&quot;</span><span class="op">,</span></span>
+<span id="cb69-30"><a href="#cb69-30" aria-hidden="true" tabindex="-1"></a>        slog<span class="op">.</span>Int<span class="op">(</span><span class="st">&quot;lines&quot;</span><span class="op">,</span> count<span class="op">),</span></span>
+<span id="cb69-31"><a href="#cb69-31" aria-hidden="true" tabindex="-1"></a>        slog<span class="op">.</span>Duration<span class="op">(</span><span class="st">&quot;elapsed&quot;</span><span class="op">,</span> <span class="dv">0</span><span class="op">*</span>time<span class="op">.</span>Millisecond<span class="op">),</span></span>
+<span id="cb69-32"><a href="#cb69-32" aria-hidden="true" tabindex="-1"></a>    <span class="op">)</span></span>
+<span id="cb69-33"><a href="#cb69-33" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> You open a 10 MiB file and read it in three ways:</p>
+<ol type="a">
+<li><code>os.ReadFile</code> into a <code>[]byte</code>,</li>
+<li><code>bufio.NewScanner</code> reading line by line,</li>
+<li><code>io.Copy(io.Discard, f)</code> using the default 32 KiB copy buffer. For each approach, estimate the peak heap allocation in MiB, assuming the file contains 100,000 lines of 100 bytes each. Which approach is best for counting lines without storing the content?</li>
+</ol></li>
+<li><p><strong>Where is the bug?</strong></p>
+<div class="sourceCode" id="cb70"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb70-1"><a href="#cb70-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb70-2"><a href="#cb70-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb70-3"><a href="#cb70-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb70-4"><a href="#cb70-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb70-5"><a href="#cb70-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;regexp&quot;</span></span>
+<span id="cb70-6"><a href="#cb70-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb70-7"><a href="#cb70-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb70-8"><a href="#cb70-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> countMatches<span class="op">(</span>texts <span class="op">[]</span><span class="dt">string</span><span class="op">,</span> pattern <span class="dt">string</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span></span>
+<span id="cb70-9"><a href="#cb70-9" aria-hidden="true" tabindex="-1"></a>    total <span class="op">:=</span> <span class="dv">0</span></span>
+<span id="cb70-10"><a href="#cb70-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> t <span class="op">:=</span> <span class="kw">range</span> texts <span class="op">{</span></span>
+<span id="cb70-11"><a href="#cb70-11" aria-hidden="true" tabindex="-1"></a>        re <span class="op">:=</span> regexp<span class="op">.</span>MustCompile<span class="op">(</span>pattern<span class="op">)</span></span>
+<span id="cb70-12"><a href="#cb70-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> re<span class="op">.</span>MatchString<span class="op">(</span>t<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb70-13"><a href="#cb70-13" aria-hidden="true" tabindex="-1"></a>            total<span class="op">++</span></span>
+<span id="cb70-14"><a href="#cb70-14" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb70-15"><a href="#cb70-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb70-16"><a href="#cb70-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> total</span>
+<span id="cb70-17"><a href="#cb70-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb70-18"><a href="#cb70-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb70-19"><a href="#cb70-19" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb70-20"><a href="#cb70-20" aria-hidden="true" tabindex="-1"></a>    titles <span class="op">:=</span> <span class="op">[]</span><span class="dt">string</span><span class="op">{</span><span class="st">&quot;positions&quot;</span><span class="op">,</span> <span class="st">&quot;Physical&quot;</span><span class="op">,</span> <span class="st">&quot;Don&#39;t Start Now&quot;</span><span class="op">,</span> <span class="st">&quot;thank u, next&quot;</span><span class="op">}</span></span>
+<span id="cb70-21"><a href="#cb70-21" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>countMatches<span class="op">(</span>titles<span class="op">,</span> <span class="st">`^[A-Z]`</span><span class="op">))</span></span>
+<span id="cb70-22"><a href="#cb70-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Write a CLI tool that accepts three flags: <code>-dir</code> (a directory path, default <code>"."</code>), <code>-ext</code> (a file extension like <code>".go"</code>, default <code>".go"</code>), and <code>-verbose</code> (a boolean, default <code>false</code>). The tool should walk the directory tree, count files whose name ends with the given extension, and print the total. When <code>-verbose</code> is set, log each matching file path using <code>slog</code> at the <code>Info</code> level with a <code>"file"</code> attribute. Use <code>log/slog</code> with a text handler writing to <code>os.Stderr</code>, <code>path/filepath.WalkDir</code>, and <code>flag</code>.</p></li>
+</ol>
+
+{% endraw %}

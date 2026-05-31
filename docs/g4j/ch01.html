@@ -27,7 +27,12 @@ nav_order: 1
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Wut:</strong> Technically there are semicolons in Go, and they work just like semicolons in Java! But since a newline also separates statements, there is no need to use a <code>;</code>. If you happen to include one everything will work — the compiler will treat it like an extra blank line. If you run the Go formatter on your code, it will cleanup (remove) the <code>;</code>.</p>
+<p><strong>Wut:</strong> Technically there are semicolons in Go, and they work just like semicolons in Java! But since a newline also separates statements, there is no need to use a <code>;</code>. If you happen to include one everything will work — the compiler will treat it like an extra blank line. If you do use semicolons to end statements, things will work, but as soon as you run the Go formatter on your code, it will clean up (remove) the <code>;</code>.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> While we are talking about formatting, remember the huge passionate war about tabs vs spaces? Perhaps not, the war peaked in the 90s and early 2000s — team spaces won. Unfortunately, Go devs didn’t get the memo. Go uses tabs for indentation and spaces for alignment <span class="citation" data-cites="GoCodingStyle">[@GoCodingStyle]</span>. You may try to fight it, but <code>gofmt</code> will switch to tab for you. At least we don’t have to debate 2 vs 4 tabs 😀. <strong><em>[gofmt]</em></strong></p>
 </div></div>
 <h2 data-number="1.2" id="import-blocks"><span class="header-section-number">1.2</span> Import Blocks</h2>
 <p></p>
@@ -37,16 +42,24 @@ nav_order: 1
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;math&quot;</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;os&quot;</span></span>
 <span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
-<p>The grouped parenthesis form is the idiomatic style. Single imports work too (<code>import "fmt"</code>), but you will see the grouped form everywhere.</p>
+<p>The grouped parenthesis form is the idiomatic style. Single imports work too (<code>import "fmt"</code>), but you will see the grouped form everywhere. <strong><em>[group-imports]</em></strong></p>
 <p>Go treats an unused import as a <strong>compile error</strong>. If you import <code>"math"</code> and never call anything from it, the build fails. This keeps dependency lists honest.</p>
 <p></p>
 <p>Sometimes you import a package purely for its side effects — a database driver that registers itself, for example. Use the <strong>blank import</strong> for this:</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> _ <span class="st">&quot;github.com/lib/pq&quot;</span>  <span class="co">// registers the PostgreSQL driver</span></span></code></pre></div>
-<p>The <code>_</code> tells the compiler “I know I am not calling anything from this; run its <code>init</code> function anyway.”</p>
+<p>The <code>_</code> tells the compiler “I know I am not calling anything from this; run its <code>init</code> function anyway.” If you do this, remember that all blank imports should happen in the main package. <strong><em>[blank-import-main-only]</em></strong></p>
+<p> </p>
+<p>You can also give an imported package an alias by placing a name between <code>import</code> and the path:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    f <span class="st">&quot;fmt&quot;</span>       <span class="co">// use f.Println instead of fmt.Println</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    mrand <span class="st">&quot;math/rand&quot;</span>  <span class="co">// avoids collision with crypto/rand</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span></code></pre></div>
+<p>This is useful when two packages share the same last path segment and would otherwise collide.</p>
+<p><code>.</code> is a special alias which dumps all exported names directly into the current file’s namespace — no qualifier needed, like <code>import pq.lib.*</code> in Java. <strong><em>[no-dot-import]</em></strong> Avoid it in non-test code: it makes it impossible to tell at a glance which package a name comes from. Tests sometimes use it to avoid circular dependencies.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Trap:</strong> Forgetting to remove an import after deleting the code that used it is a compile error in Go, not just a warning. Your editor’s <code>goimports</code> integration removes unused imports automatically — set it to run on save.</p>
+<p><strong>Trap:</strong> Forgetting to remove an import after deleting the code that used it is a compile error in Go, not just a warning. Your editor’s <code>goimports</code> integration removes unused imports automatically — set it to run on save. <strong><em>[goimports]</em></strong></p>
 </div></div>
 <h2 data-number="1.3" id="building-and-running"><span class="header-section-number">1.3</span> Building and Running</h2>
 <p>  </p>
@@ -80,7 +93,7 @@ nav_order: 1
 <h2 data-number="1.4" id="modules"><span class="header-section-number">1.4</span> Modules</h2>
 <p>  </p>
 <p>Before modules existed, Go used a single workspace called <code>GOPATH</code> where all code from all projects — yours and every third-party library — lived in one directory tree. Pinning one project to version 1.2 of a library while another needed version 2.0 was painful, and reproducible builds were hard. Modules fixed this: each project declares its own dependencies and the exact versions it needs, so two projects on the same machine can use different versions of the same library without conflict.</p>
-<p>A module is a directory tree with a <code>go.mod</code> file at its root. You can create this file yourself or use this following command.</p>
+<p>A module is a directory tree with a <code>go.mod</code> file at its root. You can create this file yourself or use the following command.</p>
 <pre><code>go mod init github.com/yourname/hello</code></pre>
 <p>This creates <code>go.mod</code> containing:</p>
 <pre><code>module github.com/yourname/hello
@@ -153,26 +166,27 @@ require (
 <p><code>fmt</code> is Go’s formatted I/O package. You will use it constantly.</p>
 <h3 data-number="1.6.1" id="fmt.println"><span class="header-section-number">1.6.1</span> <code>fmt.Println</code></h3>
 <p></p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Println<span class="op">(</span>a <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Println<span class="op">(</span>a <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
 <p>Writes its arguments to standard output separated by spaces, followed by a newline. Same idea as <code>System.out.println</code>, minus the class hierarchy.</p>
-<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;Espresso Gresso&quot;</span><span class="op">)</span>          <span class="co">// Espresso Gresso</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;hits:&quot;</span><span class="op">,</span> <span class="dv">42</span><span class="op">,</span> <span class="st">&quot;platinum&quot;</span><span class="op">)</span>    <span class="co">// hits: 42 platinum</span></span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;Espresso Gresso&quot;</span><span class="op">)</span>          <span class="co">// Espresso Gresso</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;hits:&quot;</span><span class="op">,</span> <span class="dv">42</span><span class="op">,</span> <span class="st">&quot;platinum&quot;</span><span class="op">)</span>    <span class="co">// hits: 42 platinum</span></span></code></pre></div>
 <h3 data-number="1.6.2" id="fmt.printf"><span class="header-section-number">1.6.2</span> <code>fmt.Printf</code></h3>
 <p></p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Printf<span class="op">(</span>format <span class="dt">string</span><span class="op">,</span> a <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
-<p>Formatted output, same concept as C’s <code>printf</code>.</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%s has %d Grammy nominations</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> <span class="st">&quot;Sabrina Carpenter&quot;</span><span class="op">,</span> <span class="dv">6</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Printf<span class="op">(</span>format <span class="dt">string</span><span class="op">,</span> a <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
+<p>Formatted output, same concept as C’s <code>printf</code>. Java also has <code>printf</code> — <code>System.out.printf("Hello %s\n", name)</code> — with similar format verbs. Go also has a <code>fmt.Println</code> that works like <code>System.out.println</code>.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%s has %d Grammy nominations</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> <span class="st">&quot;Sabrina Carpenter&quot;</span><span class="op">,</span> <span class="dv">6</span><span class="op">)</span></span></code></pre></div>
+<p>There are variants of <code>fmt.Printf</code> that format strings and write to files.</p>
 <h3 data-number="1.6.3" id="fmt.sprintf"><span class="header-section-number">1.6.3</span> <code>fmt.Sprintf</code></h3>
 <p></p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Sprintf<span class="op">(</span>format <span class="dt">string</span><span class="op">,</span> a <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="dt">string</span></span></code></pre></div>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Sprintf<span class="op">(</span>format <span class="dt">string</span><span class="op">,</span> a <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="dt">string</span></span></code></pre></div>
 <p>Same as <code>Printf</code> but returns the formatted string instead of printing it. This is your <code>String.format()</code> equivalent.</p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>msg <span class="op">:=</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;Track %d: %s&quot;</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="st">&quot;Espresso&quot;</span><span class="op">)</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>msg<span class="op">)</span>  <span class="co">// Track 1: Espresso</span></span></code></pre></div>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>msg <span class="op">:=</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;Track %d: %s&quot;</span><span class="op">,</span> <span class="dv">1</span><span class="op">,</span> <span class="st">&quot;Espresso&quot;</span><span class="op">)</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>msg<span class="op">)</span>  <span class="co">// Track 1: Espresso</span></span></code></pre></div>
 <h3 data-number="1.6.4" id="fmt.fprintf"><span class="header-section-number">1.6.4</span> <code>fmt.Fprintf</code></h3>
 <p></p>
-<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Fprintf<span class="op">(</span>w io<span class="op">.</span>Writer<span class="op">,</span> format <span class="dt">string</span><span class="op">,</span> a <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Fprintf<span class="op">(</span>w io<span class="op">.</span>Writer<span class="op">,</span> format <span class="dt">string</span><span class="op">,</span> a <span class="op">...</span><span class="dt">any</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span></span></code></pre></div>
 <p>Writes to any <code>io.Writer</code> — a file, a network connection, a buffer, anything. <code>fmt.Printf</code> is just <code>fmt.Fprintf(os.Stdout, ...)</code>.</p>
-<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Fprintf<span class="op">(</span>os<span class="op">.</span>Stderr<span class="op">,</span> <span class="st">&quot;error: %v</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> err<span class="op">)</span></span></code></pre></div>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Fprintf<span class="op">(</span>os<span class="op">.</span>Stderr<span class="op">,</span> <span class="st">&quot;error: %v</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> err<span class="op">)</span></span></code></pre></div>
 <h3 data-number="1.6.5" id="format-verbs"><span class="header-section-number">1.6.5</span> Format Verbs</h3>
 <p></p>
 <table>
@@ -213,16 +227,48 @@ require (
 </tr>
 </tbody>
 </table>
-<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>x <span class="op">:=</span> <span class="dv">42</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%v %T</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> x<span class="op">,</span> x<span class="op">)</span>  <span class="co">// 42 int</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%q</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> <span class="st">&quot;Anti-Hero&quot;</span><span class="op">)</span> <span class="co">// &quot;Anti-Hero&quot;</span></span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%.2f</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> <span class="fl">3.14159</span><span class="op">)</span> <span class="co">// 3.14</span></span></code></pre></div>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>x <span class="op">:=</span> <span class="dv">42</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%v %T</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> x<span class="op">,</span> x<span class="op">)</span>  <span class="co">// 42 int</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%q</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> <span class="st">&quot;Anti-Hero&quot;</span><span class="op">)</span> <span class="co">// &quot;Anti-Hero&quot;</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%.2f</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> <span class="fl">3.14159</span><span class="op">)</span> <span class="co">// 3.14</span></span></code></pre></div>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
 <p><strong>Tip:</strong> When in doubt, use <code>%v</code>. It works on every type, including structs, slices, and maps, so it is ideal for debugging.</p>
 </div></div>
-<h2 data-number="1.7" id="key-points"><span class="header-section-number">1.7</span> Key Points</h2>
+<h2 data-number="1.7" id="command-line-arguments"><span class="header-section-number">1.7</span> Command-Line Arguments</h2>
+<p>  You may have noticed that <code>main</code> doesn’t have the normal <code>main(String[] args)</code> of Java, so how do we get the command-line arguments? The <code>os</code> package exposes the program’s command-line arguments as a slice of strings:</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> Args <span class="op">[]</span><span class="dt">string</span> <span class="co">// Args[0] is the program name; Args[1:] are the arguments</span></span></code></pre></div>
+<p>A complete program that greets whoever is named on the command line:</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;os&quot;</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">len</span><span class="op">(</span>os<span class="op">.</span>Args<span class="op">)</span> <span class="op">&lt;</span> <span class="dv">2</span> <span class="op">{</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;usage: greet &lt;name&gt;&quot;</span><span class="op">)</span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;hola, %s!</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> os<span class="op">.</span>Args<span class="op">[</span><span class="dv">1</span><span class="op">])</span></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Run it:</p>
+<pre><code>$ go run main.go mundo
+hola, mundo!</code></pre>
+<p><code>os.Args[0]</code> is always the name of the compiled binary (or a temporary path when using <code>go run</code>). Arguments start at index 1.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> For simple one-off scripts, <code>os.Args</code> is enough. For programs with named flags like <code>--output=file.txt</code> or <code>-v</code>, use the <code>flag</code> package covered in Chapter 14.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Accessing <code>os.Args[1]</code> without first checking <code>len(os.Args) &gt; 1</code> panics if the user runs the program with no arguments. Always guard with a length check.</p>
+</div></div>
+<h2 data-number="1.8" id="key-points"><span class="header-section-number">1.8</span> Key Points</h2>
 <ul>
 <li>A Go program needs <code>package main</code> and <code>func main()</code> — no class wrapper required.</li>
 <li>Every import must be used; unused imports are compile errors.</li>
@@ -233,34 +279,50 @@ require (
 <li>There is no <code>protected</code> in Go; the visibility boundary is the package.</li>
 <li><code>fmt.Println</code>, <code>fmt.Printf</code>, <code>fmt.Sprintf</code>, and <code>fmt.Fprintf</code> cover nearly all formatted output needs.</li>
 <li><code>%v</code> is the universal format verb; <code>%T</code> prints the type; <code>%q</code> quotes a string.</li>
+<li><code>os.Args</code> is a <code>[]string</code> where index 0 is the binary name and index 1 onward are the arguments; always check <code>len(os.Args)</code> before indexing.</li>
+<li>Use the <code>flag</code> package (Chapter 14) for programs with named flags.</li>
 </ul>
-<h2 data-number="1.8" id="exercises"><span class="header-section-number">1.8</span> Exercises</h2>
+<h2 data-number="1.9" id="exercises"><span class="header-section-number">1.9</span> Exercises</h2>
 <ol type="1">
-<li><p><strong>Think about it:</strong> Go has no <code>protected</code> access modifier. Java uses <code>protected</code> to allow subclasses in other packages to access members. Go has no inheritance. What Go mechanism serves a similar purpose when you want controlled access across packages, and what are its limits compared to <code>protected</code>?</p></li>
+<li><p><strong>Think about it:</strong> Java has four visibility levels: <code>public</code>, <code>protected</code>, package-private (no keyword), and <code>private</code>. Go has two: exported (uppercase) and unexported (lowercase), with the package as the only boundary. What do you gain from Go’s simpler model? What do you lose? Can you think of a Java visibility pattern that has no direct equivalent in Go?</p></li>
 <li><p><strong>What does this print?</strong></p>
-<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
-<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>    name <span class="op">:=</span> <span class="st">&quot;Chappell Roan&quot;</span></span>
-<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>    plays <span class="op">:=</span> <span class="dv">1_500_000</span></span>
-<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%s has %d plays</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> name<span class="op">,</span> plays<span class="op">)</span></span>
-<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;type of plays: %T</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> plays<span class="op">)</span></span>
-<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;quoted: %q&quot;</span><span class="op">,</span> name<span class="op">))</span></span>
-<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>    name <span class="op">:=</span> <span class="st">&quot;Chappell Roan&quot;</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>    plays <span class="op">:=</span> <span class="dv">1_500_000</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%s has %d plays</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> name<span class="op">,</span> plays<span class="op">)</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;type of plays: %T</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> plays<span class="op">)</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;quoted: %q&quot;</span><span class="op">,</span> name<span class="op">))</span></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> You run the following program as:</p>
+<pre><code>go run main.go Espresso Gresso Sabrina</code></pre>
+<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;os&quot;</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="bu">len</span><span class="op">(</span>os<span class="op">.</span>Args<span class="op">))</span></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>os<span class="op">.</span>Args<span class="op">[</span><span class="dv">2</span><span class="op">])</span></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>What does it print?</p></li>
 <li><p><strong>Where is the bug?</strong></p>
-<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
-<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
-<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;math&quot;</span></span>
-<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
-<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;Hello, Go!&quot;</span><span class="op">)</span></span>
-<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
-<li><p><strong>Write a program:</strong> Write a Go program that declares a string variable with <code>:=</code> holding a song title of your choice and prints three lines: the title using <code>%s</code>, the title using <code>%q</code>, and the Go type of the title using <code>%T</code>. Run it with <code>go run</code>.</p></li>
+<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;math&quot;</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;Hello, Go!&quot;</span><span class="op">)</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Write a Go program that accepts a song title as the first command-line argument and a play count as the second, then prints them formatted as <code>"&lt;title&gt;" has &lt;count&gt; plays</code>. If fewer than two arguments are provided (not counting the program name), print a usage message and exit. Run it with <code>go run</code>.</p></li>
 </ol>
 
 {% endraw %}

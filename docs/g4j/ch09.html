@@ -1,413 +1,576 @@
 ---
 layout: default
-title: "9. Interfaces"
+title: "9. Error Handling"
 parent: "Gorgo Go for Java Programmers"
 nav_order: 9
 ---
 
 {% raw %}
-<h1 data-number="9" id="interfaces"><span class="header-section-number">9</span> Interfaces</h1>
-<p> You have been writing Go code for several chapters now, and you have already brushed against interfaces — <code>fmt.Stringer</code>, <code>io.Reader</code>, <code>error</code>. This chapter is where they become first-class citizens. Go interfaces are the primary tool for abstraction, and they work very differently from Java’s. Understanding them unlocks idiomatic Go: clean, testable, composable code that does not require a class hierarchy.</p>
-<h2 data-number="9.1" id="implicit-interface-satisfaction"><span class="header-section-number">9.1</span> Implicit Interface Satisfaction</h2>
-<p> In Java, a class declares that it implements an interface:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Song <span class="kw">implements</span> Stringer <span class="op">{</span> <span class="kw">...</span> <span class="op">}</span></span></code></pre></div>
-<p>If you forget <code>implements</code>, the class is not a <code>Stringer</code>, even if it has every required method. The compiler checks the declaration, not the methods.</p>
-<p>Go flips this completely. There is no <code>implements</code> keyword. Any type that has the required methods <strong>automatically</strong> satisfies the interface. No declaration needed.</p>
-<p>Here is the <code>fmt.Stringer</code> interface from the standard library:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Stringer <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    String<span class="op">()</span> <span class="dt">string</span>  <span class="co">// returns a human-readable representation of the value</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>Any type with a <code>String() string</code> method is automatically a <code>fmt.Stringer</code>.</p>
-<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    BPM    <span class="dt">int</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>t Track<span class="op">)</span> String<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
-<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;%s by %s (%d BPM)&quot;</span><span class="op">,</span> t<span class="op">.</span>Title<span class="op">,</span> t<span class="op">.</span>Artist<span class="op">,</span> t<span class="op">.</span>BPM<span class="op">)</span></span>
-<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p><code>Track</code> is now a <code>fmt.Stringer</code>. No annotation, no registration. <code>fmt.Println</code> calls <code>String()</code> automatically when it sees a <code>Stringer</code>:</p>
-<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>t <span class="op">:=</span> Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Die With A Smile&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Lady Gaga &amp; Bruno Mars&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">144</span><span class="op">}</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>t<span class="op">)</span> <span class="co">// Die With A Smile by Lady Gaga &amp; Bruno Mars (144 BPM)</span></span></code></pre></div>
+<h1 data-number="9" id="error-handling"><span class="header-section-number">9</span> Error Handling</h1>
+<p> Go’s approach to errors will feel alien at first if you come from Java — there are no checked exceptions, no <code>try</code>/<code>catch</code>, and no exception hierarchy. Instead, errors are plain values that functions return alongside their results, and the caller is expected to inspect them immediately. This chapter explains the <code>error</code> interface, the conventions around creating and returning errors, how to wrap and unwrap error chains, sentinel errors, custom error types, and the narrow use of <code>panic</code>/<code>recover</code>. By the end you will understand why “errors are values” is one of Go’s defining proverbs and how to apply it in production code.</p>
+<h2 data-number="9.1" id="the-error-interface"><span class="header-section-number">9.1</span> The <code>error</code> Interface</h2>
+<p>  You saw <code>error</code> briefly in Chapter 8 when the standard library interfaces were introduced. Here it gets the full treatment.</p>
+<p><code>error</code> is a predeclared interface built into the language itself — not in any package:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">error</span> <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    Error<span class="op">()</span> <span class="dt">string</span>  <span class="co">// returns a human-readable description of the error</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Any type with an <code>Error() string</code> method automatically satisfies <code>error</code>. That is the entire contract.</p>
+<h3 data-number="9.1.1" id="return-error-as-the-last-value"><span class="header-section-number">9.1.1</span> Return <code>error</code> as the Last Value</h3>
+<p> The universal Go convention is to return <code>error</code> as the <strong>last</strong> return value of a function. On success, return <code>nil</code>; on failure, return a non-nil error. Chapter 5 introduced this pattern; here is a refresher:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> parseTrackNumber<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">int</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    n<span class="op">,</span> err <span class="op">:=</span> strconv<span class="op">.</span>Atoi<span class="op">(</span>s<span class="op">)</span>  <span class="co">// convert string to int</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="dv">0</span><span class="op">,</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;invalid track number %q: %w&quot;</span><span class="op">,</span> s<span class="op">,</span> err<span class="op">)</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> n<span class="op">,</span> <span class="ot">nil</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The caller handles it immediately:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>n<span class="op">,</span> err <span class="op">:=</span> parseTrackNumber<span class="op">(</span><span class="st">&quot;3&quot;</span><span class="op">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;Track:&quot;</span><span class="op">,</span> n<span class="op">)</span></span></code></pre></div>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
-<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> This is called <strong>structural typing</strong> or <strong>duck typing</strong> with compile-time checking. If it has the right methods, it satisfies the interface — the compiler verifies this at the point of use, not at the point of definition. Java’s approach is <strong>nominal typing</strong>: the name of the interface in the declaration is what matters, not the shape of the type.</p>
+<p><strong>Trap:</strong> Java programmers sometimes assign the error to a variable and check it later, or silently ignore it with <code>_</code>. In Go, the convention is to check the error <strong>right after the call</strong> and return early. Delaying error checks makes the control flow hard to follow and is not idiomatic. Handle errors first so the success path stays unindented and easy to read. <strong><em>[error-first-return-early]</em></strong> and <strong><em>[no-else-after-error]</em></strong></p>
 </div></div>
-<h3 data-number="9.1.1" id="checking-satisfaction-explicitly"><span class="header-section-number">9.1.1</span> Checking Satisfaction Explicitly</h3>
-<p>You will sometimes want to assert at compile time that a type satisfies an interface, without actually using the interface in a function call. The idiom is:</p>
-<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> _ fmt<span class="op">.</span>Stringer <span class="op">=</span> Track<span class="op">{}</span>  <span class="co">// compile error if Track does not satisfy fmt.Stringer</span></span></code></pre></div>
-<p>The blank identifier discards the value; the assignment only exists to force a compile-time check. This is useful at the top of a file as documentation and a safety net.</p>
-<h2 data-number="9.2" id="interface-composition"><span class="header-section-number">9.2</span> Interface Composition</h2>
-<p> Go interfaces can embed other interfaces, combining their method sets. The standard library uses this pervasively.</p>
-<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">// io.Reader requires one method</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Reader <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    Read<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span>  <span class="co">// reads up to len(p) bytes into p</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="co">// io.Writer requires one method</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Writer <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    Write<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span>  <span class="co">// writes len(p) bytes from p</span></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a><span class="co">// io.ReadWriter is both</span></span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> ReadWriter <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    Reader  <span class="co">// embeds io.Reader</span></span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    Writer  <span class="co">// embeds io.Writer</span></span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>A type that implements both <code>Read</code> and <code>Write</code> automatically satisfies <code>io.ReadWriter</code>.</p>
-<p>You can define your own composed interfaces the same way:</p>
-<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> ReadWriteCloser <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>Reader   <span class="co">// Read(p []byte) (n int, err error)</span></span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>Writer   <span class="co">// Write(p []byte) (n int, err error)</span></span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    io<span class="op">.</span>Closer   <span class="co">// Close() error</span></span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>In Java, you would write <code>interface ReadWriteCloser extends Reader, Writer, Closeable</code>. Go’s embedding syntax is a bit cleaner — you list the interfaces you want to include, and the compiler assembles the combined method set.</p>
-<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
-<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
-<div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> Prefer small, single-method interfaces over large ones. The <code>io</code> package is the gold standard: <code>Reader</code>, <code>Writer</code>, <code>Closer</code>, <code>Seeker</code> are each one method. Larger interfaces emerge from composing small ones.</p>
-</div></div>
-<h2 data-number="9.3" id="any-the-top-type"><span class="header-section-number">9.3</span> <code>any</code> — The Top Type</h2>
-<p> </p>
-<p>Sometimes you want a variable that can hold any type. In Java, you do this with <code>Object</code> — <code>Object v</code> means any type of object can be assigned to <code>v</code>. You can do the same in Go with <code>var v interface{}</code>, but that is a rather verbose way to express that <code>v</code> can be assigned anything. So, Go 1.18 introduced <code>any</code> as an alias for <code>interface{}</code>. They are identical; <code>any</code> is just friendlier to read.</p>
-<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> x <span class="dt">any</span> <span class="op">=</span> <span class="dv">42</span>       <span class="co">// x holds an int</span></span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> <span class="st">&quot;sabor a mí&quot;</span>    <span class="co">// now x holds a string</span></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>x <span class="op">=</span> <span class="op">[]</span><span class="dt">int</span><span class="op">{</span><span class="dv">1</span><span class="op">,</span> <span class="dv">2</span><span class="op">,</span> <span class="dv">3</span><span class="op">}</span>  <span class="co">// now x holds a slice</span></span></code></pre></div>
-<p><code>any</code> is Go’s counterpart to Java’s <code>Object</code> — every type satisfies the empty interface because there are no methods to implement.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Wut:</strong> <code>any</code> is not a magic box that avoids copies. Assigning a value to an <code>any</code> variable wraps it in an interface value, which stores the concrete type alongside a pointer to (or copy of) the data. Small values like <code>int</code> and <code>bool</code> are stored directly in the interface value on most platforms.</p>
+<p><strong>Wut:</strong> Go has no checked exceptions. The compiler does not force you to handle an <code>error</code> return value. You can write <code>n, _ := parseTrackNumber(s)</code> and discard the error entirely — the program will compile. Using <code>_</code> is occasionally appropriate (e.g., closing a read-only file), but doing it carelessly is a common source of bugs. <code>go vet</code> and linters like <code>errcheck</code> can flag unchecked errors. <strong><em>[no-discard-error]</em></strong></p>
 </div></div>
-<p>Older Go code uses <code>interface{}</code> everywhere. When you read code that predates Go 1.18, <code>interface{}</code> and <code>any</code> mean exactly the same thing. New code should use <code>any</code>.</p>
+<h2 data-number="9.2" id="creating-errors"><span class="header-section-number">9.2</span> Creating Errors</h2>
+<p>  The standard library provides two basic ways to create an error value.</p>
+<h3 data-number="9.2.1" id="errors.new"><span class="header-section-number">9.2.1</span> <code>errors.New</code></h3>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;errors&quot;</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> ErrEmptyPlaylist <span class="op">=</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;playlist is empty&quot;</span><span class="op">)</span></span></code></pre></div>
+<p><code>errors.New</code> returns an opaque error value whose message is the string you provide. Two calls to <code>errors.New</code> with the same string return distinct values — equality is by identity, not by message content.</p>
+<h3 data-number="9.2.2" id="fmt.errorf"><span class="header-section-number">9.2.2</span> <code>fmt.Errorf</code></h3>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> loadTrack<span class="op">(</span>id <span class="dt">int</span><span class="op">)</span> <span class="op">(*</span>Track<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> id <span class="op">&lt;=</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;loadTrack: invalid id %d&quot;</span><span class="op">,</span> id<span class="op">)</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;loadTrack: id %d not found&quot;</span><span class="op">,</span> id<span class="op">)</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>fmt.Errorf</code> creates an error with a formatted message. It is the workhorse of error creation in Go.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> Use <code>any</code> sparingly. Code that traffics in <code>any</code> values gives up compile-time type safety and often requires type assertions (see below) to get the value back out. Generics (Chapter 18) are usually the better choice when you want a function that works with multiple types.</p>
+<p><strong>Tip:</strong> Prefix error messages with the function or package name: <code>"loadTrack: ..."</code>. When errors bubble up through several layers, the prefix chain reads like a stack trace in plain text: <code>"server: loadTrack: id 42 not found"</code>. Error strings must be lowercase and must not end with punctuation so they compose cleanly when prefixed. <strong><em>[lowercase-error-strings]</em></strong></p>
 </div></div>
-<h2 data-number="9.4" id="type-assertions"><span class="header-section-number">9.4</span> Type Assertions</h2>
-<p> An <strong>interface value</strong> holds two things: the concrete type and the concrete value. A type assertion extracts the concrete value.</p>
-<h3 data-number="9.4.1" id="the-panicking-form"><span class="header-section-number">9.4.1</span> The Panicking Form</h3>
-<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> i <span class="dt">any</span> <span class="op">=</span> <span class="st">&quot;bzrp music session&quot;</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> i<span class="op">.(</span><span class="dt">string</span><span class="op">)</span>      <span class="co">// assert that i holds a string; assign it to s</span></span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">)</span>       <span class="co">// bzrp music session</span></span></code></pre></div>
-<p>If the assertion is wrong, the program panics immediately:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>n <span class="op">:=</span> i<span class="op">.(</span><span class="dt">int</span><span class="op">)</span>  <span class="co">// panic: interface conversion: interface {} is string, not int</span></span></code></pre></div>
-<p>Use this form when you are certain of the type — for example, immediately after a type switch case.</p>
-<h3 data-number="9.4.2" id="the-safe-form"><span class="header-section-number">9.4.2</span> The Safe Form</h3>
-<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>s<span class="op">,</span> ok <span class="op">:=</span> i<span class="op">.(</span><span class="dt">string</span><span class="op">)</span>  <span class="co">// ok is true if i holds a string</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> ok <span class="op">{</span></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;got string:&quot;</span><span class="op">,</span> s<span class="op">)</span></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;not a string&quot;</span><span class="op">)</span></span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>The safe form never panics. If the type does not match, <code>ok</code> is <code>false</code> and <code>s</code> is the zero value of the asserted type.</p>
+<h2 data-number="9.3" id="wrapping-errors"><span class="header-section-number">9.3</span> Wrapping Errors</h2>
+<p>  </p>
+<p>Go 1.13 added error wrapping: you can attach a <strong>cause</strong> to an error so that callers can inspect the original error without depending on the message string. The <code>%w</code> verb in <code>fmt.Errorf</code> is how you wrap:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> fetchSong<span class="op">(</span>id <span class="dt">int</span><span class="op">)</span> <span class="op">(*</span>Song<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    row<span class="op">,</span> err <span class="op">:=</span> db<span class="op">.</span>QueryRow<span class="op">(</span>id<span class="op">)</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;fetchSong %d: %w&quot;</span><span class="op">,</span> id<span class="op">,</span> err<span class="op">)</span>  <span class="co">// wrap the database error</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ...</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The wrapping error remembers the original <code>err</code> and exposes it through <code>errors.Unwrap</code>:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>wrapped <span class="op">:=</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;outer: %w&quot;</span><span class="op">,</span> inner<span class="op">)</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>errors<span class="op">.</span>Unwrap<span class="op">(</span>wrapped<span class="op">))</span> <span class="co">// prints inner&#39;s message</span></span></code></pre></div>
+<p>You can wrap multiple levels deep, forming an <strong>error chain</strong>. <code>errors.Is</code> and <code>errors.As</code> (next section) walk the entire chain, so callers do not need to manually call <code>errors.Unwrap</code>.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Use <code>%w</code> whenever you add context to an error and want callers to be able to test for the original cause. Use <code>%v</code> (not <code>%w</code>) when you want to log the cause for humans but do <strong>not</strong> want callers to programmatically inspect it — for example, when the original error is an implementation detail.</p>
+</div></div>
+<h2 data-number="9.4" id="errors.is-and-errors.as"><span class="header-section-number">9.4</span> <code>errors.Is</code> and <code>errors.As</code></h2>
+<p>   These two functions replace the Java pattern of <code>catch (SpecificException e)</code> or <code>e instanceof SomeException</code>.</p>
+<h3 data-number="9.4.1" id="errors.is-matching-sentinel-values"><span class="header-section-number">9.4.1</span> <code>errors.Is</code> — Matching Sentinel Values</h3>
+<p> <code>errors.Is(err, target)</code> reports whether any error in <code>err</code>’s chain equals <code>target</code>.</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;errors&quot;</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;io&quot;</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>_<span class="op">,</span> err <span class="op">:=</span> reader<span class="op">.</span>Read<span class="op">(</span>buf<span class="op">)</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> errors<span class="op">.</span>Is<span class="op">(</span>err<span class="op">,</span> io<span class="op">.</span>EOF<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;reached end of stream&quot;</span><span class="op">)</span></span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Trap:</strong> Always use the two-value form (<code>v, ok := i.(T)</code>) when you are not certain of the type. The single-value form panics on a wrong guess, which is a runtime crash, not a compile error.</p>
+<p><strong>Trap:</strong> Never compare errors with <code>==</code> when they might be wrapped. <code>wrappedErr == io.EOF</code> is <code>false</code> if <code>wrappedErr</code> was produced by <code>fmt.Errorf("read: %w", io.EOF)</code>. <code>errors.Is(wrappedErr, io.EOF)</code> correctly walks the chain and returns <code>true</code>.</p>
 </div></div>
-<h2 data-number="9.5" id="type-switches"><span class="header-section-number">9.5</span> Type Switches</h2>
-<p> A <strong>type switch</strong> is a <code>switch</code> statement that dispatches on the dynamic type of an interface value. Chapter 4 showed a preview; here is the full picture.</p>
-<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> describe<span class="op">(</span>i <span class="dt">any</span><span class="op">)</span> <span class="dt">string</span> <span class="op">{</span></span>
-<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">switch</span> v <span class="op">:=</span> i<span class="op">.(</span><span class="kw">type</span><span class="op">)</span> <span class="op">{</span></span>
-<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="dt">int</span><span class="op">:</span></span>
-<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;int: %d&quot;</span><span class="op">,</span> v<span class="op">)</span>      <span class="co">// v is int here</span></span>
-<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="dt">string</span><span class="op">:</span></span>
-<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;string: %q&quot;</span><span class="op">,</span> v<span class="op">)</span>   <span class="co">// v is string here</span></span>
-<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="dt">bool</span><span class="op">:</span></span>
-<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;bool: %t&quot;</span><span class="op">,</span> v<span class="op">)</span>     <span class="co">// v is bool here</span></span>
-<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="op">[]</span><span class="dt">int</span><span class="op">:</span></span>
-<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;[]int of length %d&quot;</span><span class="op">,</span> <span class="bu">len</span><span class="op">(</span>v<span class="op">))</span></span>
-<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> <span class="ot">nil</span><span class="op">:</span></span>
-<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">&quot;nil&quot;</span></span>
-<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">default</span><span class="op">:</span></span>
-<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;unknown type: %T&quot;</span><span class="op">,</span> v<span class="op">)</span></span>
-<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
-<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>The expression <code>i.(type)</code> is only valid inside a type switch — you cannot write it anywhere else. In each case, <code>v</code> is automatically converted to the matched concrete type. In the <code>default</code> case, <code>v</code> retains the type of <code>i</code> (i.e., <code>any</code>).</p>
-<p>You can match multiple types in one case:</p>
-<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="cf">switch</span> v <span class="op">:=</span> i<span class="op">.(</span><span class="kw">type</span><span class="op">)</span> <span class="op">{</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="dt">int</span><span class="op">,</span> <span class="dt">int64</span><span class="op">:</span></span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;some integer:&quot;</span><span class="op">,</span> v<span class="op">)</span>  <span class="co">// v is any here because the types differ</span></span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="cf">case</span> <span class="dt">string</span><span class="op">:</span></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;string:&quot;</span><span class="op">,</span> v<span class="op">)</span></span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>When a case lists more than one type, <code>v</code> takes the type of the switch expression (here <code>any</code>) because the compiler cannot assign a single concrete type to <code>v</code>.</p>
+<h3 data-number="9.4.2" id="errors.as-extracting-a-concrete-type"><span class="header-section-number">9.4.2</span> <code>errors.As</code> — Extracting a Concrete Type</h3>
+<p> <code>errors.As(err, &amp;target)</code> walks the chain and, if it finds an error assignable to <code>*target</code>, sets <code>target</code> to that error and returns <code>true</code>. This is Go’s replacement for <code>instanceof</code> with a cast.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> TrackError <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    TrackID <span class="dt">int</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    Reason  <span class="dt">string</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>TrackError<span class="op">)</span> Error<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;track %d: %s&quot;</span><span class="op">,</span> e<span class="op">.</span>TrackID<span class="op">,</span> e<span class="op">.</span>Reason<span class="op">)</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> process<span class="op">(</span>err <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> te <span class="op">*</span>TrackError</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> errors<span class="op">.</span>As<span class="op">(</span>err<span class="op">,</span> <span class="op">&amp;</span>te<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;problem with track %d: %s</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> te<span class="op">.</span>TrackID<span class="op">,</span> te<span class="op">.</span>Reason<span class="op">)</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>In Java you would write:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="op">(</span>err <span class="kw">instanceof</span> TrackException te<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    <span class="bu">System</span><span class="op">.</span><span class="fu">out</span><span class="op">.</span><span class="fu">println</span><span class="op">(</span><span class="st">&quot;problem with track &quot;</span> <span class="op">+</span> te<span class="op">.</span><span class="fu">trackId</span><span class="op">);</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The Go form is slightly more verbose but it works through any number of wrapping layers.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> Type switches are the idiomatic Go replacement for Java’s <code>instanceof</code> chains. In Java you write:</p>
-<div class="sourceCode" id="cb14"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="op">(</span>obj <span class="kw">instanceof</span> <span class="bu">String</span> s<span class="op">)</span> <span class="op">{</span> <span class="kw">...</span> <span class="op">}</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span> <span class="cf">if</span> <span class="op">(</span>obj <span class="kw">instanceof</span> <span class="bu">Integer</span> n<span class="op">)</span> <span class="op">{</span> <span class="kw">...</span> <span class="op">}</span></span></code></pre></div>
-<p>In Go you write a type switch. It is cleaner and exhaustive — the <code>default</code> case catches everything else.</p>
+<p><strong>Tip:</strong> Use <code>errors.Is</code> when you want to test for a <strong>specific value</strong> (a sentinel like <code>io.EOF</code>). Use <code>errors.As</code> when you want to test for a <strong>specific type</strong> and access its fields.</p>
 </div></div>
-<h2 data-number="9.6" id="key-standard-library-interfaces"><span class="header-section-number">9.6</span> Key Standard Library Interfaces</h2>
-<p> Go’s standard library defines a small set of interfaces that appear everywhere. Knowing them lets you understand most Go code at a glance.</p>
-<h3 data-number="9.6.1" id="io.reader"><span class="header-section-number">9.6.1</span> <code>io.Reader</code></h3>
-<p></p>
-<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Reader <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    Read<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span>  <span class="co">// reads up to len(p) bytes into p; returns bytes read and any error</span></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p><code>Read</code> fills the slice <code>p</code> with up to <code>len(p)</code> bytes. It returns the number of bytes actually read and any error. When the underlying data is exhausted, it returns <code>0, io.EOF</code>.</p>
-<p>Here is a concrete type that implements <code>io.Reader</code>:</p>
-<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co">// CountReader wraps an io.Reader and counts bytes as they are read.</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> CountReader <span class="kw">struct</span> <span class="op">{</span></span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    r     io<span class="op">.</span>Reader</span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    count <span class="dt">int</span></span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>cr <span class="op">*</span>CountReader<span class="op">)</span> Read<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span><span class="dt">int</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
-<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    n<span class="op">,</span> err <span class="op">:=</span> cr<span class="op">.</span>r<span class="op">.</span>Read<span class="op">(</span>p<span class="op">)</span>  <span class="co">// delegate to the underlying reader</span></span>
-<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>    cr<span class="op">.</span>count <span class="op">+=</span> n           <span class="co">// tally the bytes</span></span>
-<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> n<span class="op">,</span> err</span>
-<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>Any function that accepts an <code>io.Reader</code> will accept <code>*CountReader</code> without modification.</p>
-<h3 data-number="9.6.2" id="io.writer"><span class="header-section-number">9.6.2</span> <code>io.Writer</code></h3>
-<p></p>
-<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Writer <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    Write<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span>  <span class="co">// writes len(p) bytes from p; returns bytes written and any error</span></span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p><code>Write</code> must write exactly <code>len(p)</code> bytes or return an error. <code>os.Stdout</code>, <code>*os.File</code>, <code>*bytes.Buffer</code>, and <code>*strings.Builder</code> all satisfy <code>io.Writer</code>.</p>
-<p>A minimal implementation:</p>
-<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co">// UpperWriter wraps an io.Writer and converts all bytes to upper case.</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> UpperWriter <span class="kw">struct</span> <span class="op">{</span></span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    w io<span class="op">.</span>Writer</span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>uw <span class="op">*</span>UpperWriter<span class="op">)</span> Write<span class="op">(</span>p <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span><span class="dt">int</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
-<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>    upper <span class="op">:=</span> bytes<span class="op">.</span>ToUpper<span class="op">(</span>p<span class="op">)</span>  <span class="co">// convert to upper case</span></span>
-<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> uw<span class="op">.</span>w<span class="op">.</span>Write<span class="op">(</span>upper<span class="op">)</span>   <span class="co">// delegate to the underlying writer</span></span>
-<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<h3 data-number="9.6.3" id="fmt.stringer"><span class="header-section-number">9.6.3</span> <code>fmt.Stringer</code></h3>
-<p></p>
-<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Stringer <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>    String<span class="op">()</span> <span class="dt">string</span>  <span class="co">// returns a human-readable string representation</span></span>
-<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p><code>fmt.Println</code>, <code>fmt.Sprintf</code> with <code>%v</code> or <code>%s</code>, and most other <code>fmt</code> functions check whether a value satisfies <code>Stringer</code> and call <code>String()</code> if so. You saw this at the start of the chapter with <code>Track</code>.</p>
-<h3 data-number="9.6.4" id="error"><span class="header-section-number">9.6.4</span> <code>error</code></h3>
-<p></p>
-<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> <span class="dt">error</span> <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>    Error<span class="op">()</span> <span class="dt">string</span>  <span class="co">// returns the error message</span></span>
-<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p><code>error</code> is a predeclared interface, not a type in any package — it is part of the language itself. Any type with an <code>Error() string</code> method is an <code>error</code>. Error handling is covered in full in Chapter 10; for now, just note the shape.</p>
-<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> ValidationError <span class="kw">struct</span> <span class="op">{</span></span>
-<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>    Field   <span class="dt">string</span></span>
-<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    Message <span class="dt">string</span></span>
-<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>ValidationError<span class="op">)</span> Error<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
-<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;validation failed on %s: %s&quot;</span><span class="op">,</span> e<span class="op">.</span>Field<span class="op">,</span> e<span class="op">.</span>Message<span class="op">)</span></span>
-<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p><code>*ValidationError</code> is now an <code>error</code> and can be returned anywhere an <code>error</code> is expected.</p>
-<h3 data-number="9.6.5" id="sort.interface"><span class="header-section-number">9.6.5</span> <code>sort.Interface</code></h3>
-<p></p>
-<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Interface <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    Len<span class="op">()</span> <span class="dt">int</span>              <span class="co">// returns the number of elements in the collection</span></span>
-<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    Less<span class="op">(</span>i<span class="op">,</span> j <span class="dt">int</span><span class="op">)</span> <span class="dt">bool</span>    <span class="co">// reports whether element i should sort before element j</span></span>
-<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    Swap<span class="op">(</span>i<span class="op">,</span> j <span class="dt">int</span><span class="op">)</span>         <span class="co">// swaps the elements at positions i and j</span></span>
-<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>Any type that implements all three methods can be sorted by <code>sort.Sort</code>. The standard library does not know or care what you are sorting — it only calls these three methods.</p>
-<p>Here is a concrete type that sorts a slice of songs by title:</p>
-<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Song <span class="kw">struct</span> <span class="op">{</span></span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span></span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="co">// ByTitle wraps a []Song and sorts it alphabetically by title.</span></span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> ByTitle <span class="op">[]</span>Song</span>
+<h2 data-number="9.5" id="errors.join-combining-multiple-errors"><span class="header-section-number">9.5</span> <code>errors.Join</code> — Combining Multiple Errors</h2>
+<p>  Go 1.20 added <code>errors.Join</code>, which combines multiple errors into one. The combined error’s <code>Error()</code> method returns each non-nil message on its own line, and <code>errors.Is</code>/<code>errors.As</code> check all of them.</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;errors&quot;</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> validatePlaylist<span class="op">(</span>name<span class="op">,</span> owner <span class="dt">string</span><span class="op">,</span> trackCount <span class="dt">int</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> errs <span class="op">[]</span><span class="dt">error</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> name <span class="op">==</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>        errs <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>errs<span class="op">,</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;name is required&quot;</span><span class="op">))</span></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> owner <span class="op">==</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>        errs <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>errs<span class="op">,</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;owner is required&quot;</span><span class="op">))</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> trackCount <span class="op">&lt;</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>        errs <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>errs<span class="op">,</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;track count cannot be negative&quot;</span><span class="op">))</span></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> errors<span class="op">.</span>Join<span class="op">(</span>errs<span class="op">...)</span>  <span class="co">// nil if errs is empty</span></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>errors.Join(nil, nil)</code> returns <code>nil</code>, so you can always pass the slice with <code>...</code> and get a nil result when there are no errors.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> <code>errors.Join</code> is the idiomatic tool for <strong>validation</strong> patterns where you want to report all problems at once rather than stopping at the first one. In Java you might collect exceptions in a list and throw a composite exception at the end; <code>errors.Join</code> is the Go equivalent.</p>
+</div></div>
+<p>A practical example with Bad Bunny’s discography validator:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;errors&quot;</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Album <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    Title    <span class="dt">string</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    Artist   <span class="dt">string</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>    Year     <span class="dt">int</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>    TrackCnt <span class="dt">int</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> validateAlbum<span class="op">(</span>a Album<span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> errs <span class="op">[]</span><span class="dt">error</span></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> a<span class="op">.</span>Title <span class="op">==</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>        errs <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>errs<span class="op">,</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;title is required&quot;</span><span class="op">))</span></span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> a<span class="op">.</span>Artist <span class="op">==</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>        errs <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>errs<span class="op">,</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;artist is required&quot;</span><span class="op">))</span></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> a<span class="op">.</span>Year <span class="op">&lt;</span> <span class="dv">1900</span> <span class="op">||</span> a<span class="op">.</span>Year <span class="op">&gt;</span> <span class="dv">2100</span> <span class="op">{</span></span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a>        errs <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>errs<span class="op">,</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;year %d is out of range&quot;</span><span class="op">,</span> a<span class="op">.</span>Year<span class="op">))</span></span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> a<span class="op">.</span>TrackCnt <span class="op">&lt;=</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>        errs <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>errs<span class="op">,</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;track count must be positive&quot;</span><span class="op">))</span></span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> errors<span class="op">.</span>Join<span class="op">(</span>errs<span class="op">...)</span></span>
+<span id="cb12-30"><a href="#cb12-30" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb12-31"><a href="#cb12-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-32"><a href="#cb12-32" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb12-33"><a href="#cb12-33" aria-hidden="true" tabindex="-1"></a>    a <span class="op">:=</span> Album<span class="op">{</span></span>
+<span id="cb12-34"><a href="#cb12-34" aria-hidden="true" tabindex="-1"></a>        Title<span class="op">:</span>    <span class="st">&quot;Un Verano Sin Ti&quot;</span><span class="op">,</span></span>
+<span id="cb12-35"><a href="#cb12-35" aria-hidden="true" tabindex="-1"></a>        Artist<span class="op">:</span>   <span class="st">&quot;Bad Bunny&quot;</span><span class="op">,</span></span>
+<span id="cb12-36"><a href="#cb12-36" aria-hidden="true" tabindex="-1"></a>        Year<span class="op">:</span>     <span class="dv">2022</span><span class="op">,</span></span>
+<span id="cb12-37"><a href="#cb12-37" aria-hidden="true" tabindex="-1"></a>        TrackCnt<span class="op">:</span> <span class="dv">23</span><span class="op">,</span></span>
+<span id="cb12-38"><a href="#cb12-38" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-39"><a href="#cb12-39" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">:=</span> validateAlbum<span class="op">(</span>a<span class="op">);</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb12-40"><a href="#cb12-40" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;invalid:&quot;</span><span class="op">,</span> err<span class="op">)</span></span>
+<span id="cb12-41"><a href="#cb12-41" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
+<span id="cb12-42"><a href="#cb12-42" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;album OK:&quot;</span><span class="op">,</span> a<span class="op">.</span>Title<span class="op">)</span></span>
+<span id="cb12-43"><a href="#cb12-43" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-44"><a href="#cb12-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-45"><a href="#cb12-45" aria-hidden="true" tabindex="-1"></a>    bad <span class="op">:=</span> Album<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;&quot;</span><span class="op">,</span> Year<span class="op">:</span> <span class="dv">1800</span><span class="op">,</span> TrackCnt<span class="op">:</span> <span class="op">-</span><span class="dv">1</span><span class="op">}</span></span>
+<span id="cb12-46"><a href="#cb12-46" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">:=</span> validateAlbum<span class="op">(</span>bad<span class="op">);</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb12-47"><a href="#cb12-47" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;invalid album:&quot;</span><span class="op">)</span></span>
+<span id="cb12-48"><a href="#cb12-48" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb12-49"><a href="#cb12-49" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb12-50"><a href="#cb12-50" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Output:</p>
+<pre><code>album OK: Un Verano Sin Ti
+invalid album:
+title is required
+artist is required
+year 1800 is out of range
+track count must be positive</code></pre>
+<h2 data-number="9.6" id="sentinel-errors"><span class="header-section-number">9.6</span> Sentinel Errors</h2>
+<p>  A <strong>sentinel error</strong> is a package-level error variable used as a well-known signal. The caller compares against it with <code>errors.Is</code>.</p>
+<p>The most famous sentinel in Go is <code>io.EOF</code>:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co">// in package io</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> EOF <span class="op">=</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;EOF&quot;</span><span class="op">)</span></span></code></pre></div>
+<p><code>io.EOF</code> signals that there is no more data to read. It is not a failure — it is expected behavior at the end of a stream. Functions like <code>bufio.Scanner.Scan</code> and <code>io.Copy</code> use it as a loop termination signal.</p>
+<p>Other common sentinels you will encounter:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co">// database/sql</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> ErrNoRows <span class="op">=</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;sql: no rows in result set&quot;</span><span class="op">)</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="co">// os</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> ErrNotExist <span class="op">=</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;file does not exist&quot;</span><span class="op">)</span>  <span class="co">// tested via errors.Is</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> ErrPermission <span class="op">=</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;permission denied&quot;</span><span class="op">)</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> By convention, sentinel error variable names start with <code>Err</code>. Define your own sentinels as package-level <code>var</code> declarations using <code>errors.New</code>. Export them (capitalize them) when callers outside your package need to test for them.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Do not test sentinel errors with <code>==</code>. Wrap-aware callers must use <code>errors.Is</code>:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Wrong: misses wrapped errors</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">==</span> io<span class="op">.</span>EOF <span class="op">{</span> <span class="op">...</span> <span class="op">}</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="co">// Right: walks the entire chain</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> errors<span class="op">.</span>Is<span class="op">(</span>err<span class="op">,</span> io<span class="op">.</span>EOF<span class="op">)</span> <span class="op">{</span> <span class="op">...</span> <span class="op">}</span></span></code></pre></div>
+</div></div>
+<p>Here is a realistic read loop using <code>io.EOF</code> as a sentinel:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;bufio&quot;</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;errors&quot;</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;io&quot;</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;strings&quot;</span></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>    <span class="co">// Karol G --- &quot;TQG&quot; lyrics fragment</span></span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>    src <span class="op">:=</span> strings<span class="op">.</span>NewReader<span class="op">(</span><span class="st">&quot;TQG</span><span class="ch">\n</span><span class="st">Provenza</span><span class="ch">\n</span><span class="st">Mi Ex Tenía Razón</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">)</span></span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>    r <span class="op">:=</span> bufio<span class="op">.</span>NewReader<span class="op">(</span>src<span class="op">)</span></span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>        line<span class="op">,</span> err <span class="op">:=</span> r<span class="op">.</span>ReadString<span class="op">(</span><span class="ch">&#39;\n&#39;</span><span class="op">)</span></span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="bu">len</span><span class="op">(</span>line<span class="op">)</span> <span class="op">&gt;</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>            fmt<span class="op">.</span>Print<span class="op">(</span><span class="st">&quot;track: &quot;</span><span class="op">,</span> line<span class="op">)</span></span>
+<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> errors<span class="op">.</span>Is<span class="op">(</span>err<span class="op">,</span> io<span class="op">.</span>EOF<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a>            <span class="cf">break</span></span>
+<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>            fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;unexpected error:&quot;</span><span class="op">,</span> err<span class="op">)</span></span>
+<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a>            <span class="cf">break</span></span>
+<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb17-28"><a href="#cb17-28" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb17-29"><a href="#cb17-29" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Output:</p>
+<pre><code>track: TQG
+track: Provenza
+track: Mi Ex Tenía Razón</code></pre>
+<h2 data-number="9.7" id="custom-error-types"><span class="header-section-number">9.7</span> Custom Error Types</h2>
+<p>  When an error needs to carry structured data — a status code, a field name, a record ID — define a custom error type. Implement the <code>error</code> interface by adding an <code>Error() string</code> method.</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co">// StreamError is returned when a streaming request fails.</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> StreamError <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    TrackID  <span class="dt">string</span>  <span class="co">// ID of the track that failed</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>    HTTPCode <span class="dt">int</span>     <span class="co">// HTTP status code from the streaming service</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    Msg      <span class="dt">string</span>  <span class="co">// human-readable reason</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>StreamError<span class="op">)</span> Error<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;stream error %d for track %q: %s&quot;</span><span class="op">,</span> e<span class="op">.</span>HTTPCode<span class="op">,</span> e<span class="op">.</span>TrackID<span class="op">,</span> e<span class="op">.</span>Msg<span class="op">)</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Return it as the <code>error</code> interface:</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> streamTrack<span class="op">(</span>id <span class="dt">string</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> id <span class="op">==</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="op">&amp;</span>StreamError<span class="op">{</span>TrackID<span class="op">:</span> id<span class="op">,</span> HTTPCode<span class="op">:</span> <span class="dv">400</span><span class="op">,</span> Msg<span class="op">:</span> <span class="st">&quot;empty track ID&quot;</span><span class="op">}</span></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">// ... call streaming API ...</span></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ot">nil</span></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The caller uses <code>errors.As</code> to recover the structured data:</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>err <span class="op">:=</span> streamTrack<span class="op">(</span><span class="st">&quot;&quot;</span><span class="op">)</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> se <span class="op">*</span>StreamError</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> errors<span class="op">.</span>As<span class="op">(</span>err<span class="op">,</span> <span class="op">&amp;</span>se<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;HTTP %d: %s</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> se<span class="op">.</span>HTTPCode<span class="op">,</span> se<span class="op">.</span>Msg<span class="op">)</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="co">// HTTP 400: empty track ID</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Define the <code>Error()</code> method on a <strong>pointer receiver</strong> (<code>*StreamError</code>), not a value receiver. This is the standard practice for custom error types. If you use a value receiver, the compiler accepts both <code>StreamError</code> and <code>*StreamError</code> as satisfying <code>error</code>, but <code>errors.As</code> only matches pointer receivers when you pass <code>&amp;target</code> of type <code>*StreamError</code>. Stick to pointer receivers and return <code>*StreamError</code> values; you will avoid subtle mismatches.</p>
+</div></div>
+<h3 data-number="9.7.1" id="adding-context-with-unwrap"><span class="header-section-number">9.7.1</span> Adding Context with <code>Unwrap</code></h3>
+<p> If your custom error wraps another error, implement <code>Unwrap() error</code> so that <code>errors.Is</code> and <code>errors.As</code> can traverse your type:</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> FetchError <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    URL <span class="dt">string</span>  <span class="co">// URL that was fetched</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    Err <span class="dt">error</span>   <span class="co">// the underlying error</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>FetchError<span class="op">)</span> Error<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;fetch %s: %s&quot;</span><span class="op">,</span> e<span class="op">.</span>URL<span class="op">,</span> e<span class="op">.</span>Err<span class="op">)</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>FetchError<span class="op">)</span> Unwrap<span class="op">()</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> e<span class="op">.</span>Err  <span class="co">// expose the wrapped error for errors.Is / errors.As</span></span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Now <code>errors.Is(fetchErr, io.EOF)</code> will correctly check whether the underlying error is <code>io.EOF</code>, even though the outer type is <code>*FetchError</code>.</p>
+<p>A fuller example using Bad Bunny’s “Tití Me Preguntó”:</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;errors&quot;</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;io&quot;</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
 <span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b ByTitle<span class="op">)</span> Len<span class="op">()</span> <span class="dt">int</span>           <span class="op">{</span> <span class="cf">return</span> <span class="bu">len</span><span class="op">(</span>b<span class="op">)</span> <span class="op">}</span></span>
-<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b ByTitle<span class="op">)</span> Less<span class="op">(</span>i<span class="op">,</span> j <span class="dt">int</span><span class="op">)</span> <span class="dt">bool</span> <span class="op">{</span> <span class="cf">return</span> b<span class="op">[</span>i<span class="op">].</span>Title <span class="op">&lt;</span> b<span class="op">[</span>j<span class="op">].</span>Title <span class="op">}</span></span>
-<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>b ByTitle<span class="op">)</span> Swap<span class="op">(</span>i<span class="op">,</span> j <span class="dt">int</span><span class="op">)</span>      <span class="op">{</span> b<span class="op">[</span>i<span class="op">],</span> b<span class="op">[</span>j<span class="op">]</span> <span class="op">=</span> b<span class="op">[</span>j<span class="op">],</span> b<span class="op">[</span>i<span class="op">]</span> <span class="op">}</span></span></code></pre></div>
-<p>Use it with <code>sort.Sort</code>:</p>
-<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a>songs <span class="op">:=</span> <span class="op">[]</span>Song<span class="op">{</span></span>
-<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Good Luck, Babe!&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Chappell Roan&quot;</span><span class="op">},</span></span>
-<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Beautiful Things&quot;</span><span class="op">,</span>  Artist<span class="op">:</span> <span class="st">&quot;Benson Boone&quot;</span><span class="op">},</span></span>
-<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;That&#39;s So True&quot;</span><span class="op">,</span>    Artist<span class="op">:</span> <span class="st">&quot;Gracie Abrams&quot;</span><span class="op">},</span></span>
-<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>sort<span class="op">.</span>Sort<span class="op">(</span>ByTitle<span class="op">(</span>songs<span class="op">))</span></span>
-<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> _<span class="op">,</span> s <span class="op">:=</span> <span class="kw">range</span> songs <span class="op">{</span></span>
-<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%s --- %s</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> s<span class="op">.</span>Title<span class="op">,</span> s<span class="op">.</span>Artist<span class="op">)</span></span>
-<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a><span class="co">// Beautiful Things --- Benson Boone</span></span>
-<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a><span class="co">// Good Luck, Babe! --- Chappell Roan</span></span>
-<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a><span class="co">// That&#39;s So True --- Gracie Abrams</span></span></code></pre></div>
-<p><code>ByTitle(songs)</code> is a type conversion that reinterprets the <code>[]Song</code> slice as a <code>ByTitle</code> — no copying occurs.</p>
-<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
-<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
-<div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> <code>sort.Interface</code> is best suited to types that need to be sortable as a <strong>first-class capability</strong> — for example, a domain type that your package exposes and that users will sort repeatedly or pass to generic sort utilities. For a one-off sort inside a single function, Go 1.21’s <code>slices.SortFunc</code> is simpler:</p>
-<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>slices<span class="op">.</span>SortFunc<span class="op">(</span>songs<span class="op">,</span> <span class="kw">func</span><span class="op">(</span>a<span class="op">,</span> b Song<span class="op">)</span> <span class="dt">int</span> <span class="op">{</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> cmp<span class="op">.</span>Compare<span class="op">(</span>a<span class="op">.</span>Title<span class="op">,</span> b<span class="op">.</span>Title<span class="op">)</span></span>
-<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span></code></pre></div>
-<p>You saw <code>slices.SortFunc</code> in Chapter 8; use <code>sort.Interface</code> when the sortable behavior belongs to the type itself.</p>
-</div></div>
-<h2 data-number="9.7" id="accept-interfaces-return-structs"><span class="header-section-number">9.7</span> Accept Interfaces, Return Structs</h2>
-<p> One of Go’s most important design idioms is: <strong>accept interfaces, return concrete types</strong>.</p>
-<p>When a function’s parameter is an interface, the caller can pass any type that satisfies it — including a mock in a test. When a function returns a concrete type, callers get access to all the methods of that type, not just the interface subset.</p>
-<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Good: accepts io.Writer so any writer will do --- os.Stdout, a file, a buffer</span></span>
-<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> WriteJSON<span class="op">(</span>w io<span class="op">.</span>Writer<span class="op">,</span> v <span class="dt">any</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
-<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    enc <span class="op">:=</span> json<span class="op">.</span>NewEncoder<span class="op">(</span>w<span class="op">)</span></span>
-<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> enc<span class="op">.</span>Encode<span class="op">(</span>v<span class="op">)</span></span>
-<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a><span class="co">// Less flexible: only accepts *os.File</span></span>
-<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> WriteJSONToFile<span class="op">(</span>f <span class="op">*</span>os<span class="op">.</span>File<span class="op">,</span> v <span class="dt">any</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
-<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>    enc <span class="op">:=</span> json<span class="op">.</span>NewEncoder<span class="op">(</span>f<span class="op">)</span></span>
-<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> enc<span class="op">.</span>Encode<span class="op">(</span>v<span class="op">)</span></span>
-<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>Returning interfaces makes things harder:</p>
-<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="co">// Avoid: callers cannot use *bytes.Buffer methods --- only io.Writer methods</span></span>
-<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewBuffer<span class="op">()</span> io<span class="op">.</span>Writer <span class="op">{</span></span>
-<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>bytes<span class="op">.</span>Buffer<span class="op">{}</span></span>
-<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a><span class="co">// Better: callers get the full *bytes.Buffer API</span></span>
-<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewBuffer<span class="op">()</span> <span class="op">*</span>bytes<span class="op">.</span>Buffer <span class="op">{</span></span>
-<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>bytes<span class="op">.</span>Buffer<span class="op">{}</span></span>
-<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
-<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
-<div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> Accept the narrowest interface that meets your needs. Return the most specific concrete type you can. This maximizes caller flexibility and testability without hiding useful API.</p>
-</div></div>
-<p>The rule has one well-known exception: the <code>error</code> interface. Functions return <code>error</code> (an interface) rather than a concrete error type so that callers are not coupled to the specific error implementation. Chapter 10 explains why.</p>
-<h2 data-number="9.8" id="the-interface-nil-trap"><span class="header-section-number">9.8</span> The Interface Nil Trap</h2>
-<p>  This is one of Go’s most notorious gotchas. Read this section carefully.</p>
-<p>An interface value has two components: a <strong>type</strong> and a <strong>value</strong>. An interface is <code>nil</code> only when <strong>both</strong> the type and the value are <code>nil</code>. A typed nil — a nil pointer stored in an interface — is <strong>not</strong> nil.</p>
-<div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> MyError <span class="kw">struct</span><span class="op">{</span> msg <span class="dt">string</span> <span class="op">}</span></span>
-<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>MyError<span class="op">)</span> Error<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span> <span class="cf">return</span> e<span class="op">.</span>msg <span class="op">}</span></span>
-<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> mayFail<span class="op">(</span>fail <span class="dt">bool</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
-<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> e <span class="op">*</span>MyError  <span class="co">// e is a typed nil: type=*MyError, value=nil</span></span>
-<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> fail <span class="op">{</span></span>
-<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a>        e <span class="op">=</span> <span class="op">&amp;</span>MyError<span class="op">{</span>msg<span class="op">:</span> <span class="st">&quot;something went wrong&quot;</span><span class="op">}</span></span>
-<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
-<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> e        <span class="co">// </span><span class="al">BUG</span><span class="co">: always returns a non-nil interface!</span></span>
-<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>    err <span class="op">:=</span> mayFail<span class="op">(</span><span class="ot">false</span><span class="op">)</span></span>
-<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
-<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;got error:&quot;</span><span class="op">,</span> err<span class="op">)</span>  <span class="co">// this line executes even when fail=false!</span></span>
-<span id="cb28-17"><a href="#cb28-17" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
-<span id="cb28-18"><a href="#cb28-18" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>When <code>fail</code> is <code>false</code>, <code>e</code> is <code>nil</code> (a nil <code>*MyError</code>), but <code>return e</code> wraps it in an <code>error</code> interface value with type <code>*MyError</code> and value <code>nil</code>. That interface value is <strong>not</strong> nil because the type field is populated. <code>err != nil</code> is <code>true</code>.</p>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a><span class="co">// PlaybackError wraps an underlying error with playback context.</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> PlaybackError <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>    Track <span class="dt">string</span>  <span class="co">// track that failed to play</span></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>    Err   <span class="dt">error</span>   <span class="co">// underlying cause</span></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>PlaybackError<span class="op">)</span> Error<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;playback failed for %q: %s&quot;</span><span class="op">,</span> e<span class="op">.</span>Track<span class="op">,</span> e<span class="op">.</span>Err<span class="op">)</span></span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>PlaybackError<span class="op">)</span> Unwrap<span class="op">()</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> e<span class="op">.</span>Err  <span class="co">// allows errors.Is / errors.As to walk the chain</span></span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> play<span class="op">(</span>track <span class="dt">string</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a>    <span class="co">// simulate an EOF from a truncated audio stream</span></span>
+<span id="cb23-25"><a href="#cb23-25" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>PlaybackError<span class="op">{</span>Track<span class="op">:</span> track<span class="op">,</span> Err<span class="op">:</span> io<span class="op">.</span>EOF<span class="op">}</span></span>
+<span id="cb23-26"><a href="#cb23-26" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb23-27"><a href="#cb23-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-28"><a href="#cb23-28" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb23-29"><a href="#cb23-29" aria-hidden="true" tabindex="-1"></a>    err <span class="op">:=</span> play<span class="op">(</span><span class="st">&quot;Tití Me Preguntó&quot;</span><span class="op">)</span></span>
+<span id="cb23-30"><a href="#cb23-30" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb23-31"><a href="#cb23-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-32"><a href="#cb23-32" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> errors<span class="op">.</span>Is<span class="op">(</span>err<span class="op">,</span> io<span class="op">.</span>EOF<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb23-33"><a href="#cb23-33" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;stream ended unexpectedly --- retry or skip&quot;</span><span class="op">)</span></span>
+<span id="cb23-34"><a href="#cb23-34" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb23-35"><a href="#cb23-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-36"><a href="#cb23-36" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> pe <span class="op">*</span>PlaybackError</span>
+<span id="cb23-37"><a href="#cb23-37" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> errors<span class="op">.</span>As<span class="op">(</span>err<span class="op">,</span> <span class="op">&amp;</span>pe<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb23-38"><a href="#cb23-38" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;affected track:&quot;</span><span class="op">,</span> pe<span class="op">.</span>Track<span class="op">)</span></span>
+<span id="cb23-39"><a href="#cb23-39" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb23-40"><a href="#cb23-40" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Output:</p>
+<pre><code>playback failed for &quot;Tití Me Preguntó&quot;: EOF
+stream ended unexpectedly --- retry or skip
+affected track: Tití Me Preguntó</code></pre>
+<h2 data-number="9.8" id="panic-and-recover"><span class="header-section-number">9.8</span> <code>panic</code> and <code>recover</code></h2>
+<p>  Go has <code>panic</code> and <code>recover</code>, but they are <strong>not</strong> the normal error-handling mechanism. Java programmers sometimes reach for <code>panic</code> as a <code>RuntimeException</code> substitute — that is the wrong model.</p>
+<h3 data-number="9.8.1" id="panic"><span class="header-section-number">9.8.1</span> <code>panic</code></h3>
+<p> <code>panic</code> stops the normal execution of the current goroutine, unwinds the call stack running any deferred functions, and terminates the program with a message.</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> mustPositive<span class="op">(</span>n <span class="dt">int</span><span class="op">)</span> <span class="dt">int</span> <span class="op">{</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> n <span class="op">&lt;=</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>        <span class="bu">panic</span><span class="op">(</span>fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;mustPositive: got %d, want &gt; 0&quot;</span><span class="op">,</span> n<span class="op">))</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> n</span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Use <code>panic</code> only for <strong>truly unrecoverable situations</strong>:</p>
+<ul>
+<li>A programming error that should have been caught at compile time (e.g., misused internal API).</li>
+<li>Initialization failures so severe the program cannot run at all (e.g., a required config file is missing at startup).</li>
+<li>Invariant violations that indicate a bug, not a runtime condition.</li>
+</ul>
+<p>Never use <code>panic</code> for expected failure conditions like “file not found” or “invalid user input.” Return an <code>error</code> instead.</p>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Trap:</strong> Never return a typed nil pointer in an interface. If you want to return “no error,” return the untyped <code>nil</code> literal directly:</p>
-<div class="sourceCode" id="cb29"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> mayFail<span class="op">(</span>fail <span class="dt">bool</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
-<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> fail <span class="op">{</span></span>
-<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="op">&amp;</span>MyError<span class="op">{</span>msg<span class="op">:</span> <span class="st">&quot;something went wrong&quot;</span><span class="op">}</span></span>
-<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
-<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ot">nil</span>  <span class="co">// untyped nil: type=nil, value=nil --- this is a nil error</span></span>
-<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>The fix is to return <code>nil</code> (untyped) rather than a variable of the concrete error type.</p>
+<p><strong>Trap:</strong> A common Java habit is to use unchecked exceptions for “should never happen” cases and let them propagate freely. In Go, <code>panic</code> is the analog, but the bar is much higher. If callers can reasonably be expected to handle the failure, return an <code>error</code>. <code>panic</code> is a last resort, not a shortcut. <strong><em>[errors-not-panic]</em></strong></p>
 </div></div>
-<p>You can inspect the components of an interface value using reflection, but in practice the fix is always the same: return <code>nil</code> directly, not a typed nil pointer.</p>
-<h2 data-number="9.9" id="http.handlerfunc-functions-as-interfaces"><span class="header-section-number">9.9</span> <code>http.HandlerFunc</code> — Functions as Interfaces</h2>
-<p>  Go lets you define methods on any named type, including function types. The standard library uses this to let a plain function satisfy the <code>http.Handler</code> interface.</p>
-<p>The <code>http.Handler</code> interface requires one method:</p>
-<div class="sourceCode" id="cb30"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Handler <span class="kw">interface</span> <span class="op">{</span></span>
-<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>    ServeHTTP<span class="op">(</span>ResponseWriter<span class="op">,</span> <span class="op">*</span>Request<span class="op">)</span>  <span class="co">// handles an HTTP request</span></span>
-<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p><code>http.HandlerFunc</code> is a function type with a <code>ServeHTTP</code> method:</p>
-<div class="sourceCode" id="cb31"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> HandlerFunc <span class="kw">func</span><span class="op">(</span>ResponseWriter<span class="op">,</span> <span class="op">*</span>Request<span class="op">)</span>  <span class="co">// a function that handles an HTTP request</span></span>
-<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>f HandlerFunc<span class="op">)</span> ServeHTTP<span class="op">(</span>w ResponseWriter<span class="op">,</span> r <span class="op">*</span>Request<span class="op">)</span> <span class="op">{</span></span>
-<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>    f<span class="op">(</span>w<span class="op">,</span> r<span class="op">)</span>  <span class="co">// call the function itself</span></span>
-<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p>Because <code>HandlerFunc</code> has <code>ServeHTTP</code>, it satisfies <code>http.Handler</code>. This lets you write a plain function and use it anywhere an <code>http.Handler</code> is required:</p>
-<div class="sourceCode" id="cb32"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> helloHandler<span class="op">(</span>w http<span class="op">.</span>ResponseWriter<span class="op">,</span> r <span class="op">*</span>http<span class="op">.</span>Request<span class="op">)</span> <span class="op">{</span></span>
-<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Fprintf<span class="op">(</span>w<span class="op">,</span> <span class="st">&quot;Bienvenidos!</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">)</span></span>
-<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>    http<span class="op">.</span>Handle<span class="op">(</span><span class="st">&quot;/hello&quot;</span><span class="op">,</span> http<span class="op">.</span>HandlerFunc<span class="op">(</span>helloHandler<span class="op">))</span></span>
-<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>    http<span class="op">.</span>ListenAndServe<span class="op">(</span><span class="st">&quot;:8080&quot;</span><span class="op">,</span> <span class="ot">nil</span><span class="op">)</span></span>
-<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
-<p><code>http.HandlerFunc(helloHandler)</code> is a type conversion, not a function call — it converts the function to the <code>HandlerFunc</code> type. Because <code>HandlerFunc</code> implements <code>http.Handler</code>, the converted value satisfies the <code>http.Handler</code> interface.</p>
-<p>The more common shorthand uses <code>http.HandleFunc</code>, which wraps this conversion internally:</p>
-<div class="sourceCode" id="cb33"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>http<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;/hello&quot;</span><span class="op">,</span> helloHandler<span class="op">)</span>  <span class="co">// convenience wrapper for http.HandlerFunc</span></span></code></pre></div>
-<p>This pattern is the <strong>adapter</strong> or <strong>strategy</strong> pattern from Java, implemented without any class boilerplate. HTTP is covered fully in Chapter 16; this example just demonstrates the pattern.</p>
+<h3 data-number="9.8.2" id="recover"><span class="header-section-number">9.8.2</span> <code>recover</code></h3>
+<p> <code>recover</code> catches a panic in a deferred function and returns the value that was passed to <code>panic</code>. Outside of a deferred function, <code>recover</code> returns <code>nil</code> and has no effect.</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> safePlay<span class="op">(</span>track <span class="dt">string</span><span class="op">)</span> <span class="op">(</span>err <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> r <span class="op">:=</span> <span class="bu">recover</span><span class="op">();</span> r <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>            err <span class="op">=</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;safePlay: recovered panic: %v&quot;</span><span class="op">,</span> r<span class="op">)</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}()</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>    <span class="co">// pretend this panics on a bad track</span></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> track <span class="op">==</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>        <span class="bu">panic</span><span class="op">(</span><span class="st">&quot;empty track name&quot;</span><span class="op">)</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;playing:&quot;</span><span class="op">,</span> track<span class="op">)</span></span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ot">nil</span></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>err <span class="op">:=</span> safePlay<span class="op">(</span><span class="st">&quot;&quot;</span><span class="op">)</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="co">// safePlay: recovered panic: empty track name</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>err <span class="op">=</span> safePlay<span class="op">(</span><span class="st">&quot;Provenza&quot;</span><span class="op">)</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a><span class="co">// playing: Provenza</span></span></code></pre></div>
 <div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
 <img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
 <div style="flex: 1; min-width: 0;">
-<p><strong>Tip:</strong> Defining methods on a function type is a powerful Go idiom. Whenever you see a type defined as <code>type Foo func(...)</code> in a package with a method attached, it is almost certainly being used as an adapter to make plain functions satisfy an interface.</p>
+<p><strong>Tip:</strong> The primary legitimate use of <code>recover</code> is inside a <strong>library boundary</strong> — converting an unexpected internal panic into an error that the library returns to its caller. This prevents library bugs from crashing the entire program. The standard <code>encoding/json</code> package uses this pattern internally. Do not use <code>recover</code> as a general exception handler the way you might use a <code>catch (Exception e)</code> block in Java.</p>
 </div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> <code>panic</code> and <code>recover</code> are not the same as Java exceptions. Java exceptions propagate up the call stack and can be caught at any frame with a <code>try</code>/<code>catch</code>. Go’s <code>recover</code> only works in <strong>deferred functions</strong> in the <strong>same goroutine</strong> that panicked. You cannot <code>recover</code> a panic from a different goroutine.</p>
+</div></div>
+<h3 data-number="9.8.3" id="the-must-idiom"><span class="header-section-number">9.8.3</span> The <code>must</code> Idiom</h3>
+<p>   Some initialization errors are programmer mistakes, not runtime conditions — a bad regex pattern or a malformed template literal is a bug, not something you should silently swallow or handle per-request. For these cases the standard library provides <code>Must</code> wrappers that panic on error:</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co">// regexp.MustCompile compiles a pattern and panics if the syntax is invalid.</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> trackTitleRE <span class="op">=</span> regexp<span class="op">.</span>MustCompile<span class="op">(</span><span class="st">`^[A-Za-z0-9 ,&#39;!?&amp;()\-]+$`</span><span class="op">)</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> validTitle<span class="op">(</span>s <span class="dt">string</span><span class="op">)</span> <span class="dt">bool</span> <span class="op">{</span></span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> trackTitleRE<span class="op">.</span>MatchString<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>template.Must</code> does the same for parsed templates:</p>
+<div class="sourceCode" id="cb29"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> trackTmpl <span class="op">=</span> template<span class="op">.</span>Must<span class="op">(</span>template<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;track&quot;</span><span class="op">).</span>Parse<span class="op">(</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">`{{.Title}} by {{.Artist}} ({{.BPM}} BPM)`</span><span class="op">,</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="op">))</span></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> printTrack<span class="op">(</span>t Track<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>    trackTmpl<span class="op">.</span>Execute<span class="op">(</span>os<span class="op">.</span>Stdout<span class="op">,</span> t<span class="op">)</span></span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Both patterns are appropriate because the panic fires at program startup (package-level <code>var</code> blocks and <code>init()</code> run before <code>main</code>), so a bug in the literal is caught immediately rather than surfacing as a mysterious runtime failure on the first request.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Never call <code>regexp.MustCompile</code> or <code>template.Must</code> inside a function that runs per-request or in a loop. They are for compile-time-constant literals only. If the pattern or template text comes from user input or configuration, use <code>regexp.Compile</code> or <code>template.New(...).Parse(...)</code> and handle the error normally.</p>
+</div></div>
+<h2 data-number="9.9" id="go-error-handling-proverbs"><span class="header-section-number">9.9</span> Go Error-Handling Proverbs</h2>
+<p> Two of Go’s most quoted proverbs apply directly to this chapter.</p>
+<h3 data-number="9.9.1" id="errors-are-values"><span class="header-section-number">9.9.1</span> “Errors are values”</h3>
+<p>Rob Pike’s essay of the same name makes a key point: because errors are just values, you can write functions that operate on them, store them in structs, and compose them with the same tools you use for any other value. This is why <code>errors.Join</code>, custom error types, and wrapping all feel natural in Go. Java’s exceptions, by contrast, are objects thrown out of the normal return path — they are harder to treat as first-class data.</p>
+<h3 data-number="9.9.2" id="dont-just-check-errors-handle-them-gracefully"><span class="header-section-number">9.9.2</span> “Don’t just check errors, handle them gracefully”</h3>
+<p>Checking <code>if err != nil</code> and immediately calling <code>log.Fatal</code> is not handling an error — it is panicking politely. Handling an error means deciding what to do: retry, return a friendlier message, fall back to a default, or accumulate it with <code>errors.Join</code> and report all problems at once. The goal is code that is predictable and informative when things go wrong.</p>
 <h2 data-number="9.10" id="key-points"><span class="header-section-number">9.10</span> Key Points</h2>
 <ul>
-<li>Go uses <strong>structural typing</strong>: a type satisfies an interface by having the right methods, with no <code>implements</code> declaration required.</li>
-<li>Interface composition embeds interfaces inside interfaces; <code>io.ReadWriter</code> is <code>io.Reader</code> + <code>io.Writer</code>.</li>
-<li><code>any</code> (alias for <code>interface{}</code>) is the top type; use it sparingly and prefer generics when possible.</li>
-<li>Type assertions come in two forms: <code>v := i.(T)</code> panics on failure; <code>v, ok := i.(T)</code> is safe.</li>
-<li>Type switches dispatch on dynamic type: <code>switch v := i.(type) { case int: ... }</code>.</li>
-<li>The five interfaces to know first: <code>io.Reader</code>, <code>io.Writer</code>, <code>fmt.Stringer</code>, <code>error</code>, and <code>sort.Interface</code>.</li>
-<li><code>sort.Interface</code> (<code>Len</code>, <code>Less</code>, <code>Swap</code>) lets any type be sorted by <code>sort.Sort</code>; prefer <code>slices.SortFunc</code> for one-off sorts.</li>
-<li>Accept interfaces, return concrete types — this maximizes flexibility and testability.</li>
-<li>A typed nil pointer stored in an interface is <strong>not</strong> nil; always return the untyped <code>nil</code> to signal “no error.”</li>
-<li><code>http.HandlerFunc</code> shows how function types can implement interfaces, enabling the adapter pattern with no boilerplate.</li>
+<li><code>error</code> is a predeclared interface: <code>Error() string</code>; any type with that method satisfies it.</li>
+<li>Return <code>error</code> as the last value; return <code>nil</code> for success; check the error immediately after the call.</li>
+<li><code>errors.New</code> creates a simple error; <code>fmt.Errorf</code> creates a formatted one.</li>
+<li><code>fmt.Errorf</code> with <code>%w</code> wraps an error, forming a chain; use <code>%v</code> when you do not want callers to inspect the cause.</li>
+<li><code>errors.Is(err, target)</code> walks the chain to match a sentinel value; never use <code>==</code> for this.</li>
+<li><code>errors.As(err, &amp;target)</code> walks the chain to match a concrete type; it is Go’s replacement for <code>instanceof</code> + cast.</li>
+<li><code>errors.Join</code> (Go 1.20) combines multiple errors; ideal for validation that should report all failures at once.</li>
+<li>Sentinel errors (e.g., <code>io.EOF</code>, <code>sql.ErrNoRows</code>) are package-level <code>var</code> values; name them <code>ErrFoo</code>.</li>
+<li>Custom error types implement <code>error</code> with a pointer receiver; add <code>Unwrap() error</code> if they wrap another error.</li>
+<li><code>panic</code> is for unrecoverable programming errors, not for expected runtime conditions — return an <code>error</code> instead.</li>
+<li><code>recover</code> only works in deferred functions in the same goroutine; its main use is converting internal panics into errors at a library boundary.</li>
+<li>“Errors are values”: handle them with the same composability you apply to any other data.</li>
 </ul>
 <h2 data-number="9.11" id="exercises"><span class="header-section-number">9.11</span> Exercises</h2>
 <ol type="1">
-<li><p><strong>Think about it:</strong> Go’s structural typing means any package can retroactively make its types satisfy an interface defined in any other package. In Java, if you want your <code>Song</code> class to satisfy a new interface <code>Playable</code> defined in a library you do not control, you must modify <code>Song</code>’s source. Explain how Go’s approach changes the relationship between library authors and library users. What does this mean for extending types from packages you cannot modify?</p></li>
+<li><p><strong>Think about it:</strong> Java uses checked exceptions to force callers to handle failures. Go returns <code>error</code> values that the compiler does not require you to inspect. What are the trade-offs of each approach? In what situations does Go’s approach lead to more reliable code, and in what situations might it lead to less reliable code compared to Java’s checked exceptions?</p></li>
 <li><p><strong>What does this print?</strong></p>
-<div class="sourceCode" id="cb34"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
-<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
-<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Celsius <span class="dt">float64</span></span>
-<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Fahrenheit <span class="dt">float64</span></span>
-<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>c Celsius<span class="op">)</span> String<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
-<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;%.1f°C&quot;</span><span class="op">,</span> <span class="dt">float64</span><span class="op">(</span>c<span class="op">))</span></span>
-<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> printTemp<span class="op">(</span>v fmt<span class="op">.</span>Stringer<span class="op">)</span> <span class="op">{</span></span>
-<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>v<span class="op">.</span>String<span class="op">())</span></span>
-<span id="cb34-14"><a href="#cb34-14" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb34-15"><a href="#cb34-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb34-16"><a href="#cb34-16" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb34-17"><a href="#cb34-17" aria-hidden="true" tabindex="-1"></a>    c <span class="op">:=</span> Celsius<span class="op">(</span><span class="fl">37.5</span><span class="op">)</span></span>
-<span id="cb34-18"><a href="#cb34-18" aria-hidden="true" tabindex="-1"></a>    f <span class="op">:=</span> Fahrenheit<span class="op">(</span><span class="fl">99.5</span><span class="op">)</span></span>
-<span id="cb34-19"><a href="#cb34-19" aria-hidden="true" tabindex="-1"></a>    printTemp<span class="op">(</span>c<span class="op">)</span></span>
-<span id="cb34-20"><a href="#cb34-20" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>f<span class="op">)</span></span>
-<span id="cb34-21"><a href="#cb34-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
-<li><p><strong>Calculation:</strong> An interface value in Go stores two fields: a pointer to type information and a pointer to (or copy of) the data. Given a variable declared as <code>var r io.Reader = &amp;bytes.Buffer{}</code>, how many distinct type/value components does <code>r</code> hold? If <code>r</code> is then assigned <code>nil</code>, describe the type and value components of the resulting interface value.</p></li>
+<div class="sourceCode" id="cb30"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;errors&quot;</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> ErrNotFound <span class="op">=</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;not found&quot;</span><span class="op">)</span></span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> CatalogError <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a>    Track <span class="dt">string</span></span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a>    Err   <span class="dt">error</span></span>
+<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-15"><a href="#cb30-15" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>CatalogError<span class="op">)</span> Error<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span></span>
+<span id="cb30-16"><a href="#cb30-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;catalog: %s: %s&quot;</span><span class="op">,</span> e<span class="op">.</span>Track<span class="op">,</span> e<span class="op">.</span>Err<span class="op">)</span></span>
+<span id="cb30-17"><a href="#cb30-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb30-18"><a href="#cb30-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-19"><a href="#cb30-19" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>CatalogError<span class="op">)</span> Unwrap<span class="op">()</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb30-20"><a href="#cb30-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> e<span class="op">.</span>Err</span>
+<span id="cb30-21"><a href="#cb30-21" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb30-22"><a href="#cb30-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-23"><a href="#cb30-23" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> lookup<span class="op">(</span>track <span class="dt">string</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb30-24"><a href="#cb30-24" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="op">&amp;</span>CatalogError<span class="op">{</span>Track<span class="op">:</span> track<span class="op">,</span> Err<span class="op">:</span> ErrNotFound<span class="op">}</span></span>
+<span id="cb30-25"><a href="#cb30-25" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb30-26"><a href="#cb30-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-27"><a href="#cb30-27" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb30-28"><a href="#cb30-28" aria-hidden="true" tabindex="-1"></a>    err <span class="op">:=</span> lookup<span class="op">(</span><span class="st">&quot;Tití Me Preguntó&quot;</span><span class="op">)</span></span>
+<span id="cb30-29"><a href="#cb30-29" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb30-30"><a href="#cb30-30" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>errors<span class="op">.</span>Is<span class="op">(</span>err<span class="op">,</span> ErrNotFound<span class="op">))</span></span>
+<span id="cb30-31"><a href="#cb30-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-32"><a href="#cb30-32" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> ce <span class="op">*</span>CatalogError</span>
+<span id="cb30-33"><a href="#cb30-33" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> errors<span class="op">.</span>As<span class="op">(</span>err<span class="op">,</span> <span class="op">&amp;</span>ce<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb30-34"><a href="#cb30-34" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span>ce<span class="op">.</span>Track<span class="op">)</span></span>
+<span id="cb30-35"><a href="#cb30-35" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb30-36"><a href="#cb30-36" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> Consider the following code. How many distinct, non-nil error values does <code>validateSong</code> return for the input <code>Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}</code>? What is the output of <code>fmt.Println(err)</code> for that input?</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;errors&quot;</span></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Song <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span></span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span></span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a>    Year   <span class="dt">int</span></span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a>    BPM    <span class="dt">int</span></span>
+<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb31-14"><a href="#cb31-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-15"><a href="#cb31-15" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> validateSong<span class="op">(</span>s Song<span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
+<span id="cb31-16"><a href="#cb31-16" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> errs <span class="op">[]</span><span class="dt">error</span></span>
+<span id="cb31-17"><a href="#cb31-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> s<span class="op">.</span>Title <span class="op">==</span> <span class="st">&quot;&quot;</span> <span class="op">{</span></span>
+<span id="cb31-18"><a href="#cb31-18" aria-hidden="true" tabindex="-1"></a>        errs <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>errs<span class="op">,</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;title required&quot;</span><span class="op">))</span></span>
+<span id="cb31-19"><a href="#cb31-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb31-20"><a href="#cb31-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> s<span class="op">.</span>Year <span class="op">&lt;</span> <span class="dv">2000</span> <span class="op">||</span> s<span class="op">.</span>Year <span class="op">&gt;</span> <span class="dv">2030</span> <span class="op">{</span></span>
+<span id="cb31-21"><a href="#cb31-21" aria-hidden="true" tabindex="-1"></a>        errs <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>errs<span class="op">,</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;year %d out of range&quot;</span><span class="op">,</span> s<span class="op">.</span>Year<span class="op">))</span></span>
+<span id="cb31-22"><a href="#cb31-22" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb31-23"><a href="#cb31-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> s<span class="op">.</span>BPM <span class="op">&lt;=</span> <span class="dv">0</span> <span class="op">{</span></span>
+<span id="cb31-24"><a href="#cb31-24" aria-hidden="true" tabindex="-1"></a>        errs <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>errs<span class="op">,</span> errors<span class="op">.</span>New<span class="op">(</span><span class="st">&quot;BPM must be positive&quot;</span><span class="op">))</span></span>
+<span id="cb31-25"><a href="#cb31-25" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb31-26"><a href="#cb31-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> errors<span class="op">.</span>Join<span class="op">(</span>errs<span class="op">...)</span></span>
+<span id="cb31-27"><a href="#cb31-27" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb31-28"><a href="#cb31-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-29"><a href="#cb31-29" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb31-30"><a href="#cb31-30" aria-hidden="true" tabindex="-1"></a>    s <span class="op">:=</span> Song<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Karol G&quot;</span><span class="op">,</span> Year<span class="op">:</span> <span class="dv">2021</span><span class="op">,</span> BPM<span class="op">:</span> <span class="op">-</span><span class="dv">1</span><span class="op">}</span></span>
+<span id="cb31-31"><a href="#cb31-31" aria-hidden="true" tabindex="-1"></a>    err <span class="op">:=</span> validateSong<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb31-32"><a href="#cb31-32" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb31-33"><a href="#cb31-33" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
 <li><p><strong>Where is the bug?</strong></p>
-<div class="sourceCode" id="cb35"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
-<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;fmt&quot;</span></span>
-<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> DBError <span class="kw">struct</span><span class="op">{</span> code <span class="dt">int</span> <span class="op">}</span></span>
-<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>e <span class="op">*</span>DBError<span class="op">)</span> Error<span class="op">()</span> <span class="dt">string</span> <span class="op">{</span> <span class="cf">return</span> fmt<span class="op">.</span>Sprintf<span class="op">(</span><span class="st">&quot;db error %d&quot;</span><span class="op">,</span> e<span class="op">.</span>code<span class="op">)</span> <span class="op">}</span></span>
-<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> connect<span class="op">(</span>bad <span class="dt">bool</span><span class="op">)</span> <span class="dt">error</span> <span class="op">{</span></span>
-<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> err <span class="op">*</span>DBError</span>
-<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> bad <span class="op">{</span></span>
-<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a>        err <span class="op">=</span> <span class="op">&amp;</span>DBError<span class="op">{</span>code<span class="op">:</span> <span class="dv">500</span><span class="op">}</span></span>
-<span id="cb35-13"><a href="#cb35-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
-<span id="cb35-14"><a href="#cb35-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> err</span>
-<span id="cb35-15"><a href="#cb35-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
-<span id="cb35-16"><a href="#cb35-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb35-17"><a href="#cb35-17" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
-<span id="cb35-18"><a href="#cb35-18" aria-hidden="true" tabindex="-1"></a>    e <span class="op">:=</span> connect<span class="op">(</span><span class="ot">false</span><span class="op">)</span></span>
-<span id="cb35-19"><a href="#cb35-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> e <span class="op">==</span> <span class="ot">nil</span> <span class="op">{</span></span>
-<span id="cb35-20"><a href="#cb35-20" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;connected OK&quot;</span><span class="op">)</span></span>
-<span id="cb35-21"><a href="#cb35-21" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span> <span class="cf">else</span> <span class="op">{</span></span>
-<span id="cb35-22"><a href="#cb35-22" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;failed:&quot;</span><span class="op">,</span> e<span class="op">)</span></span>
-<span id="cb35-23"><a href="#cb35-23" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
-<span id="cb35-24"><a href="#cb35-24" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
-<li><p><strong>Write a program:</strong> Define an interface <code>Shape</code> with two methods: <code>Area() float64</code> and <code>Perimeter() float64</code>. Implement <code>Shape</code> for two concrete types: <code>Rectangle</code> (with fields <code>Width</code> and <code>Height float64</code>) and <code>Circle</code> (with field <code>Radius float64</code>; use <code>math.Pi</code>). Write a function <code>printShapeInfo(s Shape)</code> that prints the area and perimeter. In <code>main</code>, create one <code>Rectangle</code> and one <code>Circle</code> and call <code>printShapeInfo</code> on each.</p></li>
+<div class="sourceCode" id="cb32"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;errors&quot;</span></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;io&quot;</span></span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;strings&quot;</span></span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> readAll<span class="op">(</span>r io<span class="op">.</span>Reader<span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>    buf <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dv">4</span><span class="op">)</span></span>
+<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> result <span class="op">[]</span><span class="dt">byte</span></span>
+<span id="cb32-13"><a href="#cb32-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb32-14"><a href="#cb32-14" aria-hidden="true" tabindex="-1"></a>        n<span class="op">,</span> err <span class="op">:=</span> r<span class="op">.</span>Read<span class="op">(</span>buf<span class="op">)</span></span>
+<span id="cb32-15"><a href="#cb32-15" aria-hidden="true" tabindex="-1"></a>        result <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>result<span class="op">,</span> buf<span class="op">[:</span>n<span class="op">]...)</span></span>
+<span id="cb32-16"><a href="#cb32-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> err <span class="op">==</span> io<span class="op">.</span>EOF <span class="op">{</span></span>
+<span id="cb32-17"><a href="#cb32-17" aria-hidden="true" tabindex="-1"></a>            <span class="cf">break</span></span>
+<span id="cb32-18"><a href="#cb32-18" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb32-19"><a href="#cb32-19" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb32-20"><a href="#cb32-20" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> <span class="ot">nil</span><span class="op">,</span> fmt<span class="op">.</span>Errorf<span class="op">(</span><span class="st">&quot;readAll: %w&quot;</span><span class="op">,</span> err<span class="op">)</span></span>
+<span id="cb32-21"><a href="#cb32-21" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb32-22"><a href="#cb32-22" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb32-23"><a href="#cb32-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result<span class="op">,</span> <span class="ot">nil</span></span>
+<span id="cb32-24"><a href="#cb32-24" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb32-25"><a href="#cb32-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-26"><a href="#cb32-26" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb32-27"><a href="#cb32-27" aria-hidden="true" tabindex="-1"></a>    r <span class="op">:=</span> strings<span class="op">.</span>NewReader<span class="op">(</span><span class="st">&quot;TQG&quot;</span><span class="op">)</span></span>
+<span id="cb32-28"><a href="#cb32-28" aria-hidden="true" tabindex="-1"></a>    data<span class="op">,</span> err <span class="op">:=</span> readAll<span class="op">(</span>r<span class="op">)</span></span>
+<span id="cb32-29"><a href="#cb32-29" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb32-30"><a href="#cb32-30" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;error:&quot;</span><span class="op">,</span> err<span class="op">)</span></span>
+<span id="cb32-31"><a href="#cb32-31" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb32-32"><a href="#cb32-32" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb32-33"><a href="#cb32-33" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="dt">string</span><span class="op">(</span>data<span class="op">))</span></span>
+<span id="cb32-34"><a href="#cb32-34" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Write a function <code>parseTimecode(s string) (int, int, int, error)</code> that parses a string in the format <code>"MM:SS"</code> (e.g., <code>"03:45"</code>) and returns the minutes, seconds, and <code>nil</code>. Return a descriptive error using <code>fmt.Errorf</code> if the string is not in the expected format, if either part is not a valid integer, or if minutes or seconds are out of range (minutes &gt;= 0, seconds 0–59). Define a sentinel <code>var ErrInvalidTimecode = errors.New("invalid timecode")</code> and wrap it with <code>%w</code> in your error returns so that callers can use <code>errors.Is(err, ErrInvalidTimecode)</code>. In <code>main</code>, call <code>parseTimecode</code> with at least three inputs: one valid (<code>"03:45"</code>), one with a bad format (<code>"345"</code>), and one with an out-of-range second (<code>"01:61"</code>). Print the result or error for each.</p></li>
 </ol>
 
 {% endraw %}

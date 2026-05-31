@@ -7,21 +7,27 @@ nav_order: 0
 
 {% raw %}
 <h1 data-number="0" id="how-to-use-this-booklet"><span class="header-section-number">0</span> How to use this booklet</h1>
-<p>This is a short booklet to help a Java programmer learn G0.</p>
+<p>This is a short booklet to help a Java programmer learn Go.</p>
 <p>Each chapter is meant to help you understand a topic, but you will still want to reference API descriptions for more specifics of the parameters and operating conditions. Hopefully, you’ll have the context you need to understand API documentation.</p>
-<h2 data-number="0.1" id="tips"><span class="header-section-number">0.1</span> Tips</h2>
+<h2 data-number="0.1" id="code-review-rules"><span class="header-section-number">0.1</span> Code Review Rules</h2>
+<p>Go is an opinionated language — they don’t even let us indent with spaces!!! You will find the Code Review Rules for Go in the appendix. These rules help developers understand the best practices for writing Go code. When we refer to these rules we will use the bold italics version of the <strong><em>[short-rule-name]</em></strong>.</p>
+<h2 data-number="0.2" id="idioms"><span class="header-section-number">0.2</span> Idioms</h2>
+<p>Idioms are found in every language — spoken and programmed. Go takes idioms next level. You are going to see <em>idiom</em> and <em>idiomatic</em> a lot, so it helps to get comfortable with the word. Wikipedia defines idiom as <span class="citation" data-cites="WikiProgrammingIdiom">[@WikiProgrammingIdiom]</span></p>
+<pre><code>a commonly-used way to code a relatively small construct in a particular programming context</code></pre>
+<p>You could also think of it as best practices. I like to think of it as “if you don’t do it the idiomatic way, you risk looking like an idiot”.</p>
+<h2 data-number="0.3" id="tips"><span class="header-section-number">0.3</span> Tips</h2>
 <p><strong>Tips</strong> call out details that you need to pay special attention to. <strong>Traps</strong> warn you of common mistakes made. <strong>Wut</strong> calls out a detail that is counter-intuitive, so make sure you pay attention.</p>
-<h2 data-number="0.2" id="function-signatures"><span class="header-section-number">0.2</span> Function Signatures</h2>
+<h2 data-number="0.4" id="function-signatures"><span class="header-section-number">0.4</span> Function Signatures</h2>
 <p>When this book introduces a new function, it shows the function’s <strong>signature</strong> and return type. A function’s signature is its name and parameter list — it uniquely identifies the function. We also show the return type so you know what the function gives back. For example:</p>
-<div class="sourceCode" id="cb1"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> abs<span class="op">(</span><span class="dt">int</span> n<span class="op">);</span></span></code></pre></div>
+<div class="sourceCode" id="cb2"><pre class="sourceCode cpp"><code class="sourceCode cpp"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="dt">int</span> abs<span class="op">(</span><span class="dt">int</span> n<span class="op">);</span></span></code></pre></div>
 <p>This tells you that <code>abs</code> takes one <code>int</code> parameter and returns an <code>int</code>. You do not need to understand every detail the first time you see it, but it gives you three things at a glance: what the function is called, what goes in, and what comes out. As you work through API documentation on your own, signatures are the first thing you will look at, so getting comfortable reading them early pays off.</p>
-<h2 data-number="0.3" id="try-it"><span class="header-section-number">0.3</span> Try It</h2>
+<h2 data-number="0.5" id="try-it"><span class="header-section-number">0.5</span> Try It</h2>
 <p>As the intro to the most amazing programming language book ever written <span class="citation" data-cites="KernighanRitchie1988">[@KernighanRitchie1988]</span> starts out:</p>
 <blockquote>
 <p>The only way to learn a new programming language is by writing programs in it.</p>
 </blockquote>
 <p>You need to write some code. Make sure you try writing some programs from scratch. At the end of most sections is a starter program that you can type in and modify to play with. Don’t use it as an excuse to avoid writing some of your own starter programs. It’s the only way to master a language.</p>
-<h2 data-number="0.4" id="exercises"><span class="header-section-number">0.4</span> Exercises</h2>
+<h2 data-number="0.6" id="exercises"><span class="header-section-number">0.6</span> Exercises</h2>
 <p>Don’t skip the exercises at the end of the chapters. You can get the answer key, but don’t look at the answer key before you work out the answer yourself. If you look at the answer key first, the concepts will not sink in.</p>
 
 {% endraw %}

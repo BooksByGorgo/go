@@ -1,0 +1,655 @@
+---
+layout: default
+title: "15. JSON, HTTP, and the Web"
+parent: "Gorgo Go for Java Programmers"
+nav_order: 15
+---
+
+{% raw %}
+<h1 data-number="15" id="json-http-and-the-web"><span class="header-section-number">15</span> JSON, HTTP, and the Web</h1>
+<p>  Go’s standard library ships everything you need to build and consume web services — no Spring Boot, no Jackson, no Tomcat required. This chapter covers JSON encoding and decoding, building HTTP servers with the 1.22 mux, writing middleware, live profiling endpoints with <code>net/http/pprof</code>, making HTTP requests, XML encoding, raw TCP/UDP networking with the <code>net</code> package, and securing connections with <code>crypto/tls</code>.</p>
+<h2 data-number="15.1" id="encoding-json"><span class="header-section-number">15.1</span> Encoding JSON</h2>
+<p>  Java programmers typically reach for Jackson or Gson to serialize objects to JSON. In Go, <code>encoding/json</code> is in the standard library and needs no configuration beyond struct tags.</p>
+<p>The two core functions are:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Marshal<span class="op">(</span>v <span class="dt">any</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span>              <span class="co">// encode v as JSON bytes</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Unmarshal<span class="op">(</span>data <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> v <span class="dt">any</span><span class="op">)</span> <span class="dt">error</span>         <span class="co">// decode JSON bytes into v (v must be a non-nil pointer)</span></span></code></pre></div>
+<p>Here is a round trip:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;encoding/json&quot;</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Song <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span> <span class="st">`json:&quot;title&quot;`</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span> <span class="st">`json:&quot;artist&quot;`</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    BPM    <span class="dt">int</span>    <span class="st">`json:&quot;bpm&quot;`</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>    s <span class="op">:=</span> Song<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Todo De Ti&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Rauw Alejandro&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">96</span><span class="op">}</span></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>    data<span class="op">,</span> err <span class="op">:=</span> json<span class="op">.</span>Marshal<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>        <span class="bu">panic</span><span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="dt">string</span><span class="op">(</span>data<span class="op">))</span></span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>    <span class="co">// {&quot;title&quot;:&quot;Todo De Ti&quot;,&quot;artist&quot;:&quot;Rauw Alejandro&quot;,&quot;bpm&quot;:96}</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> s2 Song</span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">:=</span> json<span class="op">.</span>Unmarshal<span class="op">(</span>data<span class="op">,</span> <span class="op">&amp;</span>s2<span class="op">);</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>        <span class="bu">panic</span><span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%+v</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> s2<span class="op">)</span></span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>    <span class="co">// {Title:Todo De Ti Artist:Rauw Alejandro BPM:96}</span></span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>Marshal</code> returns a <code>[]byte</code>. Convert it to <code>string</code> with <code>string(data)</code> when you need to print it or embed it in a larger string. <code>Unmarshal</code> takes a pointer so it can write into the struct; passing a non-pointer returns an error.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> In Jackson you annotate fields with <code>@JsonProperty("title")</code>. In Go you use a struct tag: <code>`json:"title"`</code>. Both achieve the same mapping — Go’s approach requires no annotation processor or reflection framework beyond what <code>encoding/json</code> already does at runtime.</p>
+</div></div>
+<h3 data-number="15.1.1" id="struct-tags-for-json"><span class="header-section-number">15.1.1</span> Struct Tags for JSON</h3>
+<p>   A struct tag is a raw string literal attached to a field declaration. <code>encoding/json</code> reads the <code>json</code> key in each tag to control marshalling.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Track <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    Title    <span class="dt">string</span>  <span class="st">`json:&quot;title&quot;`</span>                  <span class="co">// rename to &quot;title&quot;</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    Artist   <span class="dt">string</span>  <span class="st">`json:&quot;artist&quot;`</span>                 <span class="co">// rename to &quot;artist&quot;</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    BPM      <span class="dt">int</span>     <span class="st">`json:&quot;bpm,omitempty&quot;`</span>           <span class="co">// omit if BPM == 0</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    Internal <span class="dt">string</span>  <span class="st">`json:&quot;-&quot;`</span>                       <span class="co">// always skip</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>The options after the comma are:</p>
+<ul>
+<li><code>omitempty</code> — skip the field when its value is the zero value for its type (<code>0</code>, <code>""</code>, <code>false</code>, <code>nil</code>).</li>
+<li><code>-</code> — never include this field in JSON output, even if it has a value.</li>
+</ul>
+<div class="sourceCode" id="cb4"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>t1 <span class="op">:=</span> Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Lokera&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Rauw Alejandro&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">99</span><span class="op">,</span> Internal<span class="op">:</span> <span class="st">&quot;secret&quot;</span><span class="op">}</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>data<span class="op">,</span> _ <span class="op">:=</span> json<span class="op">.</span>Marshal<span class="op">(</span>t1<span class="op">)</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="dt">string</span><span class="op">(</span>data<span class="op">))</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="co">// {&quot;title&quot;:&quot;Lokera&quot;,&quot;artist&quot;:&quot;Rauw Alejandro&quot;,&quot;bpm&quot;:99}</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="co">// Internal is gone; BPM present because it is non-zero</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>t2 <span class="op">:=</span> Track<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;telepatía&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Kali Uchis&quot;</span><span class="op">}</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>data<span class="op">,</span> _ <span class="op">=</span> json<span class="op">.</span>Marshal<span class="op">(</span>t2<span class="op">)</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="dt">string</span><span class="op">(</span>data<span class="op">))</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="co">// {&quot;title&quot;:&quot;telepatía&quot;,&quot;artist&quot;:&quot;Kali Uchis&quot;}</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="co">// BPM omitted because it is zero (omitempty)</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>omitempty</code> on a struct field type omits it only when the struct pointer is <code>nil</code>, not when the struct is zero-valued. If you want a nested struct to be omittable, make the field a pointer: <code>`json:"meta,omitempty"`</code> on a <code>*Meta</code> field will omit <code>meta</code> when the pointer is <code>nil</code>.</p>
+</div></div>
+<p>Tag syntax is strict: backtick string, <code>key:"value"</code> pairs separated by spaces, no commas between pairs. <code>go vet ./...</code> catches malformed tags.</p>
+<h3 data-number="15.1.2" id="streaming-with-encoder-and-decoder"><span class="header-section-number">15.1.2</span> Streaming with <code>Encoder</code> and <code>Decoder</code></h3>
+<p>  <code>Marshal</code> and <code>Unmarshal</code> work on in-memory byte slices. When the JSON is coming from or going to an <code>io.Reader</code> or <code>io.Writer</code> — an HTTP body, a file, a network connection — use <code>json.NewEncoder</code> and <code>json.NewDecoder</code> instead.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewEncoder<span class="op">(</span>w io<span class="op">.</span>Writer<span class="op">)</span> <span class="op">*</span>Encoder  <span class="co">// write JSON to w</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewDecoder<span class="op">(</span>r io<span class="op">.</span>Reader<span class="op">)</span> <span class="op">*</span>Decoder  <span class="co">// read JSON from r</span></span></code></pre></div>
+<p>Key methods on those types:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>enc <span class="op">*</span>Encoder<span class="op">)</span> Encode<span class="op">(</span>v <span class="dt">any</span><span class="op">)</span> <span class="dt">error</span>      <span class="co">// marshal v and write to w, followed by a newline</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>dec <span class="op">*</span>Decoder<span class="op">)</span> Decode<span class="op">(</span>v <span class="dt">any</span><span class="op">)</span> <span class="dt">error</span>      <span class="co">// read one JSON value from r and unmarshal into v</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>dec <span class="op">*</span>Decoder<span class="op">)</span> More<span class="op">()</span> <span class="dt">bool</span>              <span class="co">// true if another value remains in the stream</span></span></code></pre></div>
+<p>Encoding directly to an <code>http.ResponseWriter</code>:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> songHandler<span class="op">(</span>w http<span class="op">.</span>ResponseWriter<span class="op">,</span> r <span class="op">*</span>http<span class="op">.</span>Request<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    s <span class="op">:=</span> Song<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;I Wish You Roses&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Kali Uchis&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">90</span><span class="op">}</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    w<span class="op">.</span>Header<span class="op">().</span>Set<span class="op">(</span><span class="st">&quot;Content-Type&quot;</span><span class="op">,</span> <span class="st">&quot;application/json&quot;</span><span class="op">)</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    json<span class="op">.</span>NewEncoder<span class="op">(</span>w<span class="op">).</span>Encode<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Decoding a stream of newline-delimited JSON records:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>dec <span class="op">:=</span> json<span class="op">.</span>NewDecoder<span class="op">(</span>r<span class="op">.</span>Body<span class="op">)</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> dec<span class="op">.</span>More<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> s Song</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">:=</span> dec<span class="op">.</span>Decode<span class="op">(&amp;</span>s<span class="op">);</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">break</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>s<span class="op">.</span>Title<span class="op">)</span></span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Prefer streaming <code>Encoder</code>/<code>Decoder</code> over <code>Marshal</code>/<code>Unmarshal</code> when working with <code>io.Reader</code>/<code>io.Writer</code>. Streaming avoids allocating the entire JSON payload as a byte slice, which matters for large payloads.</p>
+</div></div>
+<h2 data-number="15.2" id="building-an-http-server"><span class="header-section-number">15.2</span> Building an HTTP Server</h2>
+<p>   Chapter 8 introduced <code>http.HandlerFunc</code> as an example of the strategy pattern. Here is the full picture.</p>
+<p>The foundation of Go’s HTTP server is the <code>http.Handler</code> interface:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Handler <span class="kw">interface</span> <span class="op">{</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    ServeHTTP<span class="op">(</span>ResponseWriter<span class="op">,</span> <span class="op">*</span>Request<span class="op">)</span>  <span class="co">// handles one HTTP request</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>http.HandlerFunc</code> is a function type that implements <code>Handler</code> by calling itself (Chapter 8). The convenience wrapper <code>http.HandleFunc</code> registers a plain function with the default mux:</p>
+<div class="sourceCode" id="cb10"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> HandleFunc<span class="op">(</span>pattern <span class="dt">string</span><span class="op">,</span> handler <span class="kw">func</span><span class="op">(</span>ResponseWriter<span class="op">,</span> <span class="op">*</span>Request<span class="op">))</span>  <span class="co">// register handler for pattern</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> ListenAndServe<span class="op">(</span>addr <span class="dt">string</span><span class="op">,</span> handler Handler<span class="op">)</span> <span class="dt">error</span>                  <span class="co">// start the server; handler=nil uses DefaultServeMux</span></span></code></pre></div>
+<p>A minimal server:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;net/http&quot;</span></span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> helloHandler<span class="op">(</span>w http<span class="op">.</span>ResponseWriter<span class="op">,</span> r <span class="op">*</span>http<span class="op">.</span>Request<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Fprintf<span class="op">(</span>w<span class="op">,</span> <span class="st">&quot;Hola!</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">)</span></span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>    http<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;/hello&quot;</span><span class="op">,</span> helloHandler<span class="op">)</span></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>    http<span class="op">.</span>ListenAndServe<span class="op">(</span><span class="st">&quot;:8080&quot;</span><span class="op">,</span> <span class="ot">nil</span><span class="op">)</span></span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>http.ListenAndServe</code> blocks the calling goroutine forever (or until the server fails). If you want to do other work in <code>main</code>, launch the server in a goroutine: <code>go http.ListenAndServe(":8080", nil)</code>. Check the returned <code>error</code> in production code — a common pattern is <code>log.Fatal(http.ListenAndServe(":8080", nil))</code>.</p>
+</div></div>
+<h3 data-number="15.2.1" id="go-1.22-servemux-method-routing-and-wildcards"><span class="header-section-number">15.2.1</span> Go 1.22 <code>ServeMux</code> — Method Routing and Wildcards</h3>
+<p>   Before Go 1.22, <code>http.ServeMux</code> matched only on path prefixes and required external routers (Chi, Gorilla Mux, etc.) for method or wildcard routing. Go 1.22 upgraded the built-in mux significantly.</p>
+<p><strong>Method routing</strong> — prefix the pattern with an HTTP method and a space:</p>
+<div class="sourceCode" id="cb12"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>mux <span class="op">:=</span> http<span class="op">.</span>NewServeMux<span class="op">()</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /songs/&quot;</span><span class="op">,</span> listSongs<span class="op">)</span>    <span class="co">// only GET requests</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;POST /songs/&quot;</span><span class="op">,</span> createSong<span class="op">)</span>  <span class="co">// only POST requests</span></span></code></pre></div>
+<p><strong>Path wildcards</strong> — <code>{name}</code> captures a path segment, <code>{name...}</code> captures the rest:</p>
+<div class="sourceCode" id="cb13"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /songs/{id}/&quot;</span><span class="op">,</span> getSong<span class="op">)</span>  <span class="co">// /songs/42/ --- id = &quot;42&quot;</span></span></code></pre></div>
+<p>Retrieve the captured value with <code>r.PathValue</code>:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> getSong<span class="op">(</span>w http<span class="op">.</span>ResponseWriter<span class="op">,</span> r <span class="op">*</span>http<span class="op">.</span>Request<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    id <span class="op">:=</span> r<span class="op">.</span>PathValue<span class="op">(</span><span class="st">&quot;id&quot;</span><span class="op">)</span>                        <span class="co">// &quot;42&quot;</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Fprintf<span class="op">(</span>w<span class="op">,</span> <span class="st">&quot;fetching song %s</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> id<span class="op">)</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>A complete example wiring up a small songs API:</p>
+<div class="sourceCode" id="cb15"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;encoding/json&quot;</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;net/http&quot;</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Song <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    ID     <span class="dt">string</span> <span class="st">`json:&quot;id&quot;`</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span> <span class="st">`json:&quot;title&quot;`</span></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span> <span class="st">`json:&quot;artist&quot;`</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a><span class="kw">var</span> catalog <span class="op">=</span> <span class="kw">map</span><span class="op">[</span><span class="dt">string</span><span class="op">]</span>Song<span class="op">{</span></span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;1&quot;</span><span class="op">:</span> <span class="op">{</span>ID<span class="op">:</span> <span class="st">&quot;1&quot;</span><span class="op">,</span> Title<span class="op">:</span> <span class="st">&quot;Todo De Ti&quot;</span><span class="op">,</span>      Artist<span class="op">:</span> <span class="st">&quot;Rauw Alejandro&quot;</span><span class="op">},</span></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;2&quot;</span><span class="op">:</span> <span class="op">{</span>ID<span class="op">:</span> <span class="st">&quot;2&quot;</span><span class="op">,</span> Title<span class="op">:</span> <span class="st">&quot;I Wish You Roses&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Kali Uchis&quot;</span><span class="op">},</span></span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> getSong<span class="op">(</span>w http<span class="op">.</span>ResponseWriter<span class="op">,</span> r <span class="op">*</span>http<span class="op">.</span>Request<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>    id <span class="op">:=</span> r<span class="op">.</span>PathValue<span class="op">(</span><span class="st">&quot;id&quot;</span><span class="op">)</span></span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>    song<span class="op">,</span> ok <span class="op">:=</span> catalog<span class="op">[</span>id<span class="op">]</span></span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="op">!</span>ok <span class="op">{</span></span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>        http<span class="op">.</span>Error<span class="op">(</span>w<span class="op">,</span> <span class="st">&quot;not found&quot;</span><span class="op">,</span> http<span class="op">.</span>StatusNotFound<span class="op">)</span></span>
+<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb15-26"><a href="#cb15-26" aria-hidden="true" tabindex="-1"></a>    w<span class="op">.</span>Header<span class="op">().</span>Set<span class="op">(</span><span class="st">&quot;Content-Type&quot;</span><span class="op">,</span> <span class="st">&quot;application/json&quot;</span><span class="op">)</span></span>
+<span id="cb15-27"><a href="#cb15-27" aria-hidden="true" tabindex="-1"></a>    json<span class="op">.</span>NewEncoder<span class="op">(</span>w<span class="op">).</span>Encode<span class="op">(</span>song<span class="op">)</span></span>
+<span id="cb15-28"><a href="#cb15-28" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb15-29"><a href="#cb15-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-30"><a href="#cb15-30" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> listSongs<span class="op">(</span>w http<span class="op">.</span>ResponseWriter<span class="op">,</span> r <span class="op">*</span>http<span class="op">.</span>Request<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb15-31"><a href="#cb15-31" aria-hidden="true" tabindex="-1"></a>    songs <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span>Song<span class="op">,</span> <span class="dv">0</span><span class="op">,</span> <span class="bu">len</span><span class="op">(</span>catalog<span class="op">))</span></span>
+<span id="cb15-32"><a href="#cb15-32" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> _<span class="op">,</span> s <span class="op">:=</span> <span class="kw">range</span> catalog <span class="op">{</span></span>
+<span id="cb15-33"><a href="#cb15-33" aria-hidden="true" tabindex="-1"></a>        songs <span class="op">=</span> <span class="bu">append</span><span class="op">(</span>songs<span class="op">,</span> s<span class="op">)</span></span>
+<span id="cb15-34"><a href="#cb15-34" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb15-35"><a href="#cb15-35" aria-hidden="true" tabindex="-1"></a>    w<span class="op">.</span>Header<span class="op">().</span>Set<span class="op">(</span><span class="st">&quot;Content-Type&quot;</span><span class="op">,</span> <span class="st">&quot;application/json&quot;</span><span class="op">)</span></span>
+<span id="cb15-36"><a href="#cb15-36" aria-hidden="true" tabindex="-1"></a>    json<span class="op">.</span>NewEncoder<span class="op">(</span>w<span class="op">).</span>Encode<span class="op">(</span>songs<span class="op">)</span></span>
+<span id="cb15-37"><a href="#cb15-37" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb15-38"><a href="#cb15-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-39"><a href="#cb15-39" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb15-40"><a href="#cb15-40" aria-hidden="true" tabindex="-1"></a>    mux <span class="op">:=</span> http<span class="op">.</span>NewServeMux<span class="op">()</span></span>
+<span id="cb15-41"><a href="#cb15-41" aria-hidden="true" tabindex="-1"></a>    mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /songs/&quot;</span><span class="op">,</span>      listSongs<span class="op">)</span></span>
+<span id="cb15-42"><a href="#cb15-42" aria-hidden="true" tabindex="-1"></a>    mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /songs/{id}/&quot;</span><span class="op">,</span> getSong<span class="op">)</span></span>
+<span id="cb15-43"><a href="#cb15-43" aria-hidden="true" tabindex="-1"></a>    http<span class="op">.</span>ListenAndServe<span class="op">(</span><span class="st">&quot;:8080&quot;</span><span class="op">,</span> mux<span class="op">)</span></span>
+<span id="cb15-44"><a href="#cb15-44" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Notice that <code>getSong</code> calls <code>http.Error</code> and immediately returns when the song is not found, so the success path only runs when the lookup succeeds. <strong><em>[error-first-return-early]</em></strong></p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> A trailing slash in the pattern makes it a subtree match: <code>GET /songs/</code> matches <code>/songs/</code>, <code>/songs/anything</code>, and <code>/songs/42/</code>. Without the trailing slash, <code>GET /songs</code> matches only the exact path <code>/songs</code>. This is the same behavior as pre-1.22 <code>ServeMux</code>.</p>
+</div></div>
+<p>Compared to Java: this is the rough equivalent of Spring MVC’s <code>@GetMapping("/songs/{id}")</code> or JAX-RS’s <code>@GET @Path("/songs/{id}")</code>, but built into the standard library with no framework dependency.</p>
+<h3 data-number="15.2.2" id="middleware-chaining"><span class="header-section-number">15.2.2</span> Middleware Chaining</h3>
+<p>  Middleware in Go is a function that takes an <code>http.Handler</code> and returns an <code>http.Handler</code>. It wraps the inner handler with cross-cutting logic — logging, authentication, metrics, CORS — without modifying the handler itself.</p>
+<p>The pattern:</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> logging<span class="op">(</span>next http<span class="op">.</span>Handler<span class="op">)</span> http<span class="op">.</span>Handler <span class="op">{</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> http<span class="op">.</span>HandlerFunc<span class="op">(</span><span class="kw">func</span><span class="op">(</span>w http<span class="op">.</span>ResponseWriter<span class="op">,</span> r <span class="op">*</span>http<span class="op">.</span>Request<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>        log<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;%s %s&quot;</span><span class="op">,</span> r<span class="op">.</span>Method<span class="op">,</span> r<span class="op">.</span>URL<span class="op">.</span>Path<span class="op">)</span>  <span class="co">// before</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>        next<span class="op">.</span>ServeHTTP<span class="op">(</span>w<span class="op">,</span> r<span class="op">)</span>                        <span class="co">// call the inner handler</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    <span class="op">})</span></span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Stack middleware by composing the wrappers:</p>
+<div class="sourceCode" id="cb17"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    mux <span class="op">:=</span> http<span class="op">.</span>NewServeMux<span class="op">()</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /songs/{id}/&quot;</span><span class="op">,</span> getSong<span class="op">)</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>    handler <span class="op">:=</span> logging<span class="op">(</span>mux<span class="op">)</span>   <span class="co">// outermost middleware runs first</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>    http<span class="op">.</span>ListenAndServe<span class="op">(</span><span class="st">&quot;:8080&quot;</span><span class="op">,</span> handler<span class="op">)</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Add more layers by nesting calls:</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>handler <span class="op">:=</span> logging<span class="op">(</span>auth<span class="op">(</span>mux<span class="op">))</span>  <span class="co">// logging wraps auth wraps mux</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> The middleware pattern is the Go equivalent of Java’s servlet filters or Spring’s <code>HandlerInterceptor</code>. Because <code>http.Handler</code> is a simple interface with one method, any function that wraps it composes cleanly — no framework annotation or XML configuration required.</p>
+</div></div>
+<p>You can also write a <code>chain</code> helper to apply a list of middleware in order:</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> chain<span class="op">(</span>h http<span class="op">.</span>Handler<span class="op">,</span> middleware <span class="op">...</span><span class="kw">func</span><span class="op">(</span>http<span class="op">.</span>Handler<span class="op">)</span> http<span class="op">.</span>Handler<span class="op">)</span> http<span class="op">.</span>Handler <span class="op">{</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="op">:=</span> <span class="bu">len</span><span class="op">(</span>middleware<span class="op">)</span> <span class="op">-</span> <span class="dv">1</span><span class="op">;</span> i <span class="op">&gt;=</span> <span class="dv">0</span><span class="op">;</span> i<span class="op">--</span> <span class="op">{</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>        h <span class="op">=</span> middleware<span class="op">[</span>i<span class="op">](</span>h<span class="op">)</span>       <span class="co">// apply in reverse so the first listed runs first</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> h</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>handler <span class="op">:=</span> chain<span class="op">(</span>mux<span class="op">,</span> logging<span class="op">,</span> auth<span class="op">,</span> metrics<span class="op">)</span></span></code></pre></div>
+<h2 data-number="15.3" id="live-profiling-with-nethttppprof"><span class="header-section-number">15.3</span> Live Profiling with <code>net/http/pprof</code></h2>
+<p>  Go’s runtime can expose profiling data — CPU usage, heap allocations, goroutine stacks, mutex contention — as HTTP endpoints. All it takes is a blank import.</p>
+<div class="sourceCode" id="cb20"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> _ <span class="st">&quot;net/http/pprof&quot;</span>  <span class="co">// register pprof handlers with DefaultServeMux</span></span></code></pre></div>
+<p>The side-effect import registers several routes under <code>/debug/pprof/</code> on <code>http.DefaultServeMux</code>. If your server already calls <code>http.ListenAndServe(addr, nil)</code> (which uses <code>DefaultServeMux</code>), those routes are live the moment the process starts — no code changes beyond the import.</p>
+<p>If you are using a custom <code>*http.ServeMux</code>, register the handlers explicitly:</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;net/http&quot;</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;net/http/pprof&quot;</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>mux <span class="op">:=</span> http<span class="op">.</span>NewServeMux<span class="op">()</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /songs/{id}/&quot;</span><span class="op">,</span> getSong<span class="op">)</span></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a><span class="co">// register pprof endpoints on the same mux</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /debug/pprof/&quot;</span><span class="op">,</span>        pprof<span class="op">.</span>Index<span class="op">)</span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /debug/pprof/cmdline&quot;</span><span class="op">,</span> pprof<span class="op">.</span>Cmdline<span class="op">)</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /debug/pprof/profile&quot;</span><span class="op">,</span> pprof<span class="op">.</span>Profile<span class="op">)</span></span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /debug/pprof/symbol&quot;</span><span class="op">,</span>  pprof<span class="op">.</span>Symbol<span class="op">)</span></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /debug/pprof/trace&quot;</span><span class="op">,</span>   pprof<span class="op">.</span>Trace<span class="op">)</span></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>http<span class="op">.</span>ListenAndServe<span class="op">(</span><span class="st">&quot;:8080&quot;</span><span class="op">,</span> mux<span class="op">)</span></span></code></pre></div>
+<p>The key endpoints under <code>/debug/pprof/</code>:</p>
+<table>
+<colgroup>
+<col style="width: 28%" />
+<col style="width: 71%" />
+</colgroup>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>What it shows</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/</code></td>
+<td>index of available profiles</td>
+</tr>
+<tr>
+<td><code>heap</code></td>
+<td>live heap allocations</td>
+</tr>
+<tr>
+<td><code>goroutine</code></td>
+<td>stack trace of every live goroutine</td>
+</tr>
+<tr>
+<td><code>allocs</code></td>
+<td>all past allocations, including freed ones</td>
+</tr>
+<tr>
+<td><code>mutex</code></td>
+<td>stack traces of goroutines holding a mutex</td>
+</tr>
+<tr>
+<td><code>block</code></td>
+<td>stack traces of goroutines blocked on channels</td>
+</tr>
+<tr>
+<td><code>profile?seconds=N</code></td>
+<td>CPU profile for N seconds (default 30)</td>
+</tr>
+</tbody>
+</table>
+<p>Once the server is running, collect and view a profile with <code>go tool pprof</code>:</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># collect a 30-second CPU profile and open the interactive browser UI</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> tool pprof <span class="at">-http</span><span class="op">=</span>:6060 http://localhost:8080/debug/pprof/profile<span class="pp">?</span>seconds=30</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="co"># inspect the live heap</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="ex">go</span> tool pprof <span class="at">-http</span><span class="op">=</span>:6060 http://localhost:8080/debug/pprof/heap</span></code></pre></div>
+<p><code>go tool pprof -http</code> opens a flame graph and call-graph view in your browser. The flame graph makes it easy to see which functions consume the most CPU or allocate the most memory.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> Never expose <code>/debug/pprof/</code> on a public-facing port. A CPU profile request ties up a real OS thread for its full duration, making it trivial for an attacker to saturate the server. The standard pattern is to run pprof on a separate, internal-only port:</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co">// internal admin server on a non-public port</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="cf">go</span> <span class="kw">func</span><span class="op">()</span> <span class="op">{</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Println<span class="op">(</span>http<span class="op">.</span>ListenAndServe<span class="op">(</span><span class="st">&quot;localhost:6060&quot;</span><span class="op">,</span> <span class="ot">nil</span><span class="op">))</span>  <span class="co">// DefaultServeMux has pprof routes</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="op">}()</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="co">// public server with a custom mux</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>http<span class="op">.</span>ListenAndServe<span class="op">(</span><span class="st">&quot;:8080&quot;</span><span class="op">,</span> mux<span class="op">)</span></span></code></pre></div>
+<p>In a container environment, expose port 6060 only within the cluster network.</p>
+</div></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> In Java, runtime profiling typically requires attaching an external tool (VisualVM, JProfiler, YourKit) via the JVM attach mechanism or JMX. <code>net/http/pprof</code> is the Go equivalent built into the process — no agent, no attach, no separate daemon. The profile data is available over plain HTTP, which means you can script it with <code>curl</code> or integrate it into any monitoring pipeline.</p>
+</div></div>
+<h2 data-number="15.4" id="making-http-requests"><span class="header-section-number">15.4</span> Making HTTP Requests</h2>
+<p>   The <code>net/http</code> package is also the HTTP client. The simplest way to make a GET request is <code>http.Get</code>:</p>
+<div class="sourceCode" id="cb24"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Get<span class="op">(</span>url <span class="dt">string</span><span class="op">)</span> <span class="op">(</span>resp <span class="op">*</span>Response<span class="op">,</span> err <span class="dt">error</span><span class="op">)</span>  <span class="co">// make a GET request; caller must close resp.Body</span></span></code></pre></div>
+<div class="sourceCode" id="cb25"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>resp<span class="op">,</span> err <span class="op">:=</span> http<span class="op">.</span>Get<span class="op">(</span><span class="st">&quot;https://api.example.com/songs/1&quot;</span><span class="op">)</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> resp<span class="op">.</span>Body<span class="op">.</span>Close<span class="op">()</span>  <span class="co">// MUST close the body</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>body<span class="op">,</span> err <span class="op">:=</span> io<span class="op">.</span>ReadAll<span class="op">(</span>resp<span class="op">.</span>Body<span class="op">)</span></span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="dt">string</span><span class="op">(</span>body<span class="op">))</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> You <strong>must</strong> close <code>resp.Body</code>, even if you do not read it. Failing to close the body leaks the underlying TCP connection and eventually exhausts the connection pool. <code>defer resp.Body.Close()</code> immediately after checking <code>err</code> is the standard idiom.</p>
+</div></div>
+<p>For anything beyond a simple GET — custom headers, timeouts, POST bodies — use <code>http.Client</code> and <code>http.NewRequest</code>:</p>
+<div class="sourceCode" id="cb26"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co">// http.Client --- reusable, configurable; zero value uses sensible defaults</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Client <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    Transport     RoundTripper  <span class="co">// how to make a single HTTP transaction</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>    CheckRedirect <span class="kw">func</span><span class="op">(</span>req <span class="op">*</span>Request<span class="op">,</span> via <span class="op">[]*</span>Request<span class="op">)</span> <span class="dt">error</span>  <span class="co">// redirect policy</span></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>    Jar           CookieJar     <span class="co">// cookie storage</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>    Timeout       time<span class="op">.</span>Duration <span class="co">// zero means no timeout</span></span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewRequest<span class="op">(</span>method<span class="op">,</span> url <span class="dt">string</span><span class="op">,</span> body io<span class="op">.</span>Reader<span class="op">)</span> <span class="op">(*</span>Request<span class="op">,</span> <span class="dt">error</span><span class="op">)</span>  <span class="co">// build a request</span></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>c <span class="op">*</span>Client<span class="op">)</span> Do<span class="op">(</span>req <span class="op">*</span>Request<span class="op">)</span> <span class="op">(*</span>Response<span class="op">,</span> <span class="dt">error</span><span class="op">)</span>                   <span class="co">// execute the request</span></span></code></pre></div>
+<p>A POST with a JSON body and a timeout:</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>client <span class="op">:=</span> <span class="op">&amp;</span>http<span class="op">.</span>Client<span class="op">{</span>Timeout<span class="op">:</span> <span class="dv">10</span> <span class="op">*</span> time<span class="op">.</span>Second<span class="op">}</span></span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>song <span class="op">:=</span> Song<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;Lokera&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Rauw Alejandro&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">99</span><span class="op">}</span></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>buf <span class="op">:=</span> <span class="bu">new</span><span class="op">(</span>bytes<span class="op">.</span>Buffer<span class="op">)</span></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>json<span class="op">.</span>NewEncoder<span class="op">(</span>buf<span class="op">).</span>Encode<span class="op">(</span>song<span class="op">)</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>req<span class="op">,</span> err <span class="op">:=</span> http<span class="op">.</span>NewRequest<span class="op">(</span><span class="st">&quot;POST&quot;</span><span class="op">,</span> <span class="st">&quot;https://api.example.com/songs/&quot;</span><span class="op">,</span> buf<span class="op">)</span></span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>req<span class="op">.</span>Header<span class="op">.</span>Set<span class="op">(</span><span class="st">&quot;Content-Type&quot;</span><span class="op">,</span> <span class="st">&quot;application/json&quot;</span><span class="op">)</span></span>
+<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>resp<span class="op">,</span> err <span class="op">:=</span> client<span class="op">.</span>Do<span class="op">(</span>req<span class="op">)</span></span>
+<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> resp<span class="op">.</span>Body<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span>resp<span class="op">.</span>StatusCode<span class="op">)</span>  <span class="co">// e.g. 201</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> Create one <code>http.Client</code> and reuse it across requests. <code>http.Client</code> manages a connection pool (<code>Transport</code>) internally. Creating a new client per request bypasses pooling and creates a new pool each time, which is wasteful and slower. The package-level <code>http.Get</code> and <code>http.Post</code> helpers use a shared default client (<code>http.DefaultClient</code>).</p>
+</div></div>
+<p>In Java you would use <code>HttpClient</code> (Java 11+), <code>RestTemplate</code>, or OkHttp. Go’s <code>http.Client</code> fills the same role.</p>
+<h2 data-number="15.5" id="encoding-xml"><span class="header-section-number">15.5</span> Encoding XML</h2>
+<p>   <code>encoding/xml</code> works exactly like <code>encoding/json</code> — same <code>Marshal</code>/<code>Unmarshal</code> functions, same streaming <code>Encoder</code>/<code>Decoder</code>, same struct tag mechanism. The tag key is <code>xml</code> instead of <code>json</code>.</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Marshal<span class="op">(</span>v <span class="dt">any</span><span class="op">)</span> <span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span>              <span class="co">// encode v as XML</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Unmarshal<span class="op">(</span>data <span class="op">[]</span><span class="dt">byte</span><span class="op">,</span> v <span class="dt">any</span><span class="op">)</span> <span class="dt">error</span>         <span class="co">// decode XML into v</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewEncoder<span class="op">(</span>w io<span class="op">.</span>Writer<span class="op">)</span> <span class="op">*</span>Encoder            <span class="co">// streaming XML encoder</span></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewDecoder<span class="op">(</span>r io<span class="op">.</span>Reader<span class="op">)</span> <span class="op">*</span>Decoder            <span class="co">// streaming XML decoder</span></span></code></pre></div>
+<div class="sourceCode" id="cb29"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="st">&quot;encoding/xml&quot;</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Song <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>    XMLName xml<span class="op">.</span>Name <span class="st">`xml:&quot;song&quot;`</span>           <span class="co">// set the element name</span></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>    Title   <span class="dt">string</span>   <span class="st">`xml:&quot;title&quot;`</span></span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>    Artist  <span class="dt">string</span>   <span class="st">`xml:&quot;artist&quot;`</span></span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>    BPM     <span class="dt">int</span>      <span class="st">`xml:&quot;bpm,omitempty&quot;`</span></span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>s <span class="op">:=</span> Song<span class="op">{</span>Title<span class="op">:</span> <span class="st">&quot;telepatía&quot;</span><span class="op">,</span> Artist<span class="op">:</span> <span class="st">&quot;Kali Uchis&quot;</span><span class="op">,</span> BPM<span class="op">:</span> <span class="dv">90</span><span class="op">}</span></span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>data<span class="op">,</span> _ <span class="op">:=</span> xml<span class="op">.</span>Marshal<span class="op">(</span>s<span class="op">)</span></span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Println<span class="op">(</span><span class="dt">string</span><span class="op">(</span>data<span class="op">))</span></span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a><span class="co">// &lt;song&gt;&lt;title&gt;telepatía&lt;/title&gt;&lt;artist&gt;Kali Uchis&lt;/artist&gt;&lt;bpm&gt;90&lt;/bpm&gt;&lt;/song&gt;</span></span></code></pre></div>
+<p>The <code>xml.Name</code> field with tag <code>`xml:"song"`</code> sets the root element name. Without it, <code>encoding/xml</code> uses the struct type name, which is often not what you want.</p>
+<p>XML tag options beyond the field name:</p>
+<ul>
+<li><code>xml:"name,attr"</code> — encode the field as an XML attribute rather than a child element.</li>
+<li><code>xml:",chardata"</code> — encode the field as the character data content of the parent element.</li>
+<li><code>xml:",omitempty"</code> — same as JSON: omit when zero value.</li>
+<li><code>xml:"-"</code> — always skip.</li>
+</ul>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> If your service needs both JSON and XML representations of the same struct, define both tag keys on each field:</p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Song <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>    Title  <span class="dt">string</span> <span class="st">`json:&quot;title&quot;  xml:&quot;title&quot;`</span></span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>    Artist <span class="dt">string</span> <span class="st">`json:&quot;artist&quot; xml:&quot;artist&quot;`</span></span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>Both <code>encoding/json</code> and <code>encoding/xml</code> read only their own tag key and ignore the other.</p>
+</div></div>
+<h2 data-number="15.6" id="raw-networking-with-net"><span class="header-section-number">15.6</span> Raw Networking with <code>net</code></h2>
+<p>   HTTP sits on top of TCP. The <code>net</code> package gives you direct access to TCP and UDP connections — useful for non-HTTP protocols, custom servers, or low-level networking tools.</p>
+<p>The two fundamental functions are:</p>
+<div class="sourceCode" id="cb31"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Dial<span class="op">(</span>network<span class="op">,</span> address <span class="dt">string</span><span class="op">)</span> <span class="op">(</span>Conn<span class="op">,</span> <span class="dt">error</span><span class="op">)</span>   <span class="co">// connect to a server</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Listen<span class="op">(</span>network<span class="op">,</span> address <span class="dt">string</span><span class="op">)</span> <span class="op">(</span>Listener<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="co">// listen for incoming connections</span></span></code></pre></div>
+<p><code>network</code> is <code>"tcp"</code>, <code>"tcp4"</code>, <code>"tcp6"</code>, <code>"udp"</code>, <code>"udp4"</code>, or <code>"udp6"</code>. <code>address</code> is <code>"host:port"</code> for TCP/UDP, e.g. <code>"localhost:8080"</code> or <code>":8080"</code> (all interfaces).</p>
+<p><code>net.Conn</code> implements both <code>io.Reader</code> and <code>io.Writer</code>, so you can use any <code>io</code> utility on it:</p>
+<div class="sourceCode" id="cb32"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co">// key methods on net.Conn</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>c Conn<span class="op">)</span> Read<span class="op">(</span>b <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span>              <span class="co">// receive bytes</span></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>c Conn<span class="op">)</span> Write<span class="op">(</span>b <span class="op">[]</span><span class="dt">byte</span><span class="op">)</span> <span class="op">(</span>n <span class="dt">int</span><span class="op">,</span> err <span class="dt">error</span><span class="op">)</span>             <span class="co">// send bytes</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>c Conn<span class="op">)</span> Close<span class="op">()</span> <span class="dt">error</span>                                  <span class="co">// close the connection</span></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>c Conn<span class="op">)</span> SetDeadline<span class="op">(</span>t time<span class="op">.</span>Time<span class="op">)</span> <span class="dt">error</span>                 <span class="co">// set read+write deadline</span></span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>c Conn<span class="op">)</span> SetReadDeadline<span class="op">(</span>t time<span class="op">.</span>Time<span class="op">)</span> <span class="dt">error</span>             <span class="co">// set read deadline only</span></span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> <span class="op">(</span>c Conn<span class="op">)</span> SetWriteDeadline<span class="op">(</span>t time<span class="op">.</span>Time<span class="op">)</span> <span class="dt">error</span>            <span class="co">// set write deadline only</span></span></code></pre></div>
+<p>A simple TCP echo client:</p>
+<div class="sourceCode" id="cb33"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;net&quot;</span></span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a>    conn<span class="op">,</span> err <span class="op">:=</span> net<span class="op">.</span>Dial<span class="op">(</span><span class="st">&quot;tcp&quot;</span><span class="op">,</span> <span class="st">&quot;localhost:9000&quot;</span><span class="op">)</span></span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb33-11"><a href="#cb33-11" aria-hidden="true" tabindex="-1"></a>        <span class="bu">panic</span><span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb33-12"><a href="#cb33-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb33-13"><a href="#cb33-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> conn<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb33-14"><a href="#cb33-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-15"><a href="#cb33-15" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Fprintf<span class="op">(</span>conn<span class="op">,</span> <span class="st">&quot;hola</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">)</span>     <span class="co">// send</span></span>
+<span id="cb33-16"><a href="#cb33-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb33-17"><a href="#cb33-17" aria-hidden="true" tabindex="-1"></a>    buf <span class="op">:=</span> <span class="bu">make</span><span class="op">([]</span><span class="dt">byte</span><span class="op">,</span> <span class="dv">1024</span><span class="op">)</span></span>
+<span id="cb33-18"><a href="#cb33-18" aria-hidden="true" tabindex="-1"></a>    n<span class="op">,</span> _ <span class="op">:=</span> conn<span class="op">.</span>Read<span class="op">(</span>buf<span class="op">)</span>          <span class="co">// receive</span></span>
+<span id="cb33-19"><a href="#cb33-19" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;echo: %s&quot;</span><span class="op">,</span> buf<span class="op">[:</span>n<span class="op">])</span></span>
+<span id="cb33-20"><a href="#cb33-20" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>A minimal TCP echo server:</p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;io&quot;</span></span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;net&quot;</span></span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a>    ln<span class="op">,</span> err <span class="op">:=</span> net<span class="op">.</span>Listen<span class="op">(</span><span class="st">&quot;tcp&quot;</span><span class="op">,</span> <span class="st">&quot;:9000&quot;</span><span class="op">)</span></span>
+<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a>        <span class="bu">panic</span><span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb34-12"><a href="#cb34-12" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb34-13"><a href="#cb34-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">defer</span> ln<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb34-14"><a href="#cb34-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-15"><a href="#cb34-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb34-16"><a href="#cb34-16" aria-hidden="true" tabindex="-1"></a>        conn<span class="op">,</span> err <span class="op">:=</span> ln<span class="op">.</span>Accept<span class="op">()</span>    <span class="co">// block until a client connects</span></span>
+<span id="cb34-17"><a href="#cb34-17" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb34-18"><a href="#cb34-18" aria-hidden="true" tabindex="-1"></a>            <span class="cf">break</span></span>
+<span id="cb34-19"><a href="#cb34-19" aria-hidden="true" tabindex="-1"></a>        <span class="op">}</span></span>
+<span id="cb34-20"><a href="#cb34-20" aria-hidden="true" tabindex="-1"></a>        <span class="cf">go</span> io<span class="op">.</span>Copy<span class="op">(</span>conn<span class="op">,</span> conn<span class="op">)</span>      <span class="co">// echo: copy reads back to writes</span></span>
+<span id="cb34-21"><a href="#cb34-21" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb34-22"><a href="#cb34-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p><code>ln.Accept()</code> blocks until a new connection arrives and returns a <code>net.Conn</code> for that connection. Each connection is handled in its own goroutine so the server can accept the next connection immediately.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/wut-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Wut:</strong> <code>io.Copy(conn, conn)</code> works because <code>net.Conn</code> implements both <code>io.Reader</code> and <code>io.Writer</code>. <code>io.Copy(dst, src)</code> reads from <code>src</code> and writes to <code>dst</code> until EOF or an error. Here <code>conn</code> is both — every byte received is immediately written back.</p>
+</div></div>
+<p>For UDP, the workflow is the same but with <code>net.Dial("udp", ...)</code> and <code>net.Listen("udp", ...)</code>. UDP has no connection setup, so <code>net.ListenPacket</code> and <code>net.PacketConn</code> are sometimes used instead for servers that need to track multiple clients by address.</p>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> In Java, raw TCP/UDP programming uses <code>java.net.Socket</code>, <code>ServerSocket</code>, <code>DatagramSocket</code>, and <code>DatagramPacket</code>. Go’s <code>net.Conn</code> is a simpler unified abstraction: it is an <code>io.Reader</code> and <code>io.Writer</code>, so you can layer a <code>bufio.Scanner</code> or a <code>json.Decoder</code> directly on top of it without any adapter code.</p>
+</div></div>
+<h2 data-number="15.7" id="tls-with-cryptotls"><span class="header-section-number">15.7</span> TLS with <code>crypto/tls</code></h2>
+<p>  The <code>crypto/tls</code> package provides TLS 1.2 and 1.3 support for both servers and clients. For HTTP, the standard library handles TLS transparently — you mostly just point it at your certificate files. For raw TCP, <code>crypto/tls</code> wraps a <code>net.Conn</code> into an encrypted connection that still satisfies <code>io.Reader</code> and <code>io.Writer</code>.</p>
+<h3 data-number="15.7.1" id="https-server"><span class="header-section-number">15.7.1</span> HTTPS Server</h3>
+<p> The simplest way to add TLS to an HTTP server is <code>http.ListenAndServeTLS</code>:</p>
+<div class="sourceCode" id="cb35"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> ListenAndServeTLS<span class="op">(</span>addr<span class="op">,</span> certFile<span class="op">,</span> keyFile <span class="dt">string</span><span class="op">,</span> handler Handler<span class="op">)</span> <span class="dt">error</span></span></code></pre></div>
+<div class="sourceCode" id="cb36"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>mux <span class="op">:=</span> http<span class="op">.</span>NewServeMux<span class="op">()</span></span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /songs/&quot;</span><span class="op">,</span> listSongs<span class="op">)</span></span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>http<span class="op">.</span>ListenAndServeTLS<span class="op">(</span><span class="st">&quot;:443&quot;</span><span class="op">,</span> <span class="st">&quot;cert.pem&quot;</span><span class="op">,</span> <span class="st">&quot;key.pem&quot;</span><span class="op">,</span> mux<span class="op">)</span></span></code></pre></div>
+<p>For more control, build a <code>tls.Config</code> and pass it to <code>http.Server</code>:</p>
+<div class="sourceCode" id="cb37"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>cert<span class="op">,</span> err <span class="op">:=</span> tls<span class="op">.</span>LoadX509KeyPair<span class="op">(</span><span class="st">&quot;cert.pem&quot;</span><span class="op">,</span> <span class="st">&quot;key.pem&quot;</span><span class="op">)</span>  <span class="co">// load certificate and private key</span></span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a>srv <span class="op">:=</span> <span class="op">&amp;</span>http<span class="op">.</span>Server<span class="op">{</span></span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a>    Addr<span class="op">:</span>    <span class="st">&quot;:443&quot;</span><span class="op">,</span></span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a>    Handler<span class="op">:</span> mux<span class="op">,</span></span>
+<span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a>    TLSConfig<span class="op">:</span> <span class="op">&amp;</span>tls<span class="op">.</span>Config<span class="op">{</span></span>
+<span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a>        Certificates<span class="op">:</span> <span class="op">[]</span>tls<span class="op">.</span>Certificate<span class="op">{</span>cert<span class="op">},</span>  <span class="co">// one or more certificates</span></span>
+<span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a>        MinVersion<span class="op">:</span>   tls<span class="op">.</span>VersionTLS12<span class="op">,</span>          <span class="co">// reject TLS 1.0 and 1.1</span></span>
+<span id="cb37-11"><a href="#cb37-11" aria-hidden="true" tabindex="-1"></a>    <span class="op">},</span></span>
+<span id="cb37-12"><a href="#cb37-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb37-13"><a href="#cb37-13" aria-hidden="true" tabindex="-1"></a>srv<span class="op">.</span>ListenAndServeTLS<span class="op">(</span><span class="st">&quot;&quot;</span><span class="op">,</span> <span class="st">&quot;&quot;</span><span class="op">)</span>  <span class="co">// cert and key already in TLSConfig; pass empty strings</span></span></code></pre></div>
+<h3 data-number="15.7.2" id="tls-client-configuration"><span class="header-section-number">15.7.2</span> TLS Client Configuration</h3>
+<p>  The default <code>http.Client</code> already validates server certificates against the system trust store — you get HTTPS for free just by using an <code>https://</code> URL. To customize TLS behavior, set <code>TLSClientConfig</code> on <code>http.Transport</code>:</p>
+<div class="sourceCode" id="cb38"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>client <span class="op">:=</span> <span class="op">&amp;</span>http<span class="op">.</span>Client<span class="op">{</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>    Transport<span class="op">:</span> <span class="op">&amp;</span>http<span class="op">.</span>Transport<span class="op">{</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>        TLSClientConfig<span class="op">:</span> <span class="op">&amp;</span>tls<span class="op">.</span>Config<span class="op">{</span></span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>            MinVersion<span class="op">:</span> tls<span class="op">.</span>VersionTLS12<span class="op">,</span>  <span class="co">// require TLS 1.2+</span></span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>        <span class="op">},</span></span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>    <span class="op">},</span></span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<p>To trust a custom certificate authority (common in internal services):</p>
+<div class="sourceCode" id="cb39"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>pool <span class="op">:=</span> x509<span class="op">.</span>NewCertPool<span class="op">()</span></span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>caCert<span class="op">,</span> _ <span class="op">:=</span> os<span class="op">.</span>ReadFile<span class="op">(</span><span class="st">&quot;internal-ca.pem&quot;</span><span class="op">)</span></span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>pool<span class="op">.</span>AppendCertsFromPEM<span class="op">(</span>caCert<span class="op">)</span></span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>client <span class="op">:=</span> <span class="op">&amp;</span>http<span class="op">.</span>Client<span class="op">{</span></span>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a>    Transport<span class="op">:</span> <span class="op">&amp;</span>http<span class="op">.</span>Transport<span class="op">{</span></span>
+<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a>        TLSClientConfig<span class="op">:</span> <span class="op">&amp;</span>tls<span class="op">.</span>Config<span class="op">{</span></span>
+<span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a>            RootCAs<span class="op">:</span> pool<span class="op">,</span>  <span class="co">// trust this CA in addition to the system store</span></span>
+<span id="cb39-9"><a href="#cb39-9" aria-hidden="true" tabindex="-1"></a>        <span class="op">},</span></span>
+<span id="cb39-10"><a href="#cb39-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">},</span></span>
+<span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/trap-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Trap:</strong> <code>tls.Config{InsecureSkipVerify: true}</code> disables all certificate validation. It is occasionally used in local development against self-signed certs, but it silently makes man-in-the-middle attacks undetectable. Never use it in production code, and never commit it to a shared repository.</p>
+</div></div>
+<h3 data-number="15.7.3" id="raw-tls-connections"><span class="header-section-number">15.7.3</span> Raw TLS Connections</h3>
+<p>  <code>crypto/tls</code> mirrors the <code>net</code> package: <code>tls.Dial</code> and <code>tls.Listen</code> replace <code>net.Dial</code> and <code>net.Listen</code> and return a <code>*tls.Conn</code>, which implements <code>net.Conn</code> — and therefore <code>io.Reader</code> and <code>io.Writer</code>.</p>
+<div class="sourceCode" id="cb40"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Dial<span class="op">(</span>network<span class="op">,</span> addr <span class="dt">string</span><span class="op">,</span> config <span class="op">*</span>tls<span class="op">.</span>Config<span class="op">)</span> <span class="op">(*</span>tls<span class="op">.</span>Conn<span class="op">,</span> <span class="dt">error</span><span class="op">)</span>  <span class="co">// TLS client connection</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> Listen<span class="op">(</span>network<span class="op">,</span> laddr <span class="dt">string</span><span class="op">,</span> config <span class="op">*</span>tls<span class="op">.</span>Config<span class="op">)</span> <span class="op">(</span>net<span class="op">.</span>Listener<span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="co">// TLS server listener</span></span></code></pre></div>
+<p>A TLS client connecting to a server:</p>
+<div class="sourceCode" id="cb41"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>conn<span class="op">,</span> err <span class="op">:=</span> tls<span class="op">.</span>Dial<span class="op">(</span><span class="st">&quot;tcp&quot;</span><span class="op">,</span> <span class="st">&quot;api.example.com:443&quot;</span><span class="op">,</span> <span class="op">&amp;</span>tls<span class="op">.</span>Config<span class="op">{</span></span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>    MinVersion<span class="op">:</span> tls<span class="op">.</span>VersionTLS12<span class="op">,</span></span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a><span class="op">})</span></span>
+<span id="cb41-4"><a href="#cb41-4" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb41-5"><a href="#cb41-5" aria-hidden="true" tabindex="-1"></a>    log<span class="op">.</span>Fatal<span class="op">(</span>err<span class="op">)</span></span>
+<span id="cb41-6"><a href="#cb41-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb41-7"><a href="#cb41-7" aria-hidden="true" tabindex="-1"></a><span class="cf">defer</span> conn<span class="op">.</span>Close<span class="op">()</span></span>
+<span id="cb41-8"><a href="#cb41-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb41-9"><a href="#cb41-9" aria-hidden="true" tabindex="-1"></a>fmt<span class="op">.</span>Fprintf<span class="op">(</span>conn<span class="op">,</span> <span class="st">&quot;GET / HTTP/1.0</span><span class="ch">\r\n</span><span class="st">Host: api.example.com</span><span class="ch">\r\n\r\n</span><span class="st">&quot;</span><span class="op">)</span></span>
+<span id="cb41-10"><a href="#cb41-10" aria-hidden="true" tabindex="-1"></a>io<span class="op">.</span>Copy<span class="op">(</span>os<span class="op">.</span>Stdout<span class="op">,</span> conn<span class="op">)</span></span></code></pre></div>
+<p><code>tls.NewListener</code> wraps an existing <code>net.Listener</code> to add TLS to any protocol:</p>
+<div class="sourceCode" id="cb42"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> NewListener<span class="op">(</span>inner net<span class="op">.</span>Listener<span class="op">,</span> config <span class="op">*</span>tls<span class="op">.</span>Config<span class="op">)</span> net<span class="op">.</span>Listener</span></code></pre></div>
+<div class="sourceCode" id="cb43"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>ln<span class="op">,</span> _ <span class="op">:=</span> net<span class="op">.</span>Listen<span class="op">(</span><span class="st">&quot;tcp&quot;</span><span class="op">,</span> <span class="st">&quot;:9443&quot;</span><span class="op">)</span></span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>tlsLn <span class="op">:=</span> tls<span class="op">.</span>NewListener<span class="op">(</span>ln<span class="op">,</span> <span class="op">&amp;</span>tls<span class="op">.</span>Config<span class="op">{</span>Certificates<span class="op">:</span> <span class="op">[]</span>tls<span class="op">.</span>Certificate<span class="op">{</span>cert<span class="op">}})</span></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> <span class="op">{</span></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>    conn<span class="op">,</span> _ <span class="op">:=</span> tlsLn<span class="op">.</span>Accept<span class="op">()</span>   <span class="co">// conn is a *tls.Conn wrapping a net.Conn</span></span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">go</span> handleConn<span class="op">(</span>conn<span class="op">)</span></span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+<div style="background-color: #f5f5f5; border: 1px solid #ccc; border-radius: 4px; padding: 12px 16px; margin: 1em 0; font-size: 0.95em; display: flex; gap: 12px; align-items: center;">
+<img src="../images/tip-callout.png" style="width: 48px; flex-shrink: 0;">
+<div style="flex: 1; min-width: 0;">
+<p><strong>Tip:</strong> In Java, TLS requires <code>SSLContext</code>, <code>KeyManagerFactory</code>, <code>TrustManagerFactory</code>, and an <code>SSLSocketFactory</code> or <code>SSLServerSocketFactory</code> — a ceremony that takes dozens of lines even for the common case. Go’s <code>crypto/tls</code> collapses this to a <code>tls.Config</code> struct and a single function call. For HTTPS, <code>http.ListenAndServeTLS</code> reduces it further to two file paths.</p>
+</div></div>
+<h2 data-number="15.8" id="key-points"><span class="header-section-number">15.8</span> Key Points</h2>
+<ul>
+<li><code>json.Marshal</code> encodes a Go value to <code>[]byte</code>; <code>json.Unmarshal</code> decodes <code>[]byte</code> into a pointer.</li>
+<li>Struct tags control JSON field names, <code>omitempty</code> (skip zero values), and <code>-</code> (always skip).</li>
+<li>Use streaming <code>json.NewEncoder</code>/<code>json.NewDecoder</code> when reading from or writing to an <code>io.Reader</code>/<code>io.Writer</code> to avoid allocating the entire payload.</li>
+<li><code>http.Handler</code> is the core interface; <code>http.HandlerFunc</code> adapts a plain function to satisfy it (Chapter 8 pattern).</li>
+<li>Go 1.22 <code>ServeMux</code> supports method routing (<code>GET /path/</code>) and path wildcards (<code>/songs/{id}/</code>) in the standard library — no third-party router needed for most services.</li>
+<li>Middleware is a function <code>func(http.Handler) http.Handler</code>; compose layers by wrapping.</li>
+<li>Always close <code>resp.Body</code> after an HTTP client response — <code>defer resp.Body.Close()</code> immediately after the error check.</li>
+<li>Reuse <code>http.Client</code> across requests; it manages a connection pool internally.</li>
+<li><code>import _ "net/http/pprof"</code> registers live profiling endpoints on <code>DefaultServeMux</code>; use <code>go tool pprof -http</code> to analyze; never expose these on a public port.</li>
+<li><code>encoding/xml</code> mirrors <code>encoding/json</code> exactly — same <code>Marshal</code>/<code>Unmarshal</code> API, same tag mechanism, different key (<code>xml</code> instead of <code>json</code>).</li>
+<li><code>net.Dial</code> and <code>net.Listen</code> give raw TCP/UDP access; <code>net.Conn</code> implements <code>io.Reader</code> and <code>io.Writer</code>, so all <code>io</code> utilities compose with it.</li>
+<li><code>http.ListenAndServeTLS</code> adds TLS to an HTTP server with two file paths; <code>tls.Config</code> controls certificate loading, minimum version, and custom CA trust.</li>
+<li><code>tls.Dial</code> and <code>tls.Listen</code> mirror <code>net.Dial</code>/<code>net.Listen</code> for raw TLS; <code>tls.Conn</code> satisfies <code>net.Conn</code> so existing <code>io</code> code needs no changes.</li>
+<li>Never use <code>InsecureSkipVerify: true</code> in production — it disables all certificate validation.</li>
+</ul>
+<h2 data-number="15.9" id="exercises"><span class="header-section-number">15.9</span> Exercises</h2>
+<ol type="1">
+<li><p><strong>Think about it:</strong> In Java with Spring MVC or JAX-RS, you annotate a class method with <code>@GetMapping("/songs/{id}")</code> or <code>@GET @Path("/songs/{id}")</code> and the framework discovers handlers via reflection and classpath scanning. In Go, you call <code>mux.HandleFunc("GET /songs/{id}/", getSong)</code> explicitly in <code>main</code>. What are the tradeoffs of each approach? Consider startup time, debuggability, IDE navigation, and what happens when two handlers are registered for the same pattern.</p></li>
+<li><p><strong>What does this print?</strong></p>
+<div class="sourceCode" id="cb44"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb44-4"><a href="#cb44-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;encoding/json&quot;</span></span>
+<span id="cb44-5"><a href="#cb44-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb44-6"><a href="#cb44-6" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb44-7"><a href="#cb44-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-8"><a href="#cb44-8" aria-hidden="true" tabindex="-1"></a><span class="kw">type</span> Artist <span class="kw">struct</span> <span class="op">{</span></span>
+<span id="cb44-9"><a href="#cb44-9" aria-hidden="true" tabindex="-1"></a>    Name    <span class="dt">string</span> <span class="st">`json:&quot;name&quot;`</span></span>
+<span id="cb44-10"><a href="#cb44-10" aria-hidden="true" tabindex="-1"></a>    Country <span class="dt">string</span> <span class="st">`json:&quot;country,omitempty&quot;`</span></span>
+<span id="cb44-11"><a href="#cb44-11" aria-hidden="true" tabindex="-1"></a>    Secret  <span class="dt">string</span> <span class="st">`json:&quot;-&quot;`</span></span>
+<span id="cb44-12"><a href="#cb44-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb44-13"><a href="#cb44-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-14"><a href="#cb44-14" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb44-15"><a href="#cb44-15" aria-hidden="true" tabindex="-1"></a>    a <span class="op">:=</span> Artist<span class="op">{</span>Name<span class="op">:</span> <span class="st">&quot;Kali Uchis&quot;</span><span class="op">,</span> Country<span class="op">:</span> <span class="st">&quot;&quot;</span><span class="op">,</span> Secret<span class="op">:</span> <span class="st">&quot;Colombia&quot;</span><span class="op">}</span></span>
+<span id="cb44-16"><a href="#cb44-16" aria-hidden="true" tabindex="-1"></a>    data<span class="op">,</span> _ <span class="op">:=</span> json<span class="op">.</span>Marshal<span class="op">(</span>a<span class="op">)</span></span>
+<span id="cb44-17"><a href="#cb44-17" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span><span class="dt">string</span><span class="op">(</span>data<span class="op">))</span></span>
+<span id="cb44-18"><a href="#cb44-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb44-19"><a href="#cb44-19" aria-hidden="true" tabindex="-1"></a>    <span class="kw">var</span> b Artist</span>
+<span id="cb44-20"><a href="#cb44-20" aria-hidden="true" tabindex="-1"></a>    json<span class="op">.</span>Unmarshal<span class="op">([]</span><span class="dt">byte</span><span class="op">(</span><span class="st">`{&quot;name&quot;:&quot;Rauw Alejandro&quot;,&quot;secret&quot;:&quot;Puerto Rico&quot;}`</span><span class="op">),</span> <span class="op">&amp;</span>b<span class="op">)</span></span>
+<span id="cb44-21"><a href="#cb44-21" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Printf<span class="op">(</span><span class="st">&quot;Name: %s, Secret: %q</span><span class="ch">\n</span><span class="st">&quot;</span><span class="op">,</span> b<span class="op">.</span>Name<span class="op">,</span> b<span class="op">.</span>Secret<span class="op">)</span></span>
+<span id="cb44-22"><a href="#cb44-22" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Calculation:</strong> Consider the following <code>ServeMux</code> registration and the three incoming requests below. For each request, state which handler function is called, or <code>404</code> if none matches.</p>
+<div class="sourceCode" id="cb45"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>mux <span class="op">:=</span> http<span class="op">.</span>NewServeMux<span class="op">()</span></span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /tracks/&quot;</span><span class="op">,</span>       listTracks<span class="op">)</span></span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;GET /tracks/{id}/&quot;</span><span class="op">,</span>  getTrack<span class="op">)</span></span>
+<span id="cb45-4"><a href="#cb45-4" aria-hidden="true" tabindex="-1"></a>mux<span class="op">.</span>HandleFunc<span class="op">(</span><span class="st">&quot;POST /tracks/&quot;</span><span class="op">,</span>      createTrack<span class="op">)</span></span></code></pre></div>
+<ol type="a">
+<li><code>GET /tracks/</code></li>
+<li><code>GET /tracks/42/</code></li>
+<li><code>DELETE /tracks/7/</code></li>
+</ol></li>
+<li><p><strong>Where is the bug?</strong></p>
+<div class="sourceCode" id="cb46"><pre class="sourceCode go"><code class="sourceCode go"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="kw">package</span> main</span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a><span class="kw">import</span> <span class="op">(</span></span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;fmt&quot;</span></span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;io&quot;</span></span>
+<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">&quot;net/http&quot;</span></span>
+<span id="cb46-7"><a href="#cb46-7" aria-hidden="true" tabindex="-1"></a><span class="op">)</span></span>
+<span id="cb46-8"><a href="#cb46-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-9"><a href="#cb46-9" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> fetchLyrics<span class="op">(</span>url <span class="dt">string</span><span class="op">)</span> <span class="op">(</span><span class="dt">string</span><span class="op">,</span> <span class="dt">error</span><span class="op">)</span> <span class="op">{</span></span>
+<span id="cb46-10"><a href="#cb46-10" aria-hidden="true" tabindex="-1"></a>    resp<span class="op">,</span> err <span class="op">:=</span> http<span class="op">.</span>Get<span class="op">(</span>url<span class="op">)</span></span>
+<span id="cb46-11"><a href="#cb46-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb46-12"><a href="#cb46-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">&quot;&quot;</span><span class="op">,</span> err</span>
+<span id="cb46-13"><a href="#cb46-13" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb46-14"><a href="#cb46-14" aria-hidden="true" tabindex="-1"></a>    body<span class="op">,</span> err <span class="op">:=</span> io<span class="op">.</span>ReadAll<span class="op">(</span>resp<span class="op">.</span>Body<span class="op">)</span></span>
+<span id="cb46-15"><a href="#cb46-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb46-16"><a href="#cb46-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">&quot;&quot;</span><span class="op">,</span> err</span>
+<span id="cb46-17"><a href="#cb46-17" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb46-18"><a href="#cb46-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="dt">string</span><span class="op">(</span>body<span class="op">),</span> <span class="ot">nil</span></span>
+<span id="cb46-19"><a href="#cb46-19" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb46-20"><a href="#cb46-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-21"><a href="#cb46-21" aria-hidden="true" tabindex="-1"></a><span class="kw">func</span> main<span class="op">()</span> <span class="op">{</span></span>
+<span id="cb46-22"><a href="#cb46-22" aria-hidden="true" tabindex="-1"></a>    lyrics<span class="op">,</span> err <span class="op">:=</span> fetchLyrics<span class="op">(</span><span class="st">&quot;https://api.example.com/lyrics/todo-de-ti&quot;</span><span class="op">)</span></span>
+<span id="cb46-23"><a href="#cb46-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> err <span class="op">!=</span> <span class="ot">nil</span> <span class="op">{</span></span>
+<span id="cb46-24"><a href="#cb46-24" aria-hidden="true" tabindex="-1"></a>        fmt<span class="op">.</span>Println<span class="op">(</span><span class="st">&quot;error:&quot;</span><span class="op">,</span> err<span class="op">)</span></span>
+<span id="cb46-25"><a href="#cb46-25" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb46-26"><a href="#cb46-26" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb46-27"><a href="#cb46-27" aria-hidden="true" tabindex="-1"></a>    fmt<span class="op">.</span>Println<span class="op">(</span>lyrics<span class="op">)</span></span>
+<span id="cb46-28"><a href="#cb46-28" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div></li>
+<li><p><strong>Write a program:</strong> Build a small in-memory HTTP server that manages a list of songs. Define a <code>Song</code> struct with fields <code>ID int</code>, <code>Title string</code>, and <code>Artist string</code>, all with appropriate <code>json</code> tags. Store songs in a package-level <code>map[int]Song</code>. Register two routes using a <code>http.NewServeMux()</code>:</p>
+<ul>
+<li><code>GET /songs/</code> returns all songs as a JSON array.</li>
+<li><code>GET /songs/{id}/</code> returns the single song with that ID, or HTTP 404 if not found. Pre-populate the map with two songs (use Rauw Alejandro or Kali Uchis tracks). Start the server on <code>:8080</code>.</li>
+</ul></li>
+</ol>
+
+{% endraw %}
