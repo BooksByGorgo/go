@@ -72,6 +72,7 @@ when committing a change based on an issue (or set of issues)
 
 - whenever you finish making changes automatically commit to git
 - if there are changes that haven't been pushed, amend the commit to the latest local only commit
+- never commit `docs/g4j/*.pdf` --- they are built and deployed by the GitHub Actions workflow, not tracked in git
 
 ## pr and merge workflow
 
