@@ -48,7 +48,7 @@ func main() {
         },
     }))
 
-    input := "Physical\nDon't Start Now\nPositions\n"
+    input := "Café Del Mar\nZombie\nCrazy Train\n"
     scanner := bufio.NewScanner(strings.NewReader(input))
     count := 0
     for scanner.Scan() {
@@ -74,7 +74,7 @@ Step-by-step:
 2. `strings.NewReader` wraps the literal string as an `io.Reader`.
    `bufio.NewScanner` wraps that reader.
 3. The scanner splits on newlines (the default).
-   The input has three non-empty lines (`"Physical"`, `"Don't Start Now"`, `"Positions"`) followed by a trailing newline.
+   The input has three non-empty lines (`"Café Del Mar"`, `"Zombie"`, `"Crazy Train"`) followed by a trailing newline.
    `Scan` returns `true` three times and then `false` at EOF, so `count` ends up as `3`.
 4. `logger.Info` emits a text-format log line.
    The `time` key is suppressed by `ReplaceAttr`.
@@ -145,7 +145,7 @@ func countMatches(texts []string, pattern string) int {
 }
 
 func main() {
-    titles := []string{"positions", "Physical", "Don't Start Now", "thank u, next"}
+    titles := []string{"Crazy Train", "Café Del Mar", "Zombie", "The Sound of Silence"}
     fmt.Println(countMatches(titles, `^[A-Z]`))
 }
 ```
@@ -153,7 +153,7 @@ func main() {
 **The bug:** `regexp.MustCompile(pattern)` is called inside the `for` loop, so the pattern is compiled on every iteration.
 With four strings this is merely wasteful, but inside a hot path processing millions of records it becomes a serious performance problem --- `regexp.MustCompile` parses the pattern, builds a finite automaton, and allocates memory each time.
 
-The output is correct (it prints `2`, matching `"Physical"` and `"Don't Start Now"`), so this is a **performance bug**, not a logic bug.
+The output is correct (it prints `4`, matching all four titles which start with an uppercase letter), so this is a **performance bug**, not a logic bug.
 
 **The fix:** Compile the pattern once, before the loop.
 If the pattern is constant, hoist it to a package-level variable:

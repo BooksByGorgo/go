@@ -43,7 +43,7 @@ func checkPositive(t *testing.T, n int) {
     }
 }
 
-func TestGolden(t *testing.T) {
+func TestSoundOfSilence(t *testing.T) {
     checkPositive(t, 1)
     t.Log("checked 1")
     checkPositive(t, -1)
@@ -56,12 +56,12 @@ func TestGolden(t *testing.T) {
 Output (with `go test -v`):
 
 ```
-=== RUN   TestGolden
+=== RUN   TestSoundOfSilence
     music_test.go:7: expected positive, got -1
     music_test.go:11: checked 1
     music_test.go:13: checked -1
     music_test.go:15: checked 2
---- FAIL: TestGolden (0.00s)
+--- FAIL: TestSoundOfSilence (0.00s)
 FAIL
 ```
 
@@ -82,17 +82,17 @@ Execution continues past the failing check because `t.Errorf` is used, not `t.Fa
 
 **Note on `t.Helper()` absence:**
 `checkPositive` does not call `t.Helper()`.
-As a result, the failure line reported is inside `checkPositive` (the `t.Errorf` call), not in `TestGolden` where `checkPositive(-1)` was called.
-Adding `t.Helper()` as the first line of `checkPositive` would make the reported line point to `checkPositive(t, -1)` in `TestGolden` instead.
+As a result, the failure line reported is inside `checkPositive` (the `t.Errorf` call), not in `TestSoundOfSilence` where `checkPositive(-1)` was called.
+Adding `t.Helper()` as the first line of `checkPositive` would make the reported line point to `checkPositive(t, -1)` in `TestSoundOfSilence` instead.
 
 ---
 
 **Exercise 3** (Calculation): A benchmark function has the following structure:
 
 ```go
-func BenchmarkWoman(b *testing.B) {
+func BenchmarkCrazyTrain(b *testing.B) {
     for range b.N {
-        _ = processTrack("Woman")
+        _ = processTrack("Crazy Train")
     }
 }
 ```
@@ -133,7 +133,7 @@ This matches `processTrack`'s actual per-call cost --- the benchmark is accurate
 
 ---
 
-**Exercise 4** (Where is the bug?): The following test helper is supposed to make failure output point to the call site in `TestAboutDamnTime`, but it does not.
+**Exercise 4** (Where is the bug?): The following test helper is supposed to make failure output point to the call site in `TestBadApple`, but it does not.
 Identify the bug and show the fix.
 
 ```go
@@ -148,9 +148,9 @@ func assertNormalized(t *testing.T, input, want string) {
     }
 }
 
-func TestAboutDamnTime(t *testing.T) {
-    assertNormalized(t, "about damn time", "About Damn Time")
-    assertNormalized(t, "good as hell",    "Good as Hell")
+func TestBadApple(t *testing.T) {
+    assertNormalized(t, "bad apple!!", "Bad Apple!!")
+    assertNormalized(t, "better off alone", "Better Off Alone")
 }
 ```
 
@@ -160,10 +160,10 @@ When `t.Fatalf` fires inside `assertNormalized`, Go's test framework records the
 The reported failure location is something like:
 
 ```
-music_test.go:8: normalize("about damn time"): got "about Damn Time", want "About Damn Time"
+music_test.go:8: normalize("bad apple!!"): got "bad Apple!!", want "Bad Apple!!"
 ```
 
-That points inside `assertNormalized`, not to the line in `TestAboutDamnTime` that triggered the failure.
+That points inside `assertNormalized`, not to the line in `TestBadApple` that triggered the failure.
 You have to manually trace back to find which call site is responsible.
 
 **The fix:** add `t.Helper()` as the first statement in `assertNormalized`:
@@ -181,13 +181,13 @@ func assertNormalized(t *testing.T, input, want string) {
 With `t.Helper()` present, the reported failure location becomes:
 
 ```
-music_test.go:13: normalize("about damn time"): got "about Damn Time", want "About Damn Time"
+music_test.go:13: normalize("bad apple!!"): got "bad Apple!!", want "Bad Apple!!"
 ```
 
-That line number points directly to `assertNormalized(t, "about damn time", "About Damn Time")` in `TestAboutDamnTime`, which is exactly where the problematic call lives.
+That line number points directly to `assertNormalized(t, "bad apple!!", "Bad Apple!!")` in `TestBadApple`, which is exactly where the problematic call lives.
 
 **Secondary note:** `t.Fatalf` inside a helper is fine when subsequent checks in the same test function would be meaningless if this check fails.
-Here, if `normalize("about damn time")` returns a wrong value the second check can still run independently, so `t.Errorf` could be argued as a better choice --- but whether to use `Fatal` or `Error` is a judgment call; the `t.Helper()` omission is the clear bug.
+Here, if `normalize("bad apple!!")` returns a wrong value the second check can still run independently, so `t.Errorf` could be argued as a better choice --- but whether to use `Fatal` or `Error` is a judgment call; the `t.Helper()` omission is the clear bug.
 
 ---
 
@@ -237,12 +237,12 @@ func TestTitleCase(t *testing.T) {
         input string
         want  string
     }{
-        {name: "empty",        input: "",                    want: ""},
-        {name: "single word",  input: "golden",              want: "Golden"},
-        {name: "multi-word",   input: "good as hell",        want: "Good As Hell"},
-        {name: "all caps",     input: "ABOUT DAMN TIME",     want: "About Damn Time"},
-        {name: "mixed case",   input: "wOmAn",               want: "Woman"},
-        {name: "already title", input: "Good As Hell",       want: "Good As Hell"},
+        {name: "empty",         input: "",                      want: ""},
+        {name: "single word",   input: "silence",               want: "Silence"},
+        {name: "multi-word",    input: "better off alone",      want: "Better Off Alone"},
+        {name: "all caps",      input: "BAD APPLE!!",           want: "Bad Apple!!"},
+        {name: "mixed case",    input: "cRAzY tRaIn",           want: "Crazy Train"},
+        {name: "already title", input: "Better Off Alone",      want: "Better Off Alone"},
     }
 
     for _, tc := range cases {

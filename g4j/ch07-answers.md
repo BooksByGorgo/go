@@ -37,10 +37,10 @@ import "fmt"
 
 func main() {
     catalog := map[string]int{
-        "Blinding Lights": 4_000_000_000,
-        "Shape of You":    3_600_000_000,
+        "Saltwater":       1_200_000_000,
+        "Out Of The Blue":  980_000_000,
     }
-    hits := []string{"Shape of You", "Watermelon Sugar", "Blinding Lights"}
+    hits := []string{"Out Of The Blue", "Watermelon Sugar", "Saltwater"}
     for _, title := range hits {
         if plays, ok := catalog[title]; ok {
             fmt.Printf("%s: %d\n", title, plays)
@@ -53,15 +53,15 @@ func main() {
 
 Output:
 ```
-Shape of You: 3600000000
+Out Of The Blue: 980000000
 Watermelon Sugar: not found
-Blinding Lights: 4000000000
+Saltwater: 1200000000
 ```
 
 The loop iterates the `hits` slice in order.
-`"Shape of You"` is in the catalog and its play count is printed.
+`"Out Of The Blue"` is in the catalog and its play count is printed.
 `"Watermelon Sugar"` is not in the catalog, so the comma-ok idiom sets `ok = false` and the `else` branch runs.
-`"Blinding Lights"` is in the catalog and is printed last.
+`"Saltwater"` is in the catalog and is printed last.
 Map lookup order is random, but slice range iteration is always in index order, so the output is deterministic here.
 
 ---
@@ -99,7 +99,7 @@ package main
 import "fmt"
 
 func main() {
-    words := []string{"Levitating", "Stay", "Heat Waves", "Stay", "As It Was"}
+    words := []string{"Gouryella", "Gamemaster", "Flaming June", "Gamemaster", "Sandstorm"}
     var freq map[string]int
     for _, w := range words {
         freq[w]++
@@ -133,7 +133,7 @@ for _, w := range words {
 With the fix, the program prints:
 
 ```
-Stay 2
+Gamemaster 2
 ```
 
 ---
@@ -151,8 +151,8 @@ import (
 
 func main() {
     titles := []string{
-        "As It Was", "Blinding Lights", "Levitating",
-        "Bad Habit", "Kill Bill", "As The World Caves In",
+        "Sandstorm", "Bad Apple!!", "Gouryella",
+        "Better Off Alone", "Flaming June", "Sandstorm",
     }
 
     byLetter := make(map[string][]string)
@@ -176,10 +176,10 @@ func main() {
 
 Output:
 ```
-A: [As It Was As The World Caves In]
-B: [Bad Habit Blinding Lights]
-K: [Kill Bill]
-L: [Levitating]
+B: [Bad Apple!! Better Off Alone]
+F: [Flaming June]
+G: [Gouryella]
+S: [Sandstorm Sandstorm]
 ```
 
 Key points: always initialise a map with `make` before writing; `maps.Keys` returns an iterator (Go 1.23+) that `slices.Collect` converts to a sortable slice.

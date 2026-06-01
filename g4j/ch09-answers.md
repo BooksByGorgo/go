@@ -67,7 +67,7 @@ func lookup(track string) error {
 }
 
 func main() {
-    err := lookup("Tití Me Preguntó")
+    err := lookup("Insomnia")
     fmt.Println(err)
     fmt.Println(errors.Is(err, ErrNotFound))
 
@@ -81,17 +81,17 @@ func main() {
 Output:
 
 ```
-catalog: Tití Me Preguntó: not found
+catalog: Insomnia: not found
 true
-Tití Me Preguntó
+Insomnia
 ```
 
 **Line-by-line explanation:**
 
-`lookup("Tití Me Preguntó")` returns a `*CatalogError` with `Track = "Tití Me Preguntó"` and `Err = ErrNotFound`.
+`lookup("Insomnia")` returns a `*CatalogError` with `Track = "Insomnia"` and `Err = ErrNotFound`.
 
-`fmt.Println(err)` calls `err.Error()`, which returns `"catalog: Tití Me Preguntó: not found"`.
-`fmt.Println` appends a newline, so the first line of output is `catalog: Tití Me Preguntó: not found`.
+`fmt.Println(err)` calls `err.Error()`, which returns `"catalog: Insomnia: not found"`.
+`fmt.Println` appends a newline, so the first line of output is `catalog: Insomnia: not found`.
 
 `errors.Is(err, ErrNotFound)` starts at `err` (a `*CatalogError`) and calls `==` against `ErrNotFound` --- no match.
 It then calls `err.Unwrap()`, which returns `ErrNotFound` itself.
@@ -100,12 +100,12 @@ So `errors.Is` returns `true`, and `fmt.Println(true)` prints `true`.
 
 `errors.As(err, &ce)` checks whether `err` is assignable to `*CatalogError`.
 It is, so `ce` is set to the `*CatalogError` value and `errors.As` returns `true`.
-The `if` body prints `ce.Track`, which is `"Tití Me Preguntó"`.
+The `if` body prints `ce.Track`, which is `"Insomnia"`.
 
 ---
 
 **Exercise 3** (Calculation): Consider the following code.
-How many distinct, non-nil error values does `validateSong` return for the input `Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}`?
+How many distinct, non-nil error values does `validateSong` return for the input `Song{Title: "", Artist: "DJ Analyzer", Year: 2021, BPM: -1}`?
 What is the output of `fmt.Println(err)` for that input?
 
 ```go
@@ -138,7 +138,7 @@ func validateSong(s Song) error {
 }
 
 func main() {
-    s := Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}
+    s := Song{Title: "", Artist: "DJ Analyzer", Year: 2021, BPM: -1}
     err := validateSong(s)
     fmt.Println(err)
 }
@@ -146,7 +146,7 @@ func main() {
 
 **Answer:** `validateSong` collects **2** distinct, non-nil error values.
 
-Trace through the conditions for `Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}`:
+Trace through the conditions for `Song{Title: "", Artist: "DJ Analyzer", Year: 2021, BPM: -1}`:
 
 - `s.Title == ""` is `true` --- `errors.New("title required")` is appended. (1 error)
 - `s.Year < 2000 || s.Year > 2030`: `2021 < 2000` is `false`; `2021 > 2030` is `false` --- condition is `false`, no error appended.
@@ -162,7 +162,7 @@ title required
 BPM must be positive
 ```
 
-Note that `Artist` has no validation rule, so `"Karol G"` (a valid, non-empty value) does not contribute any error.
+Note that `Artist` has no validation rule, so `"DJ Analyzer"` (a valid, non-empty value) does not contribute any error.
 `Year = 2021` falls within the range `[2000, 2030]`, so no year error is produced either.
 
 ---
@@ -195,7 +195,7 @@ func readAll(r io.Reader) ([]byte, error) {
 }
 
 func main() {
-    r := strings.NewReader("TQG")
+    r := strings.NewReader("Children")
     data, err := readAll(r)
     if err != nil {
         fmt.Println("error:", err)
@@ -255,7 +255,7 @@ func readAll(r io.Reader) ([]byte, error) {
 With both fixes applied, the program compiles and prints:
 
 ```
-TQG
+Children
 ```
 
 ---

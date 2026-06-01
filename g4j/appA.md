@@ -201,7 +201,7 @@ The proverb asks you to design your types so the zero value is *already useful*,
 
 ```go
 var b bytes.Buffer        // zero value: empty buffer, ready to use
-b.WriteString("Espresso") // no constructor needed
+b.WriteString("Sandstorm") // no constructor needed
 
 var mu sync.Mutex         // zero value: unlocked mutex, ready to use
 mu.Lock()

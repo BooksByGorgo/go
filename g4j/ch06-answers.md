@@ -108,8 +108,8 @@ func (ft FeaturedTrack) String() string {
 }
 
 func main() {
-    t := Track{Title: "Golden Hour", Artist: "JVKE", BPM: 97}
-    ft := FeaturedTrack{Track: t, Feature: "Rosalía"}
+    t := Track{Title: "Gamemaster", Artist: "Matt Darey & Lost Tribe", BPM: 97}
+    ft := FeaturedTrack{Track: t, Feature: "Alizée"}
 
     fmt.Println(t.String())
     fmt.Println(ft.String())
@@ -120,20 +120,20 @@ func main() {
 
 Output:
 ```
-Golden Hour by JVKE
-Golden Hour by JVKE ft. Rosalía
-Golden Hour by JVKE
+Gamemaster by Matt Darey & Lost Tribe
+Gamemaster by Matt Darey & Lost Tribe ft. Alizée
+Gamemaster by Matt Darey & Lost Tribe
 97
 ```
 
 Step by step:
 
-- `t.String()`: calls `Track.String()` directly on `t`. Returns `"Golden Hour by JVKE"`.
+- `t.String()`: calls `Track.String()` directly on `t`. Returns `"Gamemaster by Matt Darey & Lost Tribe"`.
 - `ft.String()`: `FeaturedTrack` has its own `String()` method, so the promoted `Track.String()` is shadowed.
-  `FeaturedTrack.String()` calls `ft.Track.String()` (returns `"Golden Hour by JVKE"`) and appends `" ft. "` and `ft.Feature`.
-  Returns `"Golden Hour by JVKE ft. Rosalía"`.
+  `FeaturedTrack.String()` calls `ft.Track.String()` (returns `"Gamemaster by Matt Darey & Lost Tribe"`) and appends `" ft. "` and `ft.Feature`.
+  Returns `"Gamemaster by Matt Darey & Lost Tribe ft. Alizée"`.
 - `ft.Track.String()`: calls `Track.String()` through the explicit embedded path, bypassing `FeaturedTrack.String()`.
-  Returns `"Golden Hour by JVKE"`.
+  Returns `"Gamemaster by Matt Darey & Lost Tribe"`.
 - `ft.BPM`: promoted from `ft.Track.BPM`. The value is `97`.
 
 The key insight: writing `ft.String()` calls `FeaturedTrack.String()` (the outer type's method), while `ft.Track.String()` bypasses the outer method and calls `Track.String()` directly.
@@ -161,14 +161,14 @@ type Song struct {
 }
 
 func main() {
-    s := Song{Title: "Chorizo Asado"}
+    s := Song{Title: "Out Of The Blue"}
     fmt.Println(s.Title)
     fmt.Println(s.Label()) // line A
 }
 ```
 
 **The bug:** `Song` is initialized without setting the `*Artist` pointer, so `s.Artist` is `nil`.
-The first `fmt.Println(s.Title)` prints `"Chorizo Asado"` successfully.
+The first `fmt.Println(s.Title)` prints `"Out Of The Blue"` successfully.
 The second call `s.Label()` is promoted from the embedded `*Artist`.
 To call a method on the embedded type, Go dereferences the embedded pointer.
 Dereferencing a `nil` pointer causes a runtime panic:
@@ -181,11 +181,11 @@ panic: runtime error: invalid memory address or nil pointer dereference
 
 ```go
 s := Song{
-    Artist: &Artist{Name: "Feid"},
-    Title:  "Chorizo Asado",
+    Artist: &Artist{Name: "System F"},
+    Title:  "Out Of The Blue",
 }
-fmt.Println(s.Title)   // Chorizo Asado
-fmt.Println(s.Label()) // Artist: Feid
+fmt.Println(s.Title)   // Out Of The Blue
+fmt.Println(s.Label()) // Artist: System F
 ```
 
 Alternatively, construct `Song` using `NewSong` to enforce initialization:

@@ -148,7 +148,7 @@ import (
 func main() {
     var wg sync.WaitGroup
     results := make(chan string, 3)
-    tracks := []string{"rockstar", "Circles", "Earfquake"}
+    tracks := []string{"Turn Me On", "Legend", "Escape"}
 
     for _, t := range tracks {
         wg.Add(1)
@@ -169,13 +169,13 @@ func main() {
 
 **The bug:** The goroutine closure captures the loop variable `t` by reference, not by value.
 By the time the goroutines run, the `for` loop has advanced `t` to the last value in the slice.
-All three goroutines read the same final value --- `"Earfquake"` --- and send it three times.
+All three goroutines read the same final value --- `"Escape"` --- and send it three times.
 The output is likely:
 
 ```
-Playing: Earfquake
-Playing: Earfquake
-Playing: Earfquake
+Playing: Escape
+Playing: Escape
+Playing: Escape
 ```
 
 This is the **loop-closure capture bug** described in Chapter 2.
@@ -234,15 +234,15 @@ func main() {
 
     go func() {
         time.Sleep(10 * time.Millisecond)
-        ch1 <- "Post Malone: Circles"
+        ch1 <- "Jaroslav Beck & Crispin: Legend"
     }()
     go func() {
         time.Sleep(20 * time.Millisecond)
-        ch2 <- "Tyler: Wilder World"
+        ch2 <- "Jaroslav Beck: $100 Bills"
     }()
     go func() {
         time.Sleep(30 * time.Millisecond)
-        ch3 <- "Post Malone: rockstar"
+        ch3 <- "Jaroslav Beck: Turn Me On"
     }()
 
     received := 0
@@ -268,9 +268,9 @@ func main() {
 
 Output (order reflects goroutine sleep durations):
 ```
-Post Malone: Circles
-Tyler: Wilder World
-Post Malone: rockstar
+Jaroslav Beck & Crispin: Legend
+Jaroslav Beck: $100 Bills
+Jaroslav Beck: Turn Me On
 ```
 
 **How it works:**

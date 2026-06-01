@@ -36,8 +36,8 @@ import (
 )
 
 func main() {
-    a := sql.Null[string]{V: "Evergreen", Valid: true}
-    b := sql.Null[string]{V: "Killing Me", Valid: false}
+    a := sql.Null[string]{V: "J'ai pas vingt ans !", Valid: true}
+    b := sql.Null[string]{V: "Gouryella", Valid: false}
     c := sql.Null[int64]{V: 0, Valid: false}
 
     fmt.Println(a.Valid, a.V)
@@ -48,18 +48,18 @@ func main() {
 
 Output:
 ```
-true Evergreen
-false Killing Me
+true J'ai pas vingt ans !
+false Gouryella
 false 0
 ```
 
 `sql.Null[T]` is a plain struct with two exported fields: `V` (the value) and `Valid` (a bool).
 It has no logic in its fields; they are whatever you set them to.
 
-- `a` has `Valid: true` and `V: "Evergreen"`, so `fmt.Println` prints `true Evergreen`.
-- `b` has `Valid: false` but `V` is still `"Killing Me"` --- setting `Valid` to `false` does not zero out `V`.
+- `a` has `Valid: true` and `V: "J'ai pas vingt ans !"`, so `fmt.Println` prints `true J'ai pas vingt ans !`.
+- `b` has `Valid: false` but `V` is still `"Gouryella"` --- setting `Valid` to `false` does not zero out `V`.
   This might be surprising: the struct remembers the value even though it would represent `NULL` in the database.
-  `fmt.Println` prints `false Killing Me`.
+  `fmt.Println` prints `false Gouryella`.
 - `c` has `Valid: false` and `V: 0` (the zero value for `int64`).
   `fmt.Println` prints `false 0`.
 
@@ -75,7 +75,7 @@ tx, _ := db.BeginTx(ctx, nil)
 defer tx.Rollback()
 
 _, err := tx.ExecContext(ctx, "INSERT INTO songs (title, artist) VALUES (?, ?)",
-    "On My Mama", "Victoria Monét")
+    "Sounds of Slashdot", "San Mehat")
 if err != nil {
     return err
 }
@@ -264,18 +264,18 @@ func insertPlaylists(ctx context.Context, db *sql.DB) error {
 
     playlists := []Playlist{
         {
-            Name:        "Victoria Vibes",
-            Owner:       "coastin_fan",
-            Description: sql.Null[string]{V: "Best of Victoria Monét", Valid: true},
+            Name:        "Trance Classics",
+            Owner:       "gamemaster_fan",
+            Description: sql.Null[string]{V: "Best of DJ Essentials: Trance", Valid: true},
         },
         {
-            Name:        "Omar After Midnight",
-            Owner:       "coastin_fan",
-            Description: sql.Null[string]{V: "Evergreen on repeat", Valid: true},
+            Name:        "Alizée After Hours",
+            Owner:       "gamemaster_fan",
+            Description: sql.Null[string]{V: "J'ai pas vingt ans ! on repeat", Valid: true},
         },
         {
             Name:        "Late Night Mix",
-            Owner:       "apollo_stan",
+            Owner:       "gouryella_stan",
             Description: sql.Null[string]{}, // NULL description
         },
     }
@@ -292,9 +292,9 @@ func insertPlaylists(ctx context.Context, db *sql.DB) error {
 
 Output:
 ```
-1: Victoria Vibes by coastin_fan --- Best of Victoria Monét
-2: Omar After Midnight by coastin_fan --- Evergreen on repeat
-3: Late Night Mix by apollo_stan --- (no description)
+1: Trance Classics by gamemaster_fan --- Best of DJ Essentials: Trance
+2: Alizée After Hours by gamemaster_fan --- J'ai pas vingt ans ! on repeat
+3: Late Night Mix by gouryella_stan --- (no description)
 ```
 
 Key points demonstrated:

@@ -66,8 +66,8 @@ func main() {
     ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
     defer cancel()
 
-    go work(ctx, "Bewitched")
-    go work(ctx, "Too Sweet")
+    go work(ctx, "Flaming June")
+    go work(ctx, "Saltwater")
     time.Sleep(400 * time.Millisecond)
     fmt.Println("main done")
 }
@@ -75,8 +75,8 @@ func main() {
 
 Output (order of the first two lines may vary):
 ```
-Bewitched cancelled: context deadline exceeded
-Too Sweet cancelled: context deadline exceeded
+Flaming June cancelled: context deadline exceeded
+Saltwater cancelled: context deadline exceeded
 main done
 ```
 
@@ -86,7 +86,7 @@ After 200 ms the timeout fires, `ctx.Done()` is closed, and both goroutines unbl
 Each prints its label with `"cancelled: context deadline exceeded"`.
 The goroutines finish well before `main`'s `time.Sleep(400ms)` elapses, so `"main done"` appears last.
 
-The two cancelled lines may appear in either order because goroutine scheduling is not deterministic.
+The two cancelled lines (`Flaming June` and `Saltwater`) may appear in either order because goroutine scheduling is not deterministic.
 `main done` always appears last because `time.Sleep(400ms)` is longer than the 200 ms timeout and the goroutines' response time.
 
 ---
@@ -236,10 +236,10 @@ func fanOutFetch(ctx context.Context, songs []string) ([]string, error) {
 
 func main() {
     songs := []string{
-        "From The Start",
-        "Bewitched",
-        "Too Sweet",
-        "Work Song",
+        "Gouryella",
+        "Flaming June",
+        "Saltwater",
+        "Gamemaster",
     }
 
     ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
@@ -267,10 +267,10 @@ Fetches with delays in the 50--150 ms range should all complete well within 300 
 
 Sample output when all fetches succeed:
 ```
-fetched: From The Start
-fetched: Bewitched
-fetched: Too Sweet
-fetched: Work Song
+fetched: Gouryella
+fetched: Flaming June
+fetched: Saltwater
+fetched: Gamemaster
 ```
 
 Sample output when the timeout fires:

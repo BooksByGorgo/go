@@ -51,7 +51,7 @@ type Album struct {
 }
 
 func main() {
-    a := Album{Title: "Jackman", Artist: "Jack Harlow", Tracks: 13}
+    a := Album{Title: "DJ Essentials: Trance", Artist: "BT", Tracks: 13}
     t := reflect.TypeOf(a)
     v := reflect.ValueOf(a)
 
@@ -65,8 +65,8 @@ func main() {
 Output:
 
 ```
-Title (string): Jackman
-Artist (string): Jack Harlow
+Title (string): DJ Essentials: Trance
+Artist (string): BT
 Tracks (int): 13
 ```
 
@@ -102,9 +102,9 @@ func main() {
     p.SetInt(99)
     fmt.Println(n)
 
-    s := "Last Night"
+    s := "Sounds of Slashdot"
     sv := reflect.ValueOf(&s).Elem()
-    sv.SetString("First Class")
+    sv.SetString("Café Del Mar")
     fmt.Println(s)
 }
 ```
@@ -115,7 +115,7 @@ Output:
 false
 true
 99
-First Class
+Café Del Mar
 ```
 
 Step-by-step trace:
@@ -134,10 +134,10 @@ Step-by-step trace:
 6. `p.SetInt(99)` --- sets the memory at `n`'s address to `99`.
 7. `fmt.Println(n)` --- prints `99`.
    The underlying `int` variable was mutated through reflection.
-8. `s := "Last Night"` --- `s` is a `string`.
+8. `s := "Sounds of Slashdot"` --- `s` is a `string`.
 9. `sv := reflect.ValueOf(&s).Elem()` --- same pattern: pointer -> `Elem()` -> settable value.
-10. `sv.SetString("First Class")` --- replaces `s` with `"First Class"`.
-11. `fmt.Println(s)` --- prints `First Class`.
+10. `sv.SetString("Café Del Mar")` --- replaces `s` with `"Café Del Mar"`.
+11. `fmt.Println(s)` --- prints `Café Del Mar`.
 
 ---
 
@@ -283,28 +283,28 @@ type Track struct {
 
 func main() {
     tr := Track{
-        Title:    "First Class",
-        Artist:   "Jack Harlow",
+        Title:    "Café Del Mar",
+        Artist:   "Energy 52",
         BPM:      97,
         internal: "hidden",
     }
 
     m := StructToMap(tr)
     fmt.Println(m)
-    // map[artist:Jack Harlow bpm:97 title:First Class]
+    // map[artist:Energy 52 bpm:97 title:Café Del Mar]
 
     // Also works with a pointer.
     m2 := StructToMap(&tr)
     fmt.Println(m2)
-    // map[artist:Jack Harlow bpm:97 title:First Class]
+    // map[artist:Energy 52 bpm:97 title:Café Del Mar]
 }
 ```
 
 Output:
 
 ```
-map[artist:Jack Harlow bpm:97 title:First Class]
-map[artist:Jack Harlow bpm:97 title:First Class]
+map[artist:Energy 52 bpm:97 title:Café Del Mar]
+map[artist:Energy 52 bpm:97 title:Café Del Mar]
 ```
 
 Key points about the solution:

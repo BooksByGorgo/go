@@ -50,34 +50,34 @@ type Artist struct {
 }
 
 func main() {
-    a := Artist{Name: "Kali Uchis", Country: "", Secret: "Colombia"}
+    a := Artist{Name: "Chicane", Country: "", Secret: "UK"}
     data, _ := json.Marshal(a)
     fmt.Println(string(data))
 
     var b Artist
-    json.Unmarshal([]byte(`{"name":"Rauw Alejandro","secret":"Puerto Rico"}`), &b)
+    json.Unmarshal([]byte(`{"name":"Darude","secret":"Finland"}`), &b)
     fmt.Printf("Name: %s, Secret: %q\n", b.Name, b.Secret)
 }
 ```
 
 Output:
 ```
-{"name":"Kali Uchis"}
-Name: Rauw Alejandro, Secret: ""
+{"name":"Chicane"}
+Name: Darude, Secret: ""
 ```
 
 **First `Println`:**
 `a.Country` is `""`, which is the zero value for `string`.
 The tag `json:"country,omitempty"` causes `encoding/json` to omit the `country` field from the output.
-`a.Secret` is `"Colombia"`, but the tag `json:"-"` instructs the encoder to always skip this field regardless of its value.
-The result is `{"name":"Kali Uchis"}` --- only `name` survives.
+`a.Secret` is `"UK"`, but the tag `json:"-"` instructs the encoder to always skip this field regardless of its value.
+The result is `{"name":"Chicane"}` --- only `name` survives.
 
 **Second `Printf`:**
 The JSON input contains a `"secret"` key.
 However, the Go struct has `Secret string \`json:"-"\``.
 The `json:"-"` tag means `encoding/json` ignores this field during both marshalling **and** unmarshalling.
 The `"secret"` key in the JSON is silently discarded; `b.Secret` remains the zero value `""`.
-`b.Name` is correctly set to `"Rauw Alejandro"` from the `"name"` key.
+`b.Name` is correctly set to `"Darude"` from the `"name"` key.
 
 `%q` formats a string with Go double-quote syntax, so an empty string prints as `""`.
 
@@ -183,8 +183,8 @@ type Song struct {
 }
 
 var catalog = map[int]Song{
-    1: {ID: 1, Title: "Todo De Ti",      Artist: "Rauw Alejandro"},
-    2: {ID: 2, Title: "I Wish You Roses", Artist: "Kali Uchis"},
+    1: {ID: 1, Title: "Sandstorm", Artist: "Darude"},
+    2: {ID: 2, Title: "Saltwater", Artist: "Chicane"},
 }
 
 func listSongs(w http.ResponseWriter, r *http.Request) {
@@ -224,10 +224,10 @@ func main() {
 
 ```
 $ curl http://localhost:8080/songs/
-[{"id":1,"title":"Todo De Ti","artist":"Rauw Alejandro"},{"id":2,"title":"I Wish You Roses","artist":"Kali Uchis"}]
+[{"id":1,"title":"Sandstorm","artist":"Darude"},{"id":2,"title":"Saltwater","artist":"Chicane"}]
 
 $ curl http://localhost:8080/songs/1/
-{"id":1,"title":"Todo De Ti","artist":"Rauw Alejandro"}
+{"id":1,"title":"Sandstorm","artist":"Darude"}
 
 $ curl http://localhost:8080/songs/99/
 not found

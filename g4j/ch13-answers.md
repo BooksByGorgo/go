@@ -40,7 +40,7 @@ Running `go mod tidy` afterward and reviewing the diff in `go.mod` and `go.sum` 
 
 **Exercise 2** (What does this print?):
 
-Given the following three files in a module `github.com/zachbryan/demo`:
+Given the following three files in a module `github.com/angoscia/demo`:
 
 File `lyrics/lyrics.go`:
 ```go
@@ -49,7 +49,7 @@ package lyrics
 import "fmt"
 
 func Print() {
-    fmt.Println("something in the orange")
+    fmt.Println("Emerald Triangle 2012")
 }
 ```
 
@@ -69,8 +69,8 @@ File `main.go`:
 package main
 
 import (
-    "github.com/zachbryan/demo/lyrics"
-    "github.com/zachbryan/demo/lyrics/internal/detail"
+    "github.com/angoscia/demo/lyrics"
+    "github.com/angoscia/demo/lyrics/internal/detail"
 )
 
 func main() {
@@ -85,17 +85,17 @@ If not, explain why.
 
 **The build fails.**
 
-`main.go` is at the module root, which means its parent directory for the purposes of the `internal` rule is `github.com/zachbryan/demo`.
-The `internal` package's full path is `github.com/zachbryan/demo/lyrics/internal/detail`.
-For `main.go` to import it, `main.go` must live inside `github.com/zachbryan/demo/lyrics` or one of its subdirectories.
-`main.go` lives at the module root, which is `github.com/zachbryan/demo` --- it is not rooted under `github.com/zachbryan/demo/lyrics`, so the compiler rejects the import.
+`main.go` is at the module root, which means its parent directory for the purposes of the `internal` rule is `github.com/angoscia/demo`.
+The `internal` package's full path is `github.com/angoscia/demo/lyrics/internal/detail`.
+For `main.go` to import it, `main.go` must live inside `github.com/angoscia/demo/lyrics` or one of its subdirectories.
+`main.go` lives at the module root, which is `github.com/angoscia/demo` --- it is not rooted under `github.com/angoscia/demo/lyrics`, so the compiler rejects the import.
 
 The compiler error will say something like:
 ```
-use of internal package github.com/zachbryan/demo/lyrics/internal/detail not allowed
+use of internal package github.com/angoscia/demo/lyrics/internal/detail not allowed
 ```
 
-The import of `github.com/zachbryan/demo/lyrics` (the public package) is fine.
+The import of `github.com/angoscia/demo/lyrics` (the public package) is fine.
 Only the `internal/detail` import is rejected.
 
 To fix this, either move `detail` out of `lyrics/internal/` into a location that `main.go` is allowed to reach (such as `internal/detail` directly under the module root), or move `main.go` into a directory under `lyrics/`.
@@ -105,19 +105,19 @@ To fix this, either move `detail` out of `lyrics/internal/` into a location that
 **Exercise 3** (Calculation): A module's `go.mod` contains the following:
 
 ```
-module github.com/noahkahan/app
+module github.com/angoscia/app
 
 go 1.26
 
 require (
-    github.com/noahkahan/audio v1.4.0
-    github.com/noahkahan/catalog v0.9.2
+    github.com/angoscia/audio v1.4.0
+    github.com/angoscia/catalog v0.9.2
     golang.org/x/text v0.14.0 // indirect
 )
 ```
 
-`github.com/noahkahan/audio v1.4.0` itself requires `golang.org/x/text v0.12.0`.
-`github.com/noahkahan/catalog v0.9.2` requires `golang.org/x/text v0.14.0`.
+`github.com/angoscia/audio v1.4.0` itself requires `golang.org/x/text v0.12.0`.
+`github.com/angoscia/catalog v0.9.2` requires `golang.org/x/text v0.14.0`.
 
 Under Go's Minimum Version Selection, which version of `golang.org/x/text` will the final build use?
 Explain why.
@@ -127,9 +127,9 @@ What version will MVS select then?
 **First scenario: `v0.14.0`.**
 
 MVS collects the minimum required version from every module in the graph:
-- `github.com/noahkahan/app` itself requires `v0.14.0` (explicit `// indirect` entry).
-- `github.com/noahkahan/audio` requires `v0.12.0`.
-- `github.com/noahkahan/catalog` requires `v0.14.0`.
+- `github.com/angoscia/app` itself requires `v0.14.0` (explicit `// indirect` entry).
+- `github.com/angoscia/audio` requires `v0.12.0`.
+- `github.com/angoscia/catalog` requires `v0.14.0`.
 
 MVS takes the maximum of these minimums: `max(v0.14.0, v0.12.0, v0.14.0)` = **`v0.14.0`**.
 The `// indirect` entry in the main module's `go.mod` already encodes this selection; `go mod tidy` placed it there when one of the direct dependencies required `v0.14.0` and the other only `v0.12.0`.
@@ -146,8 +146,8 @@ No other dependency's version changes.
 **Exercise 4** (Where is the bug?): The following module has this layout and code:
 
 ```
-northernattitude/
-├── go.mod           (module github.com/noahkahan/northernattitude)
+betteroffalone/
+├── go.mod           (module github.com/djcobra/betteroffalone)
 ├── main.go
 └── internal/
     └── config/
@@ -160,7 +160,7 @@ package main
 
 import (
     "fmt"
-    "github.com/noahkahan/northernattitude/internal/config"
+    "github.com/djcobra/betteroffalone/internal/config"
 )
 
 func main() {
@@ -173,35 +173,35 @@ Identify the bug and describe how to fix it without moving the `config` package 
 
 **The build fails.**
 
-The `internal/` package belongs to the module `github.com/noahkahan/northernattitude`.
-The compiler's rule is that only code whose import path has `github.com/noahkahan/northernattitude` as a prefix may import packages under that module's `internal/`.
-The `player` module has path `github.com/noahkahan/player`, which does not share that prefix.
+The `internal/` package belongs to the module `github.com/djcobra/betteroffalone`.
+The compiler's rule is that only code whose import path has `github.com/djcobra/betteroffalone` as a prefix may import packages under that module's `internal/`.
+The `player` module has path `github.com/djcobra/player`, which does not share that prefix.
 The build error will be:
 
 ```
-use of internal package github.com/noahkahan/northernattitude/internal/config not allowed
+use of internal package github.com/djcobra/betteroffalone/internal/config not allowed
 ```
 
 **The fix --- without moving `config` out of `internal/`:**
 
-The `config` package contains information that `northernattitude` treats as a private implementation detail.
-If `player` genuinely needs access to it, the right solution is for `northernattitude` to expose the data through a **public API**.
-Create an exported package, for example `github.com/noahkahan/northernattitude/region`, that wraps or re-exports the value from `internal/config`:
+The `config` package contains information that `betteroffalone` treats as a private implementation detail.
+If `player` genuinely needs access to it, the right solution is for `betteroffalone` to expose the data through a **public API**.
+Create an exported package, for example `github.com/djcobra/betteroffalone/region`, that wraps or re-exports the value from `internal/config`:
 
 ```go
-// northernattitude/region/region.go
+// betteroffalone/region/region.go
 package region
 
-import "github.com/noahkahan/northernattitude/internal/config"
+import "github.com/djcobra/betteroffalone/internal/config"
 
 // DefaultRegion is the default geographic region.
 var DefaultRegion = config.DefaultRegion
 ```
 
-`player` then imports `github.com/noahkahan/northernattitude/region` instead of the internal package.
+`player` then imports `github.com/djcobra/betteroffalone/region` instead of the internal package.
 The internal package remains private; its values are accessible only through the deliberately designed public surface.
 
-Alternatively, if `player` and `northernattitude` are developed together and the restriction is inconvenient, use a Go workspace (`go work init ./northernattitude ./player`) and promote `config` to a shared module or to a non-`internal` path.
+Alternatively, if `player` and `betteroffalone` are developed together and the restriction is inconvenient, use a Go workspace (`go work init ./betteroffalone ./player`) and promote `config` to a shared module or to a non-`internal` path.
 
 ---
 
@@ -209,14 +209,14 @@ Alternatively, if `player` and `northernattitude` are developed together and the
 
 A complete implementation:
 
-File `stickseason/go.mod`:
+File `children/go.mod`:
 ```
-module github.com/noahkahan/stickseason
+module github.com/robertdreamhouse/children
 
 go 1.26
 ```
 
-File `stickseason/tracks/tracks.go`:
+File `children/tracks/tracks.go`:
 ```go
 package tracks
 
@@ -228,18 +228,18 @@ type Track struct {
 
 // Catalog is the list of tracks in this module.
 var Catalog = []Track{
-    {Title: "Stick Season",     Artist: "Noah Kahan"},
-    {Title: "Northern Attitude", Artist: "Noah Kahan"},
+    {Title: "Children",        Artist: "Robert Dream House"},
+    {Title: "Better Off Alone", Artist: "DJ Cobra"},
 }
 ```
 
-File `stickseason/internal/format/format.go`:
+File `children/internal/format/format.go`:
 ```go
 package format
 
 import (
     "fmt"
-    "github.com/noahkahan/stickseason/tracks"
+    "github.com/robertdreamhouse/children/tracks"
 )
 
 // Label returns a human-readable label for a track.
@@ -248,14 +248,14 @@ func Label(t tracks.Track) string {
 }
 ```
 
-File `stickseason/main.go`:
+File `children/main.go`:
 ```go
 package main
 
 import (
     "fmt"
-    "github.com/noahkahan/stickseason/internal/format"
-    "github.com/noahkahan/stickseason/tracks"
+    "github.com/robertdreamhouse/children/internal/format"
+    "github.com/robertdreamhouse/children/tracks"
 )
 
 func main() {
@@ -267,14 +267,14 @@ func main() {
 
 Output:
 ```
-Stick Season by Noah Kahan
-Northern Attitude by Noah Kahan
+Children by Robert Dream House
+Better Off Alone by DJ Cobra
 ```
 
 **Key observations:**
 
-- `main.go` can import `internal/format` because it is inside the same module (`github.com/noahkahan/stickseason`).
+- `main.go` can import `internal/format` because it is inside the same module (`github.com/robertdreamhouse/children`).
   An external module attempting the same import would receive a compile error.
 - `format.Label` is exported (capital `L`) so `main.go` can call it; it is still unreachable from outside the module because the package itself is under `internal/`.
-- The `tracks` package is public --- any module that depends on `github.com/noahkahan/stickseason` could import it.
+- The `tracks` package is public --- any module that depends on `github.com/robertdreamhouse/children` could import it.
   Only `internal/format` is module-private.

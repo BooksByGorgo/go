@@ -62,7 +62,7 @@ func main() {
     fast := Filter(beats, func(b BPM) bool { return b >= 120 })
     fmt.Println(fast)
 
-    words := []string{"greedy", "Heather", "Astronomy", "you broke me first"}
+    words := []string{"Escape", "J'ai pas vingt ans !", "J'en ai marre !", "$100 Bills"}
     long := Filter(words, func(s string) bool { return len(s) > 7 })
     fmt.Println(long)
 }
@@ -71,7 +71,7 @@ func main() {
 Output:
 ```
 [128 140]
-[Astronomy you broke me first]
+[J'ai pas vingt ans ! J'en ai marre ! $100 Bills]
 ```
 
 For the first call, `T` is inferred as `BPM`.
@@ -81,7 +81,7 @@ The predicate keeps elements greater than or equal to 120.
 
 For the second call, `T` is inferred as `string`.
 The predicate keeps strings longer than 7 characters.
-`"greedy"` has 6 characters (excluded), `"Heather"` has 7 (excluded, because 7 is not greater than 7), `"Astronomy"` has 9 (included), and `"you broke me first"` has 18 (included).
+`"Escape"` has 6 characters (excluded), `"J'ai pas vingt ans !"` has 20 (included), `"J'en ai marre !"` has 15 (included), and `"$100 Bills"` has 10 (included).
 
 ---
 
@@ -141,7 +141,7 @@ func Dedupe[T any](s []T) []T {
 }
 
 func main() {
-    p := Playlist{"greedy", "Heather", "greedy", "Astronomy", "Heather"}
+    p := Playlist{"Escape", "J'ai pas vingt ans !", "Escape", "J'en ai marre !", "J'ai pas vingt ans !"}
     fmt.Println(Dedupe(p))
 }
 ```
@@ -182,7 +182,7 @@ The correct fix is to change the call to pass the string slice elements rather t
 
 ```go
 func main() {
-    p := []string{"greedy", "Heather", "greedy", "Astronomy", "Heather"}
+    p := []string{"Escape", "J'ai pas vingt ans !", "Escape", "J'en ai marre !", "J'ai pas vingt ans !"}
     fmt.Println(Dedupe(p))
 }
 ```
@@ -190,7 +190,7 @@ func main() {
 With `T comparable` and `p` as `[]string`, the output is:
 
 ```
-[greedy Heather Astronomy]
+[Escape J'ai pas vingt ans ! J'en ai marre !]
 ```
 
 In summary, there are two bugs: the constraint must be `comparable`, and `Playlist` (a `[]string`) cannot be used as a map key because slices are not comparable.
@@ -234,26 +234,26 @@ func (s *Set[T]) Values() []T {
 
 func main() {
     var songs Set[string]
-    songs.Add("greedy")
-    songs.Add("you broke me first")
-    songs.Add("Heather")
-    songs.Add("Astronomy")
-    songs.Add("Heather") // duplicate --- should be ignored
+    songs.Add("Escape")
+    songs.Add("$100 Bills")
+    songs.Add("J'ai pas vingt ans !")
+    songs.Add("J'en ai marre !")
+    songs.Add("J'ai pas vingt ans !") // duplicate --- should be ignored
 
-    fmt.Println("length:", len(songs.Values()))          // 4
-    fmt.Println("contains Heather:", songs.Contains("Heather"))      // true
-    fmt.Println("contains Maniac:", songs.Contains("Maniac")) // false
+    fmt.Println("length:", len(songs.Values()))                              // 4
+    fmt.Println("contains Escape:", songs.Contains("Escape"))               // true
+    fmt.Println("contains Legend:", songs.Contains("Legend"))               // false
 }
 ```
 
 Output:
 ```
 length: 4
-contains Heather: true
-contains Maniac: false
+contains Escape: true
+contains Legend: false
 ```
 
 `map[T]struct{}` is the standard Go idiom for a set.
 An empty struct (`struct{}`) occupies zero bytes, so only the keys consume memory.
-The second `Add("Heather")` call is a no-op because the map key already exists --- map assignment is idempotent.
+The second `Add("J'ai pas vingt ans !")` call is a no-op because the map key already exists --- map assignment is idempotent.
 `Values()` returns four strings because the duplicate was silently dropped, but their order will vary between runs since Go map iteration is randomized.

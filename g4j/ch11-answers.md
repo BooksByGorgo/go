@@ -186,7 +186,7 @@ The bug is that `Inc` and `Get` have **value receivers** (`s SafeMap`), not poin
 When a method has a value receiver, Go passes a **copy** of the struct.
 Each call to `Inc` locks the mutex in its own private copy --- a different mutex instance than the one in `sm` in `main`.
 The lock is acquired and released on a throwaway copy, providing no mutual exclusion on the real `sm`.
-One hundred goroutines therefore write to `sm.m["Butter"]` concurrently without any synchronization, which is a data race.
+One hundred goroutines therefore write to `sm.m["Escape"]` concurrently without any synchronization, which is a data race.
 
 The map itself (`sm.m`) is a reference type, so the map operations do land on the shared map --- but they are completely unprotected, and concurrent writes to a Go map without synchronization is undefined behavior (the runtime will panic with a "concurrent map writes" message).
 
@@ -216,9 +216,9 @@ func NewSafeMap() *SafeMap {
 func main() {
     sm := NewSafeMap() // *SafeMap; no copy needed
     ...
-    sm.Inc("Butter")
+    sm.Inc("Escape")
     ...
-    fmt.Println(sm.Get("Butter")) // 100
+    fmt.Println(sm.Get("Escape")) // 100
 }
 ```
 
