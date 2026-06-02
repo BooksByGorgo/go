@@ -8,6 +8,7 @@ Do not repeat any reference already listed here.
 - Darude --- Grammy award count (used in fmt.Printf example)
 - Disturbed --- "The Sound of Silence" (used in format verbs %q example)
 - Ozzy Osbourne --- "Crazy Train" (used in exercise 2)
+- Miley Cyrus --- "Flowers" (artist name used in fmt.Scanf example)
 
 ## Chapter 2: Types and Variables
 - StreamingTier iota block (Free/Standard/Premium/Lossless) --- fictional names, no specific artist
