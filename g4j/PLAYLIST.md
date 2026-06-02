@@ -146,8 +146,3 @@ Do not repeat any reference already listed here.
 - Disturbed --- "The Sound of Silence" (used in TestSoundOfSilence exercise 2 what-does-this-print question)
 - Ozzy Osbourne --- "Crazy Train" (used in BenchmarkCrazyTrain exercise 3 calculation question)
 
-## Chapter 19: Reflection
-- San Mehat --- "Sounds of Slashdot" (used in TypeOf/ValueOf intro example as string value; and in exercise 3 SetString starting value)
-- Darude --- "Sandstorm" (used in Elem() / struct example: Song.Title field value)
-- Energy 52 --- "Café Del Mar (Three 'n One Remix)" (used in struct field iteration printFields example; exercise 3 SetString result)
-- BT --- album "ESCM" (used in exercise 2 Album struct)
