@@ -1,4 +1,4 @@
-# Chapter 15: Essential Standard Library --- Answers
+# Chapter 14: Essential Standard Library --- Answers
 
 **Exercise 1** (Think about it): In Java, `InputStream`, `OutputStream`, `Reader`, and `Writer` are four separate abstract class hierarchies.
 Go has two interfaces --- `io.Reader` and `io.Writer` --- and a set of composition functions.
@@ -31,7 +31,6 @@ package main
 
 import (
     "bufio"
-    "fmt"
     "log/slog"
     "os"
     "strings"
