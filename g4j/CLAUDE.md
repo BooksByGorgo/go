@@ -20,7 +20,7 @@ This book covers all the topics that a good Go programmer uses in daily life in 
 
 ## Examples
 
-- for strings, use 2020s references, lyrics from 2020s songs, and Spanish occasionally. Keep it short.
+- for strings, use 2020s references, lyrics from PLAYLIST.md songs, and Spanish occasionally. Keep it short.
 - cover up to Go 1.26
 - avoid repeating lyrics in examples even across chapters
 - Validate examples to make sure syntax and result is correct
@@ -60,7 +60,7 @@ This book covers all the topics that a good Go programmer uses in daily life in 
 - in `\index{}`, escape double quotes by doubling them (e.g., `\index{extern ""C""}`)
 - `\printindex` goes only in appF.md (the last file built into the book) --- do not add it to other chapters or appendices
 
-## 2020s References
+## Playlist References
 
 - PLAYLIST.md tracks all songs and references used in the text, organized by chapter
 - do not repeat references already listed in PLAYLIST.md

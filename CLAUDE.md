@@ -7,7 +7,8 @@ a collection of programming texts --- focused on GO --- suitable for introductor
 - DO NOT MODIFY THE AUTHOR INTRO section
 - each markdown file starting with `ch` or `app` represents a chapter
 - the chapter should start with a chapter title. the chapters are numbered automatically when formatted into a single PDF or into webpages
-- each chapter starts with an introducton to the topics covered. motivation for the topics highlighting things that are hard to do without know    ledge of the topics, and a brief overview of the section
+- each chapter starts with an introducton to the topics covered. motivation for the topics highlighting things that are hard to do without knowledge of the topics, and a brief overview of the section
+- before the list of key points, each chapter should have a complete `Try It` program that covers the key APIs presented in the chapter
 - each chapter ends with a brief highlight of key points
 - each chapter has some exercises to test reader's comprehesion of the topics covered. there should be a mix of the following types of questions:
     - though provoking questions to make them think a little deeper about what they have read
@@ -54,8 +55,8 @@ when committing a change based on an issue (or set of issues)
 - check any code examples for errors
 - check that everything is explained accurately
 - are there any missing concepts that should be covered?
-- does the chapter have all the required elements
-- does each chapter have exercises with a mix of:
+- check that the chapter has all the required elements
+- check that each chapter has exercises that cover all important concepts with a mix of:
     - thought provoking questions
     - what does this do type questions with code snippets
     - calculation questions
