@@ -33,7 +33,7 @@ There are no exercises in Chapter 0.
 
 ---
 
-# Chapter 1: Hello, Go
+# Chapter 1: Hello, Go --- Answers
 
 **Exercise 1** (Think about it): Java has four visibility levels: `public`, `protected`, package-private (no keyword), and `private`.
 Go has two: exported (uppercase) and unexported (lowercase), with the package as the only boundary.
@@ -43,10 +43,10 @@ Can you think of a Java visibility pattern that has no direct equivalent in Go?
 
 **What you gain:**
 
-- Simplicity --- one rule covers everything: uppercase = visible outside the package, lowercase = not.
-  There is no keyword to remember, no risk of accidentally using `protected` when you meant `private`, and no six-word modifier like `public static final`.
+- Simplicity --- one rule covers everything: uppercase means visible outside the package, lowercase means not.
+  There is no keyword to remember, no risk of accidentally writing `protected` when you meant `private`, and no three-word modifier like `public static final`.
 - Consistency --- the rule applies uniformly to functions, types, variables, struct fields, and methods.
-  There is no special case for classes vs members.
+  There is no special case for classes versus members.
 - Readability --- any identifier starting with a capital letter is part of the public API; the rest is implementation detail.
   You can tell at a glance what is exported without an IDE.
 
@@ -60,8 +60,8 @@ Can you think of a Java visibility pattern that has no direct equivalent in Go?
 **A Java pattern with no direct Go equivalent:**
 
 `protected` members --- visible to subclasses anywhere but hidden from unrelated code in other packages.
-Go has no inheritance, so the concept of "subclass visibility" does not exist.
-The closest substitutes are the `internal/` directory convention (covered in Chapter 13) and interfaces, but neither maps exactly to `protected`.
+Go has no inheritance, so the idea of "subclass visibility" does not exist.
+The closest substitutes are the `internal/` directory convention (covered in Chapter 13) and interfaces, but neither maps exactly onto `protected`.
 
 ---
 
@@ -77,11 +77,12 @@ func main() {
     plays := 2_100_000_000
     fmt.Printf("%s has %d plays\n", name, plays)
     fmt.Printf("type of plays: %T\n", plays)
-    fmt.Println(fmt.Sprintf("quoted: %q", name))
+    fmt.Printf("quoted: %q\n", name)
 }
 ```
 
 Output:
+
 ```
 Ozzy Osbourne has 2100000000 plays
 type of plays: int
@@ -89,10 +90,9 @@ quoted: "Ozzy Osbourne"
 ```
 
 `%s` formats the string without quotes.
-`%d` formats the integer in base 10; the `_` digit separator in the source literal `2_100_000_000` is purely cosmetic --- the value is `2100000000`.
-`%T` prints the Go type name, which for an integer literal assigned with `:=` is `int`.
+`%d` formats the integer in base 10; the `_` digit separators in the source literal `2_100_000_000` are purely cosmetic, so the value is `2100000000`.
+`%T` prints the Go type name, which for an untyped integer literal assigned with `:=` is `int`.
 `%q` wraps the string in double quotes and escapes any characters that need it.
-`fmt.Sprintf` returns the formatted string; `fmt.Println` then prints it with a newline appended.
 
 ---
 
@@ -123,6 +123,7 @@ The full slice is `["<binary>", "Sandstorm", "Remix", "Darude"]`, so `len(os.Arg
 `os.Args[2]` is `"Remix"` (the second user-supplied argument, at index 2).
 
 Output:
+
 ```
 4
 Remix
@@ -147,19 +148,20 @@ func main() {
 
 `"math"` is imported but never used.
 The program will not compile.
-The compiler produces:
+The compiler produces a message like:
 
 ```
-./main.go:5:2: "math" imported and not used
+./main.go: "math" imported and not used
 ```
 
 The fix is to remove the `"math"` import.
-If you were writing this in an editor with `goimports` configured to run on save, it would have removed the unused import automatically before you even tried to build.
+If you were writing this in an editor with `goimports` configured to run on save, it would have stripped the unused import automatically before you even tried to build.
 
 ---
 
 **Exercise 5** (Write a program): Write a Go program that accepts a song title as the first command-line argument and a play count as the second, then prints them formatted as `"<title>" has <count> plays`.
 If fewer than two arguments are provided (not counting the program name), print a usage message and exit.
+Run it with `go run`.
 
 ```go
 package main
@@ -181,24 +183,28 @@ func main() {
 ```
 
 Sample run:
+
 ```
 $ go run main.go "Sandstorm" 2100000000
 "Sandstorm" has 2100000000 plays
 ```
 
 Notes:
-- `len(os.Args) < 3` because index 0 is the binary name, 1 is the title, and 2 is the count.
+
+- The check is `len(os.Args) < 3` because index 0 is the binary name, 1 is the title, and 2 is the count.
 - The play count is kept as a string here; Chapter 3 covers `strconv.Atoi` for converting it to an integer.
 - `fmt.Fprintln(os.Stderr, ...)` sends the usage message to standard error, which is the convention for diagnostic output.
 - `os.Exit(1)` terminates the program immediately with a non-zero exit code, signalling failure to the shell.
 
 ---
 
-# Chapter 2: Types and Variables
+---
+
+# Chapter 2: Types and Variables --- Answers
 
 **Exercise 1** (Think about it): In Java, using an uninitialized local variable is a compile error.
 In Go, every variable has a zero value.
-What are the benefits and potential risks of zero values?
+What are the practical benefits of Go's approach, and when might zero values mask a bug instead of preventing one?
 
 The primary benefit is safety and predictability: there are no uninitialized reads and no undefined behavior from reading a garbage value off the stack.
 You can declare a `sync.Mutex` or a `bytes.Buffer` and use it immediately without calling a constructor, because the zero value is deliberately designed to be a valid, ready-to-use state.
@@ -253,9 +259,9 @@ tier type: main.StreamingTier, value: 2
 type Bpm float64
 
 var tempo Bpm    = 120.0
-var raw  float64 = tempo         // line A
+var raw  float64 = tempo          // line A
 var cvt  float64 = float64(tempo) // line B
-var same Bpm     = cvt           // line C
+var same Bpm     = cvt            // line C
 ```
 
 | Line | Result | Reason |
@@ -415,16 +421,20 @@ This mirrors Exercise 6: to mutate the caller's value through a pointer paramete
 
 ---
 
-# Chapter 3: Strings, Bytes, and Runes
+# Chapter 3: Strings, Bytes, and Runes --- Answers
 
-**Exercise 1** (Think about it): Go strings are immutable byte sequences and Java strings are immutable too, yet Go's `for range` over a string behaves differently from Java's enhanced `for` loop over a `String`. Why? What would have to be true for both to give the same result?
+**Exercise 1** (Think about it): Go strings are described as "immutable sequences of bytes."
+Java strings are also immutable.
+Given that both languages have immutable strings, why does Go's `for range` behave differently from Java's enhanced `for` loop over a `String`?
+What would have to be true about the loop for both languages to give the same result?
 
-Java's enhanced `for` loop does not iterate a `String` directly (a `String` is not `Iterable`); you iterate `char` values via index/`charAt` or a stream.
-Either way the unit is a UTF-16 **code unit**.
-Go's `for range` decodes the string as **UTF-8** and yields one `rune` (full code point) per iteration, with the index being the byte offset of the rune's first byte.
-So the difference is the unit of iteration and the encoding being walked: UTF-16 code units in Java versus decoded UTF-8 code points in Go.
-The two loops give the same sequence only when the text is restricted to the Basic Multilingual Plane characters that are also a single byte in UTF-8 --- i.e. pure ASCII.
-For any non-ASCII character the counts and per-iteration values diverge: e.g. `é` is one `char` in Java but two bytes (one rune) in Go, and a non-BMP emoji is two Java `char` values but one Go `rune`.
+Immutability is not the source of the difference --- the unit of iteration and the encoding being walked are.
+A Java `String` is backed by UTF-16, and when you iterate its `char` values (a `String` is not directly `Iterable`, so you go through `charAt`/index or a stream) the unit is a UTF-16 **code unit**.
+Go's `for range` decodes the string as **UTF-8** and yields one `rune` (a full Unicode code point) per iteration, with the loop index being the byte offset of that rune's first byte.
+So Java walks UTF-16 code units while Go walks decoded UTF-8 code points.
+
+The two loops give the same sequence only when the text is restricted to characters that are both a single UTF-16 code unit in Java and a single byte in UTF-8 in Go --- i.e. pure ASCII.
+For any non-ASCII character the counts and per-iteration values diverge: `é` is one Java `char` but two bytes (one rune) in Go, and a non-BMP emoji is two Java `char` values (a surrogate pair) but one Go `rune`.
 
 ---
 
@@ -442,13 +452,14 @@ func main() {
 ```
 
 Output:
+
 ```
 195
 ```
 
-`"Alizée"` is `A l i z é e`.
-The accented `é` (U+00E9) is the fifth character but, because the four preceding letters are one byte each, `é` begins at byte index 4 and occupies bytes 4 and 5 (`0xC3 0xA9`).
-`s[4]` indexes a **byte**, so it returns `195` (`0xC3`), the first byte of the UTF-8 encoding of `é` --- not the character `é`, and not the trailing plain `e` (which lives at byte index 6).
+`"Alizée"` is the characters `A l i z é e`.
+The four preceding letters (`A`, `l`, `i`, `z`) are one byte each, so the accented `é` (U+00E9) begins at byte index 4 and occupies bytes 4 and 5 (`0xC3 0xA9`).
+Indexing a string with `s[4]` returns a **byte**, not a character, so you get `195` (`0xC3`), the first byte of the UTF-8 encoding of `é` --- not the character `é`, and not the trailing plain `e` (which lives at byte index 6).
 
 ---
 
@@ -456,15 +467,15 @@ The accented `é` (U+00E9) is the fifth character but, because the four precedin
 How many runes does `utf8.RuneCountInString("Alizée")` return?
 
 `len("Alizée")` returns `7`.
-The letters `A`, `l`, `i`, `z`, `e` are each one byte (5 bytes), and `é` (U+00E9) encodes to two bytes in UTF-8, for 7 bytes total.
+The letters `A`, `l`, `i`, `z`, `e` are each one byte (5 bytes), and `é` (U+00E9) encodes to two bytes in UTF-8 (`0xC3 0xA9`), for 7 bytes total.
 
-`utf8.RuneCountInString("Alizée")` returns `6`: six characters --- `A`, `l`, `i`, `z`, `é`, `e`.
+`utf8.RuneCountInString("Alizée")` returns `6`: six code points --- `A`, `l`, `i`, `z`, `é`, `e`.
 `len` counts bytes; `RuneCountInString` counts code points.
 They agree only on pure ASCII.
 
 ---
 
-**Exercise 4** (Where is the bug?): the `swapCase` function operates on raw bytes.
+**Exercise 4** (Where is the bug?): The following function tries to reverse each byte's case by operating on raw bytes:
 
 ```go
 func swapCase(s string) string {
@@ -486,18 +497,27 @@ func main() {
 ```
 
 The bug: the function treats every byte as an independent ASCII letter.
-For ASCII that works (`H`(72) + 32 -> 104 `h`; `r`, `o`, `e` -> `R`, `O`, `E`).
-But `é` is the two bytes `0xC3` (195) and `0xA9` (169).
-Neither byte falls in the `A`--`Z` or `a`--`z` ranges, so the `switch` leaves them unchanged --- the accented vowel survives by luck, not design.
-The program prints `héROE`: `H` becomes `h`, the two bytes of `é` pass through untouched, and `roe` becomes `ROE`.
+For the ASCII letters this works as intended.
+Tracing `"Héroe"` byte by byte: `H` is 72, in `A`--`Z`, so it becomes 104 (`h`).
+The `é` is the two bytes `0xC3` (195) and `0xA9` (169); neither falls in the `A`--`Z` or `a`--`z` ranges, so the `switch` leaves both bytes untouched.
+Then `r` (114), `o` (111), and `e` (101) are each in `a`--`z`, so they lose 32 and become `R` (82), `O` (79), `E` (69).
 
-The fundamental problem is that byte-wise case logic is only valid for ASCII.
-Had `é`'s bytes happened to land in the ASCII ranges, adding or subtracting 32 byte-wise would corrupt the multibyte sequence and produce invalid UTF-8.
+So the program prints:
+
+```
+héROE
+```
+
+The `é` survives intact only by luck: its two bytes happened to dodge the ASCII case ranges.
+That is exactly what is fundamentally wrong with the approach --- byte-wise case logic is only valid for ASCII.
+Had one of `é`'s bytes landed in `A`--`Z` or `a`--`z` (say a code point whose continuation byte happened to be a printable ASCII value), adding or subtracting 32 to that single byte would corrupt the multibyte sequence and produce invalid UTF-8.
 The correct approach is to work on runes (`for range` or `[]rune`), or simply use `strings.ToUpper` / `strings.ToLower`, which are Unicode-aware.
 
 ---
 
-**Exercise 5** (Write a program): Write a function `reverseString(s string) string` that returns `s` with its runes in reverse order (e.g. `reverseString("café")` returns `"éfac"`), and test it on a string with a multibyte character.
+**Exercise 5** (Write a program): Write a function `reverseString(s string) string` that returns the string with its runes in reverse order.
+For example, `reverseString("café")` should return `"éfac"`.
+Test it with at least one string that contains a multibyte character to confirm it handles Unicode correctly.
 
 ```go
 package main
@@ -521,6 +541,7 @@ func main() {
 ```
 
 Output:
+
 ```
 "café" -> "éfac"
 "Beyoncé" -> "écnoyeB"
@@ -529,16 +550,17 @@ Output:
 
 The key step is converting the string to `[]rune` first.
 This decodes the UTF-8 and gives you one `rune` per Unicode code point regardless of how many bytes each one occupies.
-You then swap elements in the rune slice in place, and convert back to a `string` at the end.
-Reversing the raw `[]byte` instead would shuffle the individual bytes of multibyte characters and produce invalid UTF-8.
+You then swap elements in the rune slice in place and convert back to a `string` at the end.
+Reversing the raw `[]byte` instead would shuffle the individual bytes of multibyte characters and produce invalid UTF-8 --- `café` would come out garbled rather than as `éfac`.
 
 ---
 
-# Chapter 4: Control Flow
+# Chapter 4: Control Flow --- Answers
 
 **Exercise 1** (Think about it): Go's `switch` does not fall through by default, while Java's does.
 Imagine you are reviewing a Go codebase written by a Java programmer.
 What kind of bug would you look for in their `switch` statements?
+Describe a concrete example where the Java habit causes a silent logic error in Go.
 
 Look for stray `break` statements and, more importantly, for cases that were *meant* to share logic via fall-through.
 A Java programmer used to writing
@@ -575,6 +597,7 @@ func main() {
 ```
 
 Output:
+
 ```
 done
 2
@@ -592,7 +615,7 @@ Deferred calls execute in LIFO (last-in, first-out) order, so the last one regis
 
 ---
 
-**Exercise 3** (What does this print?):
+**Exercise 3** (What does this print?): Trace the output of the following expression-less switch, one line at a time.
 
 ```go
 package main
@@ -621,6 +644,7 @@ func main() {
 ```
 
 Output:
+
 ```
 negative
 zero
@@ -635,7 +659,8 @@ Cases are evaluated top to bottom; once a match is found, the remaining cases ar
 
 ---
 
-**Exercise 4** (Where is the bug?):
+**Exercise 4** (Where is the bug?): The following code tries to build three multiplier functions that multiply their input by 10, 20, and 30 respectively.
+What does it actually print when each function is called with `5`, and why?
 
 ```go
 package main
@@ -677,10 +702,13 @@ for i := 0; i < 3; i++ {
 ```
 
 Now each closure captures a distinct `factor` variable, and the output is `50`, `100`, `150`.
+Note that Go's per-iteration loop variable semantics (Go 1.22 and later) fix the classic `i`-capture bug automatically, but they do not help here because the captured variable is `factor`, not the loop variable.
 
 ---
 
-**Exercise 5** (Write a program): Write a function `processFile(path string)` that opens a file, defers closing it, reads the first 64 bytes, and prints them as a string. Call it with a valid path and a missing path.
+**Exercise 5** (Write a program): Write a function `processFile(path string)` that opens a file, defers closing it, reads the first 64 bytes, and prints them as a string.
+Use `defer` to guarantee the file is closed even if an error occurs mid-function.
+Call the function with a valid path and with a path that does not exist, and print the error in the second case.
 
 ```go
 package main
@@ -723,7 +751,7 @@ Note that a single `Read` is not guaranteed to fill the buffer; using `io.ReadFu
 
 ---
 
-**Exercise 6** (Calculation):
+**Exercise 6** (Calculation): Consider this loop.
 
 ```go
 count := 0
@@ -752,7 +780,8 @@ Java's checked exceptions provide a compiler-enforced contract: if a method decl
 There is no way to silently ignore a checked exception in Java without at least writing a catch block (even an empty one is conspicuous).
 
 Go does not provide that same guarantee.
-You can write `result, _ := divide(a, b)` or even `result := somePackage.Lookup(key)` if you know (or ignore) that `Lookup` returns `(string, error)` but only assign one variable --- though the compiler will reject an assignment that captures the wrong number of values, it will happily accept `_` for any of them.
+You can write `result, _ := divide(a, b)` to throw the error away, and the compiler is perfectly happy.
+The compiler will reject an assignment that captures the wrong *number* of return values, so you cannot accidentally drop the error by writing `result := divide(a, b)` when `divide` returns two values --- but it will gladly accept `_` for any value you choose to discard.
 
 **What Go gains:**
 
@@ -803,7 +832,7 @@ Output:
 ```
 
 `makeAdder(5)` creates a single variable `n` initialized to `5`.
-Both `inc` and `dec` are closures that capture that *same* `n` by reference, so they share one piece of state --- mutating `n` through one closure is visible to the other.
+Both `inc` and `dec` are closures that capture that *same* `n`, so they share one piece of state --- mutating `n` through one closure is visible to the other.
 
 - `inc()`: `n = 5 + 1 = 6`; prints `6`.
 - `inc()`: `n = 6 + 1 = 7`; prints `7`.
@@ -847,7 +876,7 @@ Output:
 ```
 
 `running(100)` creates a closure that captures `total`, initialised to `100`.
-The same `total` variable is shared across all calls through `acc` because the closure captures it by reference --- it is the same memory location every time.
+The same `total` variable is shared across all calls through `acc` because the closure captures it --- it is the same memory location every time.
 
 - `acc(10)`: `total = 100 + 10 = 110`; returns and prints `110`.
 - `acc(20)`: `total = 110 + 20 = 130`; returns and prints `130`.
@@ -859,7 +888,7 @@ Each call modifies and returns the accumulated value.
 ---
 
 **Exercise 4** (Where is the bug?):
-The following code tries to build a slice of greeting functions, one for each name in a list, using a Go 1.21 module.
+The following code tries to build a slice of greeting functions, one for each name in a list, using a Go 1.21 module (the `go` directive in `go.mod` is `go 1.21`).
 
 ```go
 package main
@@ -930,9 +959,9 @@ func pipeline(fns ...func(int) int) func(int) int {
 }
 
 func main() {
-    double  := func(n int) int { return n * 2 }   // multiply by 2
-    addTen  := func(n int) int { return n + 10 }  // add 10
-    square  := func(n int) int { return n * n }   // square the value
+    double := func(n int) int { return n * 2 }  // multiply by 2
+    addTen := func(n int) int { return n + 10 } // add 10
+    square := func(n int) int { return n * n }  // square the value
 
     // double then addTen: (3*2)+10 = 16
     p1 := pipeline(double, addTen)
@@ -955,14 +984,13 @@ func main() {
 Key points in this solution:
 
 - `pipeline` is variadic: it accepts any number of `func(int) int` values.
-- Inside the returned closure, `fns` is captured by reference --- the same `[]func(int) int` slice the outer call built.
+- Inside the returned closure, `fns` is captured --- the same `[]func(int) int` slice the outer call built.
 - The order of application matters: `pipeline(double, addTen)` and `pipeline(addTen, double)` produce different results for the same input.
 - An empty `pipeline()` call returns an identity function because the loop body never executes.
 
-
 ---
 
-# Chapter 6: Methods and Embedding --- Answers
+# Chapter 6: Objects using Methods and Embedding --- Answers
 
 **Exercise 1** (Think about it): In Java, a class bundles data and behavior together and inheritance lets you share both across a type hierarchy.
 Go separates data (struct), behavior (methods), and code reuse (embedding) into three distinct mechanisms, and interfaces handle polymorphism independently of all three.
@@ -971,27 +999,27 @@ Can you think of a scenario where Java's approach is simpler or more convenient?
 
 **Advantages of Go's separated approach:**
 
-1. **You can attach methods to any type, not just classes.**
+1. **You can attach methods to any named type, not just classes.**
    In Java, methods live inside class bodies and you cannot add methods to types defined in other packages.
-   In Go, you can define methods on any named type in the same package, including types imported from the standard library via type definitions (e.g., `type Seconds float64`).
+   In Go, you can define methods on any named type declared in the same package, including types built on standard-library types (e.g., `type Seconds float64`).
 
 2. **Code reuse without coupling.**
    Java inheritance forces an is-a relationship: `FeaturedTrack extends Track` means every `FeaturedTrack` is substitutable for a `Track`.
-   Go embedding is a has-a relationship with no substitutability.
+   Go embedding is a has-a relationship with no automatic substitutability.
    You get promoted fields and methods without locking yourself into a hierarchy that may become wrong later.
 
 3. **Interfaces decouple behavior from data completely.**
-   A type satisfies a Go interface without knowing the interface exists.
-   This lets you define interfaces in the consumer package, not the producer package, making dependencies flow the right way.
+   A type satisfies a Go interface without naming or knowing the interface exists.
+   This lets you define interfaces in the consumer package, not the producer package, so dependencies flow the right way.
 
 4. **No fragile base-class problem.**
    Java's virtual dispatch means a change to a superclass method can silently alter the behavior of all subclasses.
-   Go's promoted methods are not virtual: calling a promoted method on an outer struct always calls the embedded type's method, unless the outer struct explicitly defines its own method with the same name.
+   Go's promoted methods are not virtual: calling a promoted method on an outer struct always calls the embedded type's method, unless the outer struct defines its own method with the same name.
 
 **Where Java's approach is simpler:**
 
 - When you genuinely want polymorphism through a type hierarchy (e.g., a UI widget tree), Java's `extends` gives you substitutability, virtual dispatch, and `instanceof` checks in one declaration.
-  In Go you need an interface plus embedding, and you must ensure both the outer and inner types implement the interface explicitly.
+  In Go you need an interface plus embedding, and you must ensure both the outer and inner types satisfy the interface.
 - A `toString()` override in Java is automatic through the `Object` base class.
   In Go, `fmt.Stringer` requires you to implement `String() string` on each type that wants custom formatting; there is no default.
 
@@ -1030,6 +1058,7 @@ func main() {
 ```
 
 Output:
+
 ```
 42
 blue
@@ -1068,7 +1097,7 @@ func (ft *FeaturedTrack) String() string { /* ... */ }
 **Answer:**
 
 - a. `Track` (the value type): **1** --- only `IsLong`, the sole value-receiver method.
-  `String` and `ScaleBPM` have pointer receivers, so they are *not* in the value type's method set.
+  `String` and `ScaleBPM` have pointer receivers, so they are not in the value type's method set.
 - b. `*Track`: **3** --- `String`, `ScaleBPM`, and `IsLong`.
   A pointer type's method set includes both pointer-receiver and value-receiver methods.
 - c. `FeaturedTrack` (the value type), counting promoted methods: **1** --- only the promoted `IsLong`.
@@ -1077,11 +1106,13 @@ func (ft *FeaturedTrack) String() string { /* ... */ }
 - d. `*FeaturedTrack`, counting promoted methods: **3** --- its own `String` (which shadows the promoted `Track.String`), plus the promoted `ScaleBPM` and `IsLong`.
   Embedding a value `Track` promotes the full `*Track` method set onto `*FeaturedTrack`; the outer `String` shadows the inner one, so the count stays **3**, not 4.
 
-The key insight: pointer-receiver methods join only the *pointer* type's method set, and an outer method with the same name shadows the promoted method rather than adding to the count.
+The key insight: pointer-receiver methods join only the pointer type's method set, and an outer method with the same name shadows the promoted method rather than adding to the count.
+You can confirm these counts with `reflect.TypeOf(x).NumMethod()`, which reports 1, 3, 1, and 3 respectively.
 
 ---
 
-**Exercise 4** (Where is the bug?):
+**Exercise 4** (Where is the bug?): The following program panics at runtime.
+Identify the exact line that panics, explain why, and describe how to fix it.
 
 ```go
 package main
@@ -1102,16 +1133,16 @@ type Song struct {
 }
 
 func main() {
-    s := Song{Title: "Chorizo Asado"}
+    s := Song{Title: "Out Of The Blue"}
     fmt.Println(s.Title)
     fmt.Println(s.Label()) // line A
 }
 ```
 
-**The bug:** `Song` is initialized without setting the `*Artist` pointer, so `s.Artist` is `nil`.
-The first `fmt.Println(s.Title)` prints `"Chorizo Asado"` successfully.
-The second call `s.Label()` is promoted from the embedded `*Artist`.
-To call a method on the embedded type, Go dereferences the embedded pointer.
+**The bug:** `Song` is initialized without setting the embedded `*Artist` pointer, so `s.Artist` is `nil`.
+The first `fmt.Println(s.Title)` prints `Out Of The Blue` successfully.
+Line A (`fmt.Println(s.Label())`) is where the program panics.
+`Label` is promoted from the embedded `*Artist`, and to call it Go must dereference the embedded pointer.
 Dereferencing a `nil` pointer causes a runtime panic:
 
 ```
@@ -1123,13 +1154,13 @@ panic: runtime error: invalid memory address or nil pointer dereference
 ```go
 s := Song{
     Artist: &Artist{Name: "Feid"},
-    Title:  "Chorizo Asado",
+    Title:  "Out Of The Blue",
 }
-fmt.Println(s.Title)   // Chorizo Asado
+fmt.Println(s.Title)   // Out Of The Blue
 fmt.Println(s.Label()) // Artist: Feid
 ```
 
-Alternatively, construct `Song` using `NewSong` to enforce initialization:
+Alternatively, construct `Song` through a constructor that enforces initialization:
 
 ```go
 func NewSong(title, artistName string) Song {
@@ -1139,7 +1170,11 @@ func NewSong(title, artistName string) Song {
 
 ---
 
-**Exercise 5** (Write a program):
+**Exercise 5** (Write a program): Define a struct `Counter` with a single `int` field `Value`.
+Write a `New*` constructor that accepts a starting value and returns a `*Counter`.
+Add three pointer-receiver methods: `Increment()` that adds 1, `Reset()` that sets `Value` to zero, and `String() string` that returns the current value formatted as `"count: N"`.
+In `main`, create a `Counter` with `NewCounter(10)`, increment it three times, print it, reset it, and print it again.
+Use `defer` to print `"done"` at the end of `main`, so that "done" appears as the very last line of output.
 
 ```go
 package main
@@ -1150,19 +1185,13 @@ type Counter struct {
     Value int
 }
 
-func NewCounter(start int) *Counter {   // constructor: returns *Counter so callers can use pointer receivers
+func NewCounter(start int) *Counter {  // constructor: returns *Counter so callers can use pointer receivers
     return &Counter{Value: start}
 }
 
-func (c *Counter) Increment() {         // pointer receiver: mutates Value
-    c.Value++
-}
-
-func (c *Counter) Reset() {             // pointer receiver: mutates Value
-    c.Value = 0
-}
-
-func (c *Counter) String() string {     // pointer receiver for consistency
+func (c *Counter) Increment()     { c.Value++ }       // pointer receiver: mutates Value
+func (c *Counter) Reset()         { c.Value = 0 }      // pointer receiver: mutates Value
+func (c *Counter) String() string {                   // pointer receiver for consistency
     return fmt.Sprintf("count: %d", c.Value)
 }
 
@@ -1173,13 +1202,14 @@ func main() {
     c.Increment()
     c.Increment()
     c.Increment()
-    fmt.Println(c)  // count: 13
+    fmt.Println(c) // count: 13
     c.Reset()
-    fmt.Println(c)  // count: 0
+    fmt.Println(c) // count: 0
 }
 ```
 
 Output:
+
 ```
 count: 13
 count: 0
@@ -1187,8 +1217,9 @@ done
 ```
 
 Notes:
+
 - `NewCounter` returns `*Counter` so every method call works without taking an address at the call site.
-- All three methods use pointer receivers for consistency --- since `Increment` and `Reset` must mutate `c.Value`, all methods on `*Counter` use the pointer form.
+- All three methods use pointer receivers for consistency --- since `Increment` and `Reset` must mutate `c.Value`, keeping `String` on the pointer receiver too keeps the method set uniform.
 - `fmt.Println(c)` calls `c.String()` automatically because `*Counter` satisfies `fmt.Stringer` (which requires `String() string`).
 - `defer fmt.Println("done")` is registered first but runs last, when `main` returns, so `done` is the final line of output --- the same LIFO cleanup mechanism used for releasing resources.
 
@@ -1200,11 +1231,18 @@ Notes:
 Go's `map[K]V` requires `K` to be comparable at the language level, and a `[]E` slice stores values directly in the backing array.
 What are the trade-offs of Go's approach for each collection type?
 Give one example of a Java key type you cannot use directly as a Go map key, and explain one scenario where storing values directly in a slice (rather than as heap references) matters for performance.
-When would you feel the difference most?
+
+For maps, Go's comparable-at-the-language-level requirement is simpler and faster than Java's `hashCode()`/`equals()` contract, but it is also stricter.
+You cannot supply custom equality, and some types simply cannot be keys at all.
+A Java key type you cannot use directly as a Go map key is anything backed by a slice: for example, a Java `List<String>` (or a `byte[]`) used as a `HashMap` key has no Go equivalent, because slices are not comparable in Go.
+You must convert to a comparable form first --- turn a `[]byte` into a `string`, or build a struct or string key out of the pieces.
+The trade-off is less flexibility (no custom hashing) in exchange for no boxing, no per-key method dispatch, and a guarantee that the compiler rejects un-hashable keys at compile time instead of letting you discover the problem at runtime.
+
+For slices, storing values directly rather than as heap references gives much better memory layout, but it only helps for value types (`int`, `float64`, structs).
 
 A Java `ArrayList<Integer>` stores a pointer (reference) to each boxed `Integer` object, and each `Integer` object lives somewhere on the heap.
 Iterating over the list means following a pointer for every element, and those `Integer` objects may be scattered around memory --- poor cache locality.
-Each `Integer` also carries object header overhead (typically 16 bytes) even though the actual integer value is just 4 bytes.
+Each `Integer` also carries object-header overhead (typically 16 bytes) even though the actual integer value is just 4 bytes.
 
 A Go `[]int` stores the integer values **directly** and **contiguously** in the backing array.
 Iterating is a sequential scan through a flat region of memory: the CPU prefetcher handles this extremely well.
@@ -1212,17 +1250,16 @@ There is no per-element allocation overhead and no pointer chasing.
 
 You feel the difference most in:
 
-- **Tight loops** that process large slices: the sequential memory access pattern is cache-friendly, and modern CPUs can vectorize flat integer arrays.
+- **Tight loops** that process large slices: the sequential memory-access pattern is cache-friendly, and modern CPUs can vectorize flat integer arrays.
 - **Memory usage**: a Go `[]int` of a million elements is roughly 8 MB (64-bit ints).
   A Java `ArrayList<Integer>` of a million elements is the list's pointer array (8 MB of references) plus a million `Integer` objects on the heap (at least 16 MB more), for a minimum of 24 MB --- and GC pressure from all those small objects.
 - **GC pauses**: the Go garbage collector has no pointers to trace inside a `[]int`, so it scans the array in constant time.
   A Java `ArrayList<Integer>` forces the GC to follow a million references.
 
-The trade-off is that Go's approach works for slices of value types (`int`, `float64`, structs).
+The trade-off is that Go's flat layout only pays off for slices of value types.
 For slices of interfaces or pointers, Go has the same indirection that Java does.
 
 ---
-
 
 **Exercise 2** (What does this print?):
 
@@ -1234,7 +1271,7 @@ import "fmt"
 func main() {
     catalog := map[string]int{
         "Saltwater":       1_200_000_000,
-        "Out Of The Blue":  980_000_000,
+        "Out Of The Blue": 980_000_000,
     }
     hits := []string{"Out Of The Blue", "Watermelon Sugar", "Saltwater"}
     for _, title := range hits {
@@ -1248,6 +1285,7 @@ func main() {
 ```
 
 Output:
+
 ```
 Out Of The Blue: 980000000
 Watermelon Sugar: not found
@@ -1255,14 +1293,15 @@ Saltwater: 1200000000
 ```
 
 The loop iterates the `hits` slice in order.
-`"Out Of The Blue"` is in the catalog and its play count is printed.
-`"Watermelon Sugar"` is not in the catalog, so the comma-ok idiom sets `ok = false` and the `else` branch runs.
+`"Out Of The Blue"` is in the catalog, so the comma-ok idiom sets `ok = true` and its play count is printed.
+`"Watermelon Sugar"` is not in the catalog, so `ok = false` and the `else` branch runs.
 `"Saltwater"` is in the catalog and is printed last.
-Map lookup order is random, but slice range iteration is always in index order, so the output is deterministic here.
+Map lookup order is randomized, but slice `range` iteration is always in index order, so the output here is deterministic.
 
 ---
 
 **Exercise 3** (Calculation): Given the following code, trace the value of `len(s)` and `cap(s)` after each line.
+Does any line cause a new backing array to be allocated?
 
 ```go
 s := make([]int, 2, 5)
@@ -1272,18 +1311,18 @@ s = append(s, 30)
 s = append(s, 40)
 ```
 
-| After line | `len(s)` | `cap(s)` | New array? |
-|---|---|---|---|
-| `make([]int, 2, 5)` | 2 | 5 | Yes (initial) |
-| `append(s, 10)` | 3 | 5 | No |
-| `append(s, 20)` | 4 | 5 | No |
-| `append(s, 30)` | 5 | 5 | No |
-| `append(s, 40)` | 6 | ≥10 | **Yes** |
+| After line          | `len(s)` | `cap(s)` | New array?  |
+|---------------------|----------|----------|-------------|
+| `make([]int, 2, 5)` | 2        | 5        | yes (initial) |
+| `append(s, 10)`     | 3        | 5        | no          |
+| `append(s, 20)`     | 4        | 5        | no          |
+| `append(s, 30)`     | 5        | 5        | no          |
+| `append(s, 40)`     | 6        | 10       | **yes**     |
 
-`make([]int, 2, 5)` allocates a backing array with capacity 5.
-The first three `append` calls fit within the existing capacity (len grows 2 → 3 → 4 → 5).
-The fourth `append` exceeds capacity 5, so the runtime allocates a new array (typically double, so cap ≥ 10) and copies the existing elements.
-The exact new capacity is implementation-defined but at least 6; in current Go runtimes it is 10.
+`make([]int, 2, 5)` allocates a backing array with capacity 5 and length 2 (two zero-valued ints already present).
+The first three `append` calls fit within the existing capacity, so the length grows 2 -> 3 -> 4 -> 5 with no new allocation.
+The fourth `append` would push the length to 6, which exceeds capacity 5, so the runtime allocates a new backing array and copies the existing elements.
+The exact new capacity is implementation-defined, but it must be at least 6; in go1.26.3 it is 10 (the runtime roughly doubles capacity for small slices).
 
 ---
 
@@ -1309,15 +1348,14 @@ func main() {
 ```
 
 **The bug:** `var freq map[string]int` declares a nil map.
-Reading from a nil map returns the zero value (`0` for `int`), which is harmless.
-But **writing to a nil map panics** at runtime.
-The program panics at `freq[w]++` on the first iteration:
+Reading from a nil map returns the zero value (`0` for `int`), which is harmless, but **writing to a nil map panics** at runtime.
+The statement `freq[w]++` is a write (it reads the current value, adds one, and stores the result), so the program panics on the very first iteration:
 
 ```
 panic: assignment to entry in nil map
 ```
 
-**Fix:** Initialize the map with `make` before the loop:
+**Fix:** Initialize the map with `make` (or a literal) before the loop:
 
 ```go
 freq := make(map[string]int)
@@ -1332,9 +1370,14 @@ With the fix, the program prints:
 Gamemaster 2
 ```
 
+`"Gamemaster"` is the only word that appears more than once.
+
 ---
 
-**Exercise 5** (Write a program): Write a program that reads a slice of song titles and builds a map from the first letter (as a `string`) to a slice of titles starting with that letter, then prints each letter and its titles in sorted order (sort both the letters and the titles within each group).
+**Exercise 5** (Write a program): Write a program that reads a slice of song titles and builds a map from the first letter (as a `string`) to a slice of titles starting with that letter.
+Use the input `[]string{"Sandstorm", "Bad Apple!!", "Gouryella", "Better Off Alone", "Flaming June", "Sandstorm"}`.
+Print each letter and its titles in sorted order (sort both the letters and the titles within each group).
+Collect the map's keys into a slice with a `for range` loop, then use `slices.Sort` for both the keys and the titles within each group.
 
 ```go
 package main
@@ -1370,6 +1413,7 @@ func main() {
 ```
 
 Output:
+
 ```
 B: [Bad Apple!! Better Off Alone]
 F: [Flaming June]
@@ -1377,8 +1421,10 @@ G: [Gouryella]
 S: [Sandstorm Sandstorm]
 ```
 
-Key points: always initialize a map with `make` before writing; collect the map's keys into a slice with a `for range` loop, then `slices.Sort` both the keys and the titles within each group for deterministic output (map iteration order is randomized).
+Key points: always initialize a map with `make` before writing to it.
+Collect the map's keys into a slice with a `for range` loop, then call `slices.Sort` on both the keys and the titles within each group, because map iteration order is randomized and you need an explicit sort for deterministic output.
 
+---
 
 ---
 
@@ -1389,16 +1435,18 @@ In Java, if you want your `Song` class to satisfy a new interface `Playable` def
 Explain how Go's approach changes the relationship between library authors and library users.
 What does this mean for extending types from packages you cannot modify?
 
-Go's structural typing means that the author of a type and the author of an interface are completely decoupled.
-If library A defines `type Track struct { ... }` and later library B defines `interface Playable { Play() }`, and `Track` already has a `Play()` method, then `Track` satisfies `Playable` automatically --- neither author needs to know about the other.
+Go's structural typing decouples the author of a type from the author of an interface.
+If library A defines `type Track struct { ... }` with a `Play()` method, and later library B defines `interface Playable { Play() }`, then `Track` satisfies `Playable` automatically --- neither author needs to know about the other, and no source change is required on either side.
 
-For types you cannot modify, the picture is similar: if the type already has the methods you need, you can use it directly where your interface is expected.
-If it does not, you have two options: wrap the type in your own struct that adds the missing methods (the adapter pattern), or define a new named type based on the original and add methods to that.
+In Java the relationship between a class and an interface is declared at write-time with `implements` and baked into the source.
+A class can only satisfy interfaces that already existed (or that you can edit the class to add).
+In Go the relationship is checked at compile-time by the compiler from the methods the type actually has --- it emerges from what the type does, not from what it says it is.
 
-This is a fundamental philosophical difference.
-In Java, the relationship between a class and an interface is declared at write-time and embedded in the source.
-In Go, the relationship is discovered at compile-time by the compiler --- it emerges from what the type does, not from what it says it is.
-This makes Go code easier to extend and test, because you can define narrow interfaces in your own package that third-party types satisfy without any changes to the third-party source.
+For types you cannot modify, this means: if the type already has the methods your interface requires, you can pass it directly wherever that interface is expected, with zero changes to the third-party code.
+If it does not, you wrap it in your own struct that adds the missing methods (the adapter pattern), or define a new named type whose underlying type is the original and add methods to that.
+
+The practical payoff is that you define narrow interfaces in your own package, on demand, and third-party concrete types satisfy them for free.
+Interfaces tend to be defined by the consumer, not the producer, which keeps dependencies pointing the right way and makes testing easy: any test double with the right methods slots in.
 
 ---
 
@@ -1429,18 +1477,19 @@ func main() {
 ```
 
 Output:
+
 ```
 37.5°C
 99.5
 ```
 
-`Celsius` has a `String() string` method, so it satisfies `fmt.Stringer`.
-`printTemp` calls `v.String()` and passes the result to `fmt.Println`, which prints `37.5°C` followed by a newline.
+`Celsius` has a `String() string` method, so it satisfies `fmt.Stringer` implicitly.
+`printTemp(c)` calls `v.String()`, which returns `37.5°C`, and `fmt.Println` prints that line.
 
 `Fahrenheit` does **not** have a `String() string` method, so it does not satisfy `fmt.Stringer`.
-`fmt.Println(f)` formats `f` using the default verb for its underlying type, which is `float64`.
-The default formatting for a float is the shortest decimal representation that rounds back to the same value --- here that is `99.5`.
-No degree symbol, no unit: just the number.
+(Methods are not inherited across named types: `Celsius` and `Fahrenheit` are distinct types even though both have underlying type `float64`.)
+`fmt.Println(f)` therefore formats `f` with the default verb for its underlying type, `float64`, which prints the shortest decimal that rounds back to the value: `99.5`.
+No degree symbol, no unit, just the number.
 
 ---
 
@@ -1448,19 +1497,22 @@ No degree symbol, no unit: just the number.
 Given a variable declared as `var r io.Reader = &bytes.Buffer{}`, how many distinct type/value components does `r` hold?
 If `r` is then assigned `nil`, describe the type and value components of the resulting interface value.
 
-`r` holds **two** components:
-- **Type:** a pointer to the runtime type descriptor for `*bytes.Buffer`.
-- **Value:** a pointer to the `bytes.Buffer` value on the heap.
+An interface value always has exactly two components, so `r` holds **two**: a type component and a value (data) component.
 
-After `r = nil`, both components are set to `nil`:
-- **Type:** `nil` (no concrete type information).
-- **Value:** `nil` (no data pointer).
+After `var r io.Reader = &bytes.Buffer{}`:
 
-This is the **untyped nil** interface value.
-`r == nil` is `true` after this assignment.
+- The type component points to the type descriptor (itab) for the dynamic type `*bytes.Buffer` and its `io.Reader` method set.
+- The value component holds the `*bytes.Buffer` pointer to the freshly allocated buffer.
 
-Contrast this with the nil trap in the chapter: if instead you wrote `var buf *bytes.Buffer = nil; r = buf`, the type component would be `*bytes.Buffer` (non-nil) and the value component would be `nil`.
-That interface value is **not** nil even though `buf` is nil.
+Because both components are non-nil, `r == nil` is `false`.
+
+After `r = nil`:
+
+- The type component is `nil`.
+- The value component is `nil`.
+
+A nil interface is precisely the state where both components are nil, so now `r == nil` is `true`.
+This is the key thing to remember: an interface is nil only when both halves are nil --- an interface that carries a non-nil type but a nil pointer value is not equal to `nil` (see Exercise 4).
 
 ---
 
@@ -1493,29 +1545,41 @@ func main() {
 }
 ```
 
-**The bug:** `connect` always returns a non-nil `error`, even when `bad` is `false`.
+This is the classic nil-pointer-in-a-non-nil-interface trap.
+The program prints:
 
-When `bad` is `false`, `err` is a nil `*DBError`.
-The `return err` statement wraps that typed nil in an `error` interface value.
-The interface value has type `*DBError` (non-nil) and value `nil`.
-Because the type component is non-nil, `e == nil` evaluates to `false`, and the program prints `failed: <nil>` instead of `connected OK`.
+```
+failed: <nil>
+```
 
-**The fix:**
+You probably expected `connected OK`.
+When `bad` is `false`, `err` stays a nil `*DBError` pointer.
+But `connect` returns `error` (an interface), so returning `err` wraps that typed nil pointer into an interface value whose **type** component is `*DBError` and whose **value** component is `nil`.
+
+An interface is `nil` only when both components are nil.
+Here the type component is non-nil (`*DBError`), so `e == nil` is `false`, and the `else` branch runs.
+The printed value is `<nil>` because `fmt` sees a non-nil interface, calls its `Error()` method path / default formatting on a nil pointer, and renders the nil pointer as `<nil>` (the `Error()` method is not actually invoked here since `fmt` detects the nil pointer first).
+
+The fix: do not declare the return holder as the concrete pointer type and then return it.
+Return an explicit `nil` (the untyped interface nil) on the success path:
 
 ```go
 func connect(bad bool) error {
     if bad {
         return &DBError{code: 500}
     }
-    return nil  // untyped nil: type=nil, value=nil --- this is a true nil error
+    return nil
 }
 ```
 
-Return `nil` directly rather than returning a typed nil pointer through an interface variable.
+Now the success path returns a genuinely nil interface, the type component is nil, and `e == nil` is `true`.
 
 ---
 
-**Exercise 5** (Write a program):
+**Exercise 5** (Write a program): Define an interface `Shape` with two methods: `Area() float64` and `Perimeter() float64`.
+Implement `Shape` for two concrete types: `Rectangle` (with fields `Width` and `Height float64`) and `Circle` (with field `Radius float64`; use `math.Pi`).
+Write a function `printShapeInfo(s Shape)` that prints the area and perimeter.
+In `main`, create one `Rectangle` and one `Circle` and call `printShapeInfo` on each.
 
 ```go
 package main
@@ -1526,65 +1590,44 @@ import (
 )
 
 type Shape interface {
-    Area() float64      // returns the area of the shape
-    Perimeter() float64 // returns the perimeter of the shape
+    Area() float64
+    Perimeter() float64
 }
 
 type Rectangle struct {
-    Width  float64
-    Height float64
+    Width, Height float64
 }
 
-func (r Rectangle) Area() float64 {
-    return r.Width * r.Height
-}
-
-func (r Rectangle) Perimeter() float64 {
-    return 2 * (r.Width + r.Height)
-}
+func (r Rectangle) Area() float64      { return r.Width * r.Height }
+func (r Rectangle) Perimeter() float64 { return 2 * (r.Width + r.Height) }
 
 type Circle struct {
     Radius float64
 }
 
-func (c Circle) Area() float64 {
-    return math.Pi * c.Radius * c.Radius
-}
-
-func (c Circle) Perimeter() float64 {
-    return 2 * math.Pi * c.Radius
-}
+func (c Circle) Area() float64      { return math.Pi * c.Radius * c.Radius }
+func (c Circle) Perimeter() float64 { return 2 * math.Pi * c.Radius }
 
 func printShapeInfo(s Shape) {
-    fmt.Printf("Area:      %.4f\n", s.Area())
-    fmt.Printf("Perimeter: %.4f\n", s.Perimeter())
+    fmt.Printf("area=%.2f perimeter=%.2f\n", s.Area(), s.Perimeter())
 }
 
 func main() {
-    r := Rectangle{Width: 4.0, Height: 3.0}
-    c := Circle{Radius: 5.0}
-
-    fmt.Println("Rectangle:")
-    printShapeInfo(r)
-
-    fmt.Println("Circle:")
-    printShapeInfo(c)
+    printShapeInfo(Rectangle{Width: 3, Height: 4})
+    printShapeInfo(Circle{Radius: 5})
 }
 ```
 
 Output:
+
 ```
-Rectangle:
-Area:      12.0000
-Perimeter: 14.0000
-Circle:
-Area:      78.5398
-Perimeter: 31.4159
+area=12.00 perimeter=14.00
+area=78.54 perimeter=31.42
 ```
 
-Both `Rectangle` and `Circle` satisfy `Shape` implicitly --- no declaration required.
-`printShapeInfo` accepts any `Shape`, so adding a new shape (say, `Triangle`) requires only implementing `Area()` and `Perimeter()` on it; `printShapeInfo` does not change.
-This is the open/closed principle, Go style.
+Both `Rectangle` and `Circle` define `Area` and `Perimeter` with value receivers, so values of either type satisfy `Shape` implicitly --- no `implements` keyword needed.
+`printShapeInfo` accepts any `Shape`, and Go picks the right method via the interface's dynamic type at the call site.
+For the circle, `math.Pi * 5 * 5 = 78.54...` and `2 * math.Pi * 5 = 31.42...`, which match the `%.2f`-formatted output above.
 
 ---
 
@@ -1657,7 +1700,7 @@ func lookup(track string) error {
 }
 
 func main() {
-    err := lookup("Tití Me Preguntó")
+    err := lookup("Insomnia")
     fmt.Println(err)
     fmt.Println(errors.Is(err, ErrNotFound))
 
@@ -1671,29 +1714,29 @@ func main() {
 Output:
 
 ```
-catalog: Tití Me Preguntó: not found
+catalog: Insomnia: not found
 true
-Tití Me Preguntó
+Insomnia
 ```
 
-`lookup("Tití Me Preguntó")` returns a `*CatalogError` with `Track = "Tití Me Preguntó"` and `Err = ErrNotFound`.
+`lookup("Insomnia")` returns a `*CatalogError` with `Track = "Insomnia"` and `Err = ErrNotFound`.
 
-`fmt.Println(err)` calls `err.Error()`, which returns `"catalog: Tití Me Preguntó: not found"`.
-`fmt.Println` appends a newline, so the first line of output is `catalog: Tití Me Preguntó: not found`.
+`fmt.Println(err)` calls `err.Error()`, which returns `"catalog: Insomnia: not found"`.
+`fmt.Println` appends a newline, so the first line of output is `catalog: Insomnia: not found`.
 
-`errors.Is(err, ErrNotFound)` starts at `err` (a `*CatalogError`) and calls `==` against `ErrNotFound` --- no match.
+`errors.Is(err, ErrNotFound)` starts at `err` (a `*CatalogError`) and compares it with `==` against `ErrNotFound` --- no match.
 It then calls `err.Unwrap()`, which returns `ErrNotFound` itself.
 `ErrNotFound == ErrNotFound` is `true`.
 So `errors.Is` returns `true`, and `fmt.Println(true)` prints `true`.
 
-`errors.As(err, &ce)` checks whether `err` is assignable to `*CatalogError`.
-It is, so `ce` is set to the `*CatalogError` value and `errors.As` returns `true`.
-The `if` body prints `ce.Track`, which is `"Tití Me Preguntó"`.
+`errors.As(err, &ce)` checks whether any error in the chain is assignable to `*CatalogError`.
+The outer error is exactly a `*CatalogError`, so `ce` is set to that value and `errors.As` returns `true`.
+The `if` body prints `ce.Track`, which is `"Insomnia"`.
 
 ---
 
 **Exercise 3** (Calculation): Consider the following code.
-For the input `Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}`, how many sub-errors does the joined error returned by `validateSong` contain?
+For the input `Song{Title: "", Artist: "DJ Analyzer", Year: 2021, BPM: -1}`, how many sub-errors does the joined error returned by `validateSong` contain?
 What is the output of `fmt.Println(err)` for that input?
 
 ```go
@@ -1726,18 +1769,18 @@ func validateSong(s Song) error {
 }
 
 func main() {
-    s := Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}
+    s := Song{Title: "", Artist: "DJ Analyzer", Year: 2021, BPM: -1}
     err := validateSong(s)
     fmt.Println(err)
 }
 ```
 
-**Answer:** `validateSong` collects **2** distinct, non-nil error values.
+**Answer:** The joined error contains **2** sub-errors.
 
-Trace through the conditions for `Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}`:
+Trace through the conditions for `Song{Title: "", Artist: "DJ Analyzer", Year: 2021, BPM: -1}`:
 
 - `s.Title == ""` is `true` --- `errors.New("title required")` is appended. (1 error)
-- `s.Year < 2000 || s.Year > 2030`: `2021 < 2000` is `false`; `2021 > 2030` is `false` --- condition is `false`, no error appended.
+- `s.Year < 2000 || s.Year > 2030`: `2021 < 2000` is `false` and `2021 > 2030` is `false`, so the condition is `false` --- no error appended.
 - `s.BPM <= 0`: `-1 <= 0` is `true` --- `errors.New("BPM must be positive")` is appended. (2 errors)
 
 `errors.Join` receives a slice of 2 non-nil errors.
@@ -1750,7 +1793,7 @@ title required
 BPM must be positive
 ```
 
-Note that `Artist` has no validation rule, so `"Karol G"` (a valid, non-empty value) does not contribute any error.
+Note that `Artist` has no validation rule, so `"DJ Analyzer"` (a valid, non-empty value) does not contribute any error.
 `Year = 2021` falls within the range `[2000, 2030]`, so no year error is produced either.
 
 ---
@@ -1793,7 +1836,7 @@ func main() {
 }
 ```
 
-**The bug:** The program compiles and runs as written, but it has one idiomatic-correctness bug.
+**The bug:** The program compiles and runs as written (it prints `Children`), but it has one idiomatic-correctness bug.
 
 **The bug --- comparing `err == io.EOF` directly instead of using `errors.Is`:** The sentinel check `if err == io.EOF` happens to work for the bare `io.EOF` returned by `strings.Reader`, but it silently misses `io.EOF` if any reader in the future wraps it (e.g., `fmt.Errorf("read: %w", io.EOF)`).
 The chapter recommends never comparing errors with `==` when they might be wrapped.
@@ -1915,6 +1958,7 @@ Both `int` values are zero on error, consistent with the Go convention of return
 - `strings.Split(s, ":")` with a check on `len(parts) != 2` is the idiomatic way to parse a two-part format.
 Using `fmt.Sscanf` or a regex are also valid; `strings.Split` is the most readable for this simple case.
 
+---
 
 ---
 
@@ -1928,18 +1972,18 @@ What cost, if any, do goroutines impose that Java threads do not, and when might
 The key mechanism is **M:N scheduling**: the Go runtime multiplexes M goroutines onto N OS threads, where N defaults to the number of CPU cores (`GOMAXPROCS`).
 The scheduler lives in user space, so switching between goroutines does not require a kernel mode transition --- it is many times faster than a Java thread context switch.
 
-Goroutines start with a ~2 KB stack that grows dynamically as needed (up to a configurable maximum, typically 1 GB).
-Java threads allocate their full stack (512 KB to 1 MB) up front, from virtual memory at minimum.
-This means creating a million goroutines consumes roughly 2 GB of initial stack memory; creating a million Java threads would require 500 GB to 1 TB.
-In practice, the OS would refuse long before that.
+Goroutines start with a small stack (around 2 KB) that grows dynamically as needed, up to a configurable maximum.
+Java threads allocate their full stack (typically 512 KB to 1 MB) up front from virtual memory.
+This means creating a million goroutines consumes roughly 2 GB of initial stack memory, while a million Java threads would require 500 GB to 1 TB.
+In practice the OS would refuse long before that.
 
-**Costs goroutines impose:** Each goroutine is a heap allocation tracked by the scheduler.
-At very high goroutine counts (hundreds of thousands) the scheduler itself becomes a bottleneck, and GC pressure increases because goroutine stacks are heap-allocated.
-There is also some overhead per goroutine in the runtime's internal bookkeeping structures.
+**Costs goroutines impose:** Each goroutine is a heap-tracked object that the scheduler manages.
+At very high goroutine counts (hundreds of thousands) the scheduler itself becomes a bottleneck, and GC pressure rises because goroutine stacks live on the heap.
+There is also per-goroutine overhead in the runtime's internal bookkeeping.
 
-**When to still limit goroutines:** Any time the goroutines are doing I/O-bound work that creates downstream resource pressure --- for example, goroutines that each open a database connection or a file descriptor.
-Even if the goroutines themselves are cheap, the external resources they consume (connections, file descriptors, memory for outbound HTTP requests) are not.
-The common Go idiom for bounding concurrency is a buffered channel used as a semaphore, or the worker-pool pattern covered in Chapter 13.
+**When to still limit goroutines:** Any time the goroutines drive downstream resource pressure --- for example, goroutines that each open a database connection, a file descriptor, or an outbound HTTP request.
+Even when the goroutines themselves are cheap, the external resources they consume are not.
+The common Go idiom for bounding concurrency is a buffered channel used as a semaphore, or the worker-pool pattern.
 
 ---
 
@@ -1968,6 +2012,7 @@ func main() {
 ```
 
 Output:
+
 ```
 7
 13
@@ -1977,17 +2022,17 @@ Output:
 
 **Why:**
 
-The channel has capacity 3, so all three sends succeed without blocking --- no goroutine is needed.
-`close(ch)` marks the channel closed; the three buffered values are still available to receive.
+The channel has capacity 3, so all three sends succeed without blocking --- no receiving goroutine is needed.
+`close(ch)` marks the channel closed, but the three buffered values are still available to receive.
 
 `range ch` drains the channel in FIFO order, printing `7`, `13`, and `21`.
 When the buffer is empty and the channel is closed, `range` terminates.
 
 After the loop, `<-ch` receives from a channel that is both closed and empty.
 The comma-ok idiom returns the **zero value** of the element type (`0` for `int`) and `false` for `ok`, because the channel is exhausted.
-`fmt.Println(v, ok)` prints `0 false`.
+So `fmt.Println(v, ok)` prints `0 false`.
 
-This demonstrates two important rules: buffered values survive a `close`, and receiving from an empty closed channel always returns `(zero, false)` rather than blocking or panicking.
+This demonstrates two rules: buffered values survive a `close`, and receiving from an empty closed channel always returns `(zero, false)` rather than blocking or panicking.
 
 ---
 
@@ -2026,6 +2071,7 @@ func main() {
 ```
 
 Output:
+
 ```
 6
 10
@@ -2035,23 +2081,19 @@ done
 
 **Trace:**
 
-1. `src` is a buffered channel with capacity 3.
-   The three sends (`3`, `5`, `8`) all succeed immediately without blocking.
-   `src` is then closed.
+`main` fills `src` with `3`, `5`, `8` (the buffer of capacity 3 holds all three without blocking) and closes it.
+`go double(src, dst)` launches one goroutine that ranges over `src`, doubling each value and sending `6`, `10`, `16` to `dst`.
+Because `dst` also has capacity 3, all three doubled values fit in the buffer, so the `double` goroutine never blocks on send.
+After `src` is drained and closed, `double`'s `range` loop ends and it calls `close(out)` (which is `dst`).
 
-2. `go double(src, dst)` launches `double` as a goroutine.
-   `double` reads from `src` using `range`, which drains the buffered values `3`, `5`, `8` in order and then exits when `src` is empty and closed.
-   For each value, it sends the doubled result to `dst` (also buffered with capacity 3, so no blocking occurs).
-   After the loop, `double` calls `close(dst)`.
+`main` ranges over `dst`, receiving `6`, `10`, `16` in FIFO order, then the loop terminates once `dst` is empty and closed.
+Finally `main` prints `done`.
 
-3. Back in `main`, `for result := range dst` drains `dst`.
-   The values arrive in order: `6`, `10`, `16`.
-   When `dst` is closed and empty, the loop ends.
+**Goroutine count:** By the time `range dst` has fully drained the channel, the `double` goroutine has already executed `close(out)` and returned.
+A returned goroutine is no longer alive.
+So when the final `fmt.Println("done")` runs, **zero** goroutines are alive other than `main`.
 
-4. `fmt.Println("done")` runs last.
-
-**Goroutines alive when `fmt.Println("done")` runs:** Zero (other than `main`).
-The `double` goroutine has already returned --- it finished draining `src`, called `close(dst)`, and exited before `main`'s `range dst` loop could finish (since `close(dst)` is what caused the loop to terminate).
+(Strictly, the scheduler may not have reclaimed the goroutine's bookkeeping the instant it returns, but logically it has finished --- the only goroutine the program ever created has exited.)
 
 ---
 
@@ -2068,11 +2110,11 @@ import (
 func main() {
     var wg sync.WaitGroup
     results := make(chan string, 3)
-    tracks := []string{"rockstar", "Circles", "Earfquake"}
+    tracks := []string{"Turn Me On", "Legend", "Escape"}
 
     for _, t := range tracks {
-        wg.Add(1)
         go func() {
+            wg.Add(1)
             defer wg.Done()
             results <- "Playing: " + t
         }()
@@ -2087,28 +2129,20 @@ func main() {
 }
 ```
 
-**The bug:** The goroutine closure captures the loop variable `t` by reference, not by value.
-By the time the goroutines run, the `for` loop has advanced `t` to the last value in the slice.
-All three goroutines read the same final value --- `"Earfquake"` --- and send it three times.
-The output is likely:
+The bug is that `wg.Add(1)` is called **inside** the goroutine instead of before launching it.
 
-```
-Playing: Earfquake
-Playing: Earfquake
-Playing: Earfquake
-```
+`wg.Wait()` runs in `main` concurrently with the three goroutines.
+There is no guarantee any goroutine has reached its `wg.Add(1)` before `main` calls `wg.Wait()`.
+If `Wait` observes the counter still at `0`, it returns immediately, `main` closes `results`, and the goroutines then panic with `panic: send on closed channel` when they try to send.
 
-This is the **loop-closure capture bug** described in Chapter 5.
+Running the program under `-race` reports a data race between `wg.Add` / the channel send and `close(results)`, and the program often panics or prints nothing.
 
-**Why it happens:** In Go, the range variable `t` is a single variable whose value is updated on each iteration.
-All three goroutines close over the same `t` variable (a single memory address), not over a copy of its value at the time the goroutine was launched.
-Because the goroutines are scheduled after the loop completes, `t` holds the last assigned value when they execute.
+The rule is: **call `wg.Add(n)` before starting the goroutines**, on the goroutine that owns the `WaitGroup`, never inside the goroutine being waited on.
 
-**The fix:** Capture the value at goroutine launch time by passing it as a parameter to the anonymous function, or by introducing a local copy:
+Fixed version:
 
 ```go
 for _, t := range tracks {
-    t := t  // new variable scoped to this iteration
     wg.Add(1)
     go func() {
         defer wg.Done()
@@ -2117,27 +2151,18 @@ for _, t := range tracks {
 }
 ```
 
-Or equivalently, pass `t` as a function argument:
+With `Add` hoisted out, the counter reaches 3 before `Wait` can return, so all three sends complete before `close(results)`, and the `range` loop prints all three lines (in nondeterministic order).
 
-```go
-for _, t := range tracks {
-    wg.Add(1)
-    go func(track string) {
-        defer wg.Done()
-        results <- "Playing: " + track
-    }(t)
-}
-```
-
-Both fixes capture the value of `t` at the point of goroutine creation so each goroutine gets its own independent copy.
-
-Note: In Go 1.22 and later, range variables are per-iteration by default, which eliminates this class of bug automatically.
-If you are on Go 1.22 or newer, the original code would work correctly.
-On earlier versions, the fix is required.
+Note: the original `func()` literal capturing `t` is fine under Go 1.22+, where each loop iteration gets a fresh `t`.
+Under older Go you would also need to pass `t` as a parameter to avoid all goroutines seeing the last value.
 
 ---
 
-**Exercise 5** (Write a program):
+**Exercise 5** (Write a program): Write a program that launches three goroutines.
+Each goroutine sleeps for a different duration (10ms, 20ms, 30ms) and then sends one of the given strings on its own channel.
+In `main`, use a `select` loop to receive from all three channels and print each message as it arrives.
+Also add a `time.After(100 * time.Millisecond)` case that prints `"timeout"` and exits the loop if no message arrives within 100 ms of the last received one.
+Print the messages in the order they actually arrive.
 
 ```go
 package main
@@ -2148,65 +2173,60 @@ import (
 )
 
 func main() {
-    ch1 := make(chan string, 1)
-    ch2 := make(chan string, 1)
-    ch3 := make(chan string, 1)
+    c1 := make(chan string)
+    c2 := make(chan string)
+    c3 := make(chan string)
 
     go func() {
         time.Sleep(10 * time.Millisecond)
-        ch1 <- "Post Malone: Circles"
+        c1 <- "Jaroslav Beck & Crispin: Legend"
     }()
     go func() {
         time.Sleep(20 * time.Millisecond)
-        ch2 <- "Tyler: Wilder World"
+        c2 <- "Jaroslav Beck: $100 Bills"
     }()
     go func() {
         time.Sleep(30 * time.Millisecond)
-        ch3 <- "Post Malone: rockstar"
+        c3 <- "Jaroslav Beck: Turn Me On"
     }()
 
-    received := 0
-    total := 3
-    for received < total {
+    for {
         select {
-        case msg := <-ch1:
+        case msg := <-c1:
             fmt.Println(msg)
-            received++
-        case msg := <-ch2:
+        case msg := <-c2:
             fmt.Println(msg)
-            received++
-        case msg := <-ch3:
+        case msg := <-c3:
             fmt.Println(msg)
-            received++
         case <-time.After(100 * time.Millisecond):
             fmt.Println("timeout")
-            received = total  // exit the loop
+            return
         }
     }
 }
 ```
 
-Output (order reflects goroutine sleep durations):
+Output:
+
 ```
-Post Malone: Circles
-Tyler: Wilder World
-Post Malone: rockstar
+Jaroslav Beck & Crispin: Legend
+Jaroslav Beck: $100 Bills
+Jaroslav Beck: Turn Me On
+timeout
 ```
 
 **How it works:**
 
-Each goroutine sleeps for a different duration before sending on its dedicated channel.
-`main` loops using `select`, blocking until any of the four cases is ready.
-Because the goroutines sleep for 10 ms, 20 ms, and 30 ms, the messages arrive in that order.
+Each goroutine sleeps its own duration and then sends on its own unbuffered channel.
+The `select` in `main` blocks until one of the channels is ready, then runs that case and loops again.
+Because the sleeps are 10ms, 20ms, and 30ms apart, the messages arrive in that order.
 
-The `time.After(100 * time.Millisecond)` case provides a safety net.
-`time.After` returns a receive-only channel (`<-chan time.Time`) that the `time` package sends a value on after the specified duration.
-If no message arrives within 100 ms, that case fires, prints `"timeout"`, and sets `received = total` to exit the loop.
+The `time.After(100 * time.Millisecond)` case is re-created on **every** iteration of the loop because `select` re-evaluates its cases each pass.
+So the 100ms timer is reset after each received message and measures the gap since the last receive, exactly as required.
+After the third message, no further sends happen, so 100ms later the `time.After` case fires, prints `"timeout"`, and `return` exits `main`.
 
-A subtle point: `time.After` creates a new timer on every call to `select`, which is fine for correctness but slightly wasteful.
-In production code that needs tight control over timer lifetimes, you would create a `time.NewTimer` once and reuse it.
-That is a concern for Chapter 15; the `time.After` form is idiomatic for simple timeouts.
-
+The three messages and `timeout` are deterministic here given the chosen sleep values; only the exact wall-clock timing varies.
+Verified clean under `go run -race`.
 
 ---
 
@@ -2219,8 +2239,8 @@ Consider: what happens when you need to protect two independent fields in the sa
 
 Java's per-object monitor is convenient for simple cases: every object already has a lock, so you can write `synchronized (this)` with no extra declarations.
 The downside is that the monitor is coarse-grained --- there is only one per object.
-If a struct (class in Java) has two independent fields that can be updated concurrently without affecting each other, locking the whole object monitor for either field creates unnecessary contention.
-Java programmers work around this with separate `java.util.concurrent.locks.Lock` objects or by using a dedicated inner lock object:
+If a class has two independent fields that can be updated concurrently without affecting each other, locking the whole object monitor for either field creates unnecessary contention.
+Java programmers work around this with separate `java.util.concurrent.locks.Lock` objects or with dedicated inner lock objects:
 
 ```java
 private final Object tracksLock = new Object();
@@ -2230,7 +2250,7 @@ synchronized (tracksLock) { tracks.add(track); }
 synchronized (playsLock)  { plays.increment(); }
 ```
 
-Go's approach makes this natural: you simply declare two independent mutex fields.
+Go's approach makes the fine-grained case natural: you simply declare two independent mutex fields.
 
 ```go
 type Catalog struct {
@@ -2247,16 +2267,14 @@ This is less magic but more explicit.
 
 The practical advantages of Go's approach:
 
-- **Granularity:** You can have as many independent mutexes as you need at zero structural cost.
-- **Clarity:** The pairing between a mutex and the data it protects is visible in the struct definition.
-- **No accidental sharing:** In Java, every synchronized method on the same object uses the same monitor, even if they protect unrelated state. In Go, each mutex is independent by default.
+- **Granularity:** you can have as many independent mutexes as you need at zero structural cost.
+- **Clarity:** the pairing between a mutex and the data it protects is visible in the struct definition (often with a `// protects tracks` comment).
+- **No accidental sharing:** in Java, every synchronized method on the same object uses the same monitor, even if they protect unrelated state. In Go, each mutex is independent by default.
 
-The practical disadvantage:
+The practical disadvantages:
 
-- **Verbosity:** You must declare, name, and document each mutex.
-  Java's implicit monitor requires no declaration.
-- **Copy hazard:** Go structs are value types. Copying a struct that contains a `sync.Mutex` is a bug; the struct must always be passed and stored by pointer.
-  Java objects are always references, so this hazard does not exist.
+- **Verbosity:** you must declare, name, and document each mutex. Java's implicit monitor requires no declaration.
+- **Copy hazard:** Go structs are value types. Copying a struct that contains a `sync.Mutex` after first use is a bug; the struct must always be passed and stored by pointer. Java objects are always references, so this hazard does not exist (and `go vet` catches the Go version, as Exercise 4 shows).
 
 ---
 
@@ -2302,7 +2320,7 @@ func main() {
 }
 ```
 
-The output is:
+The output is always:
 
 ```
 loaded=1 skipped=2
@@ -2311,7 +2329,7 @@ loaded=1 skipped=2
 Here is why.
 
 `sync.Once` guarantees that the function passed to `Do` runs **exactly once** across all goroutines.
-One of the three goroutines (say goroutine with `n=0`, `n=1`, or `n=2` --- the scheduler decides which wins) will execute `results[n] = "loaded"`, setting one slot of the `results` slice.
+One of the three goroutines (whichever wins the race --- the scheduler decides) executes `results[n] = "loaded"`, setting exactly one slot of the `results` slice.
 
 The other two goroutines call `once.Do` as well, but their function bodies are silently dropped because the once is already done.
 They proceed past `once.Do` and check `results[n] == ""` for their own slot `n`.
@@ -2319,7 +2337,9 @@ Because the winning goroutine wrote to a **different** index than these two, the
 
 The final tally is always exactly one `"loaded"` and two `"skipped"`, regardless of which goroutine wins the `once.Do` race.
 
-Note: even though goroutines access different indices of `results` concurrently, this specific program is **not** a data race because each goroutine always writes to its own `results[n]` (where `n` is passed by value), and no two goroutines write to the same index.
+Note: even though goroutines access different indices of `results` concurrently, this specific program is **not** a data race.
+Each goroutine writes only to its own `results[n]` (where `n` is passed by value), no two goroutines touch the same index, and `once.Do` establishes a happens-before edge for the one shared write.
+Running with `go run -race` reports no race.
 
 ---
 
@@ -2343,19 +2363,24 @@ fmt.Println(counter.Load())
 **(a)** `counter.Load()` always prints `40`.
 
 `atomic.Int64.Add` is an atomic read-modify-write operation.
-No matter what order the four goroutines execute, each `Add(10)` is applied to the current value atomically, and all four additions will complete before `wg.Wait()` returns.
-The final value is always 4 × 10 = 40.
-This would **not** be true with a plain `int` counter and no synchronization --- that would be a data race with unpredictable results.
+No matter what order the four goroutines execute, each `Add(10)` is applied to the current value atomically, and all four additions complete before `wg.Wait()` returns.
+The final value is always 4 x 10 = 40.
+This would **not** be guaranteed with a plain `int` counter and no synchronization --- that would be a data race with unpredictable results.
 
-**(b)** Replacing `counter.Add(10)` with `counter.Add(int64(i))` introduces a **closure capture bug**.
+**(b)** Replacing `counter.Add(10)` with `counter.Add(int64(i))` (capturing `i` directly from the loop) prints `6` under Go 1.22 and later.
 
-The goroutine closure captures the **variable** `i`, not its value at the moment the goroutine was launched.
-By the time the goroutines run, the loop may have already incremented `i` past the value it had when `go func()` was called.
-In the worst case, all four goroutines see `i == 4` (the value after the loop ends) and print `4 * 4 = 16`.
-In the best case, they each capture a different value (0, 1, 2, 3) and print 0 + 1 + 2 + 3 = 6.
-Any value between 0 and 16 is possible, and the result is non-deterministic.
+Under Go 1.22+, each iteration of the `for` loop gets its **own** copy of the loop variable `i`.
+So the four goroutines capture distinct values 0, 1, 2, and 3, and the total is always 0 + 1 + 2 + 3 = 6, deterministically.
+Verified under go1.26.3: the program prints `6` on every run.
 
-The fix is the same as described in Chapter 5 (closures): pass `i` as a parameter to the goroutine function.
+**Would your answer have differed in Go 1.21 or earlier? Yes.**
+Before Go 1.22, the loop variable `i` was a **single** variable shared across all iterations of the loop, including in a C-style three-clause `for` (the per-iteration change applies to both `for i := ...; ...; ... {}` loops and `for ... range` loops --- not just range).
+With the old shared-variable semantics, the goroutines capture the **variable**, not its value at launch time.
+By the time a goroutine runs, the loop may already have advanced `i`.
+In the worst case all four goroutines observe `i == 4` (the value after the loop ends) and add 4 each, for a total of 16; in the best case they each capture a distinct value and total 6; intermediate totals are also possible.
+The result under Go 1.21 was non-deterministic, somewhere between 6 and 16.
+
+The version-independent fix that works correctly on every Go version is to pass `i` as a parameter:
 
 ```go
 go func(n int) {
@@ -2364,12 +2389,10 @@ go func(n int) {
 }(i) // pass i by value here
 ```
 
-With this fix the result is always 0 + 1 + 2 + 3 = 6.
+With this fix the result is always 0 + 1 + 2 + 3 = 6, on Go 1.21 and Go 1.22+ alike.
 
-**Go 1.21 vs Go 1.22:** No, the answer for part (b) would not differ.
-This is a C-style three-clause `for` loop, whose loop variable `i` has always been (and still is) a single variable shared across iterations --- you must write `i := i` or pass `i` as a parameter regardless of Go version.
-The Go 1.22 per-iteration loop-variable change affected only `for ... range` loop variables, not the variables declared in a C-style `for` loop's init clause.
-So the capture hazard in part (b) exists identically in Go 1.21 and Go 1.22.
+Note that the Go 1.22 per-iteration loop-variable change is gated on the `go` directive in your `go.mod`.
+You can confirm which loops the compiler rewrites with `go build -gcflags=-d=loopvar=2`, which prints `loop variable i now per-iteration, stack-allocated` for both three-clause and range loops.
 
 ---
 
@@ -2403,9 +2426,11 @@ The bug is that `Inc` and `Get` have **value receivers** (`s SafeMap`), not poin
 When a method has a value receiver, Go passes a **copy** of the struct.
 Each call to `Inc` locks the mutex in its own private copy --- a different mutex instance than the one in `sm` in `main`.
 The lock is acquired and released on a throwaway copy, providing no mutual exclusion on the real `sm`.
-One hundred goroutines therefore write to `sm.m["Butter"]` concurrently without any synchronization, which is a data race.
+One hundred goroutines therefore mutate the shared map concurrently without any synchronization.
 
-The map itself (`sm.m`) is a reference type, so the map operations do land on the shared map --- but they are completely unprotected, and concurrent writes to a Go map without synchronization is undefined behavior (the runtime will panic with a "concurrent map writes" message).
+The map header (`sm.m`) is a reference type, so the map operations do land on the same underlying map --- but they are completely unprotected, and concurrent writes to a Go map are not allowed.
+Verified under go1.26.3: the program crashes with `fatal error: concurrent map writes`.
+`go vet` also flags the root cause statically: `Inc passes lock by value: command-line-arguments.SafeMap contains sync.Mutex` (and the same for `Get`).
 
 The fix is to use pointer receivers throughout:
 
@@ -2423,7 +2448,7 @@ func (s *SafeMap) Get(key string) int {
 }
 ```
 
-And in `main`, take the address of `sm` (or change `NewSafeMap` to return `*SafeMap`):
+And have the constructor return a pointer so no copy is ever made:
 
 ```go
 func NewSafeMap() *SafeMap {
@@ -2431,11 +2456,11 @@ func NewSafeMap() *SafeMap {
 }
 
 func main() {
-    sm := NewSafeMap() // *SafeMap; no copy needed
-    ...
-    sm.Inc("Butter")
-    ...
-    fmt.Println(sm.Get("Butter")) // 100
+    sm := NewSafeMap() // *SafeMap; no copy
+    // ...
+    sm.Inc("Escape")
+    // ...
+    fmt.Println(sm.Get("Escape")) // 100
 }
 ```
 
@@ -2458,7 +2483,7 @@ import (
     "time"
 )
 
-// RateLimiter allows at most Limit tokens per one-second window.
+// RateLimiter allows at most limit tokens per one-second window.
 type RateLimiter struct {
     mu      sync.Mutex
     limit   int
@@ -2517,21 +2542,20 @@ func main() {
 }
 ```
 
-Sample output (with a limit of 25 and 50 total calls):
+Sample output (limit 25, 50 total calls; the 50 calls all land in the same one-second window):
 
 ```
 allowed=25 denied=25 total=50
 ```
 
+Verified under go1.26.3, including with `go run -race`: no data race is reported and the totals are stable across runs.
+
 Key points of the implementation:
 
-- The `sync.Mutex` in `RateLimiter` protects both `used` and `resetAt` together as a single invariant.
-  Neither field can be read or written outside the lock.
-- `Allow` checks the current time inside the lock so that the window reset and the token deduction are one atomic decision.
-  If the check and the deduction were in separate lock acquisitions, another goroutine could sneak in between them.
-- The `allowed` and `denied` counters in `main` use `atomic.Int64` rather than a mutex because they are independent single-variable updates --- a perfect atomic use case.
-- `wg.Add(1)` is called in the outer loop, before the goroutine is launched, not inside the goroutine --- following the `WaitGroup` rule from the chapter.
-
+- The `sync.Mutex` in `RateLimiter` protects both `used` and `resetAt` together as a single invariant. Neither field is read or written outside the lock.
+- `Allow` checks the current time inside the lock so that the window reset and the token deduction are one atomic decision. If the check and the deduction were in separate lock acquisitions, another goroutine could sneak in between them.
+- The `allowed` and `denied` counters in `main` use `atomic.Int64` rather than a mutex because they are independent single-variable updates --- a textbook atomic use case.
+- `wg.Add(1)` is called in the outer loop, **before** the goroutine is launched, following the `WaitGroup` rule from the chapter (and the bug in Exercise 6). You could equally use `wg.Go(func() { ... })` (Go 1.25+) and drop the explicit `Add`/`Done`.
 
 ---
 
@@ -2560,6 +2584,8 @@ func main() {
 }
 ```
 
+The author expects `[0 1 4 9 16]` but usually sees something like `[0 0 0 0 0]`, and `go run -race` reports a data race.
+
 **The bug:** `wg.Add(1)` is called *inside* the goroutine instead of before launching it.
 
 `wg.Wait()` blocks only while the counter is greater than zero.
@@ -2569,7 +2595,7 @@ If `Wait` observes the counter at zero (which it can, because no goroutine has e
 This produces two distinct problems:
 
 - **Premature `Wait`:** the program usually prints a partial or all-zero slice such as `[0 0 0 0 0]` instead of `[0 1 4 9 16]`. The output is non-deterministic and changes run to run.
-- **Data race:** `main` reads `results` (via `fmt.Println`) at the same time the surviving goroutines write to `results[n]`. `go run -race` reports a `DATA RACE`. Even `go vet` flags this statically with the diagnostic "WaitGroup.Add called from inside new goroutine".
+- **Data race:** `main` reads `results` (via `fmt.Println`) at the same time the surviving goroutines write to `results[n]`. Verified under go1.26.3: `go run -race` reports `WARNING: DATA RACE`, and `go vet` flags it statically with the exact diagnostic `WaitGroup.Add called from inside new goroutine`.
 
 **The fix:** call `wg.Add(1)` in the main goroutine *before* the `go` statement, so the counter is guaranteed non-zero before `Wait` can observe it:
 
@@ -2586,7 +2612,22 @@ fmt.Println(results) // [0 1 4 9 16]
 ```
 
 With `Add` moved out, `Wait` cannot return until all five `Done` calls have happened, which establishes a happens-before relationship so the subsequent read of `results` is race-free.
-Go 1.25 added a `WaitGroup.Go` helper that runs a function in a new goroutine and handles the matching `Add`/`Done` automatically, which sidesteps this whole class of mistake.
+
+Even cleaner, Go 1.25 added the `WaitGroup.Go` helper, which runs a function in a new goroutine and handles the matching `Add`/`Done` automatically, sidestepping this whole class of mistake:
+
+```go
+for i := 0; i < 5; i++ {
+    wg.Go(func() {
+        results[i] = i * i // i is per-iteration under Go 1.22+
+    })
+}
+wg.Wait()
+fmt.Println(results) // [0 1 4 9 16]
+```
+
+Verified under go1.26.3: this `WaitGroup.Go` version compiles and prints `[0 1 4 9 16]`.
+
+---
 
 ---
 
@@ -2598,7 +2639,7 @@ What are the advantages of passing a context explicitly rather than relying on a
 Consider what happens when a Java thread is blocked in a third-party library that does not handle `InterruptedException`, compared to how a Go function using a context-aware library would behave.
 
 Java's thread-interrupt model is **implicit and cooperative at the thread level**.
-When you call `Thread.interrupt()`, a flag is set on the thread, and blocking calls like `Object.wait()`, `Thread.sleep()`, and `java.io.InputStream.read()` on some implementations throw `InterruptedException` when they notice it.
+When you call `Thread.interrupt()`, a flag is set on the thread, and blocking calls like `Object.wait()`, `Thread.sleep()`, and some `java.io.InputStream.read()` implementations throw `InterruptedException` when they notice it.
 But not every blocking operation checks the flag: a thread blocked in a native call, a third-party lock, or a legacy `InputStream` implementation may never see the interrupt at all.
 The interrupt propagates up the call stack only as long as every layer catches and re-throws (or re-sets) the flag, which is notoriously easy to accidentally swallow:
 
@@ -2611,7 +2652,7 @@ try {
 ```
 
 Go's `context.Context` is **explicit and uniform**.
-Every function that can be cancelled must accept a `context.Context` parameter.
+Every function that can be cancelled accepts a `context.Context` parameter, conventionally as its first argument.
 Cancellation is communicated by closing `ctx.Done()`, which is observable without any thread-local state.
 Any function that calls another context-aware function simply passes the same context through; the propagation is visible in every function signature.
 
@@ -2679,32 +2720,35 @@ Each prints its label with `"cancelled: context deadline exceeded"`.
 The goroutines finish well before `main`'s `time.Sleep(400ms)` elapses, so `"main done"` appears last.
 
 The two cancelled lines may appear in either order because goroutine scheduling is not deterministic.
-`main done` always appears last because `time.Sleep(400ms)` is longer than the 200 ms timeout and the goroutines' response time.
+`main done` always appears last because `time.Sleep(400ms)` is longer than the 200 ms timeout plus the goroutines' response time.
 
 ---
 
 **Exercise 3** (Calculation): You run a worker pool with `workers = 3` and feed it a slice of 7 tasks.
 Each task takes exactly 100 ms.
 Assuming no overhead and perfect parallelism, how many milliseconds does the pool take to complete all 7 tasks?
+Show your work: how many rounds of 3 concurrent workers are needed and what does each round contribute?
 
 **Answer: 300 ms.**
 
 With 3 workers processing tasks that each take 100 ms:
 
 | Round | Tasks processed   | Wall-clock time elapsed |
-|-------|-------------------|------------------------|
-| 1     | tasks 1, 2, 3     | 0 -- 100 ms            |
-| 2     | tasks 4, 5, 6     | 100 -- 200 ms          |
-| 3     | task 7 (+ 2 idle) | 200 -- 300 ms          |
+|-------|-------------------|-------------------------|
+| 1     | tasks 1, 2, 3     | 0 -- 100 ms             |
+| 2     | tasks 4, 5, 6     | 100 -- 200 ms           |
+| 3     | task 7 (+ 2 idle) | 200 -- 300 ms           |
 
 Round 1 dispatches tasks 1--3 in parallel.
 All three finish at T=100 ms.
 Round 2 dispatches tasks 4--6 in parallel; all finish at T=200 ms.
 Round 3 dispatches task 7 alone (only one task remains); it finishes at T=300 ms.
 
-Total elapsed time = ceil(7 / 3) × 100 ms = 3 × 100 ms = **300 ms**.
+Total elapsed time = ceil(7 / 3) x 100 ms = 3 x 100 ms = **300 ms**.
 
-General formula: `ceil(N / workers) × task_duration`.
+General formula: `ceil(N / workers) x task_duration`.
+
+Note that the third round still takes a full 100 ms even though only one worker is busy: wall-clock time is governed by the slowest (in this case the only) task in the round, so 2 workers sitting idle does not shorten it.
 
 ---
 
@@ -2744,13 +2788,14 @@ func main() {
 
 **The bug: goroutine leak in `fetchData`.**
 
-`fetchData` launches a goroutine that sleeps for 2 seconds and then sends on `ch`.
+`fetchData` launches a goroutine that sleeps for 2 seconds and then sends on the unbuffered `ch`.
 When the context times out after 500 ms, `main` exits the `select` via `ctx.Done()` and prints `"timed out"`.
 At this point `ch` is no longer being read by anyone.
 The goroutine inside `fetchData` is still sleeping; when it wakes up at T=2 s and tries to send `ch <- "result for ..."`, it blocks forever because nobody will ever receive from `ch`.
 The goroutine is leaked --- it will never exit.
+A `go.uber.org/goleak` check confirms the goroutine is still parked on `time.Sleep` after `main` returns.
 
-**The fix:** pass the context into `fetchData` so the goroutine can bail out early.
+**The fix:** pass the context into `fetchData` so the goroutine can bail out early, and buffer the channel so the send never blocks.
 
 ```go
 func fetchData(ctx context.Context, url string) <-chan string {
@@ -2780,7 +2825,8 @@ func main() {
 }
 ```
 
-Using a buffered channel of capacity 1 also guards against a secondary leak: if the result arrives after `main`'s `select` exits the `ctx.Done()` branch (a narrow race), the goroutine can still send on `ch` without blocking, and then exit.
+Using a buffered channel of capacity 1 also guards against a secondary leak: if the result arrives at the same instant `main`'s `select` exits via the `ctx.Done()` branch (a narrow race), the goroutine can still send on `ch` without blocking, and then exit.
+With this fix, `goleak.VerifyNone` reports no leaked goroutines.
 
 ---
 
@@ -2807,7 +2853,7 @@ func fanOutFetch(ctx context.Context, songs []string) ([]string, error) {
     g, ctx := errgroup.WithContext(ctx)
 
     for i, song := range songs {
-        i, song := i, song // capture for Go < 1.22
+        i, song := i, song // capture for Go < 1.22; harmless on 1.22+
         g.Go(func() error {
             delay := time.Duration(50+rand.Intn(100)) * time.Millisecond
             select {
@@ -2852,10 +2898,12 @@ func main() {
 
 `errgroup.WithContext` derives a new context from the one passed in.
 If any goroutine returns a non-nil error, `errgroup` cancels that derived context, causing all other goroutines that are still sleeping to unblock on `ctx.Done()` and return `ctx.Err()`.
-`g.Wait()` returns the first error.
+`g.Wait()` returns the first non-nil error.
+Each goroutine writes to a distinct index `results[i]`, so there is no data race --- this passes `go run -race` cleanly.
+Because each goroutine writes only its own slot, the results stay in the same order as `songs` without any locking.
 
-Because the outer `context.WithTimeout` fires after 300 ms, any fetch whose random delay exceeds the remaining budget will be cancelled.
-Fetches with delays in the 50--150 ms range should all complete well within 300 ms under normal conditions; set the timeout lower (e.g., 100 ms) to reliably trigger a cancellation in testing.
+Because the outer `context.WithTimeout` fires after 300 ms, any fetch whose random delay exceeds the remaining budget is cancelled.
+Fetches with delays in the 50--150 ms range all complete well within 300 ms under normal conditions; lower the timeout (for example to 20 ms) to reliably trigger a cancellation in testing.
 
 Sample output when all fetches succeed:
 ```
@@ -2870,6 +2918,8 @@ Sample output when the timeout fires:
 error: context deadline exceeded
 ```
 
+Note that `errgroup` lives in the `golang.org/x/sync/errgroup` package, not the standard library.
+Add it with `go get golang.org/x/sync/errgroup`.
 
 ---
 
@@ -2912,7 +2962,7 @@ The final line passes a plain `string` literal `"user"`, whose type is `string`,
 Because the key types differ, no match is found anywhere in the tree, so `ctx.Value("user")` returns `nil`, which prints as `<nil>`.
 This is exactly why idiomatic Go uses an unexported key type: a `string` key from another package can never collide with your typed key.
 
-Note: this program uses a named string-based key type purely to demonstrate the type-matching rule; `go vet` does not flag it because the key type is not a built-in type.
+Note: this program uses a named string-based key type purely to demonstrate the type-matching rule; `go vet` does not flag it because the key type is a defined (named) type rather than a built-in type.
 In production, prefer an unexported empty-struct key type as shown in the chapter.
 
 ---
@@ -2927,39 +2977,38 @@ What problems does MVS avoid?
 What does it make harder?
 When might the Go approach cause a surprise after running `go get pkg@latest`?
 
-Go's Minimum Version Selection works by computing the maximum of the minimum required versions across all modules in the dependency graph.
-If module A requires `library v1.2.0` and module B requires `library v1.3.0`, Go selects `v1.3.0` --- the minimum version that satisfies both.
-No module ever gets a version newer than the one its author tested against, unless someone explicitly requests an upgrade.
+MVS works by computing, for each dependency, the maximum of the minimum versions requested across the whole module graph.
+If module A requires `library v1.2.0` and module B requires `library v1.3.0`, Go selects `v1.3.0` --- the smallest version that satisfies both requirements.
+No module ever silently gets a version newer than the one its author actually tested against, unless someone explicitly asks for an upgrade.
 
 **Problems MVS avoids:**
 
 - **Silent upgrades.**
-  In Maven's nearest-wins model, adding a new dependency can silently pull in a newer (or older) version of a transitive library, breaking unrelated code.
+  In Maven's nearest-wins model, adding one new dependency can quietly pull in a newer (or older) version of a transitive library and break unrelated code.
   MVS never introduces a version you did not ask for.
-- **Build irreproducibility.**
-  Because MVS is deterministic and recorded in `go.sum`, two developers checking out the same commit always get bit-for-bit identical dependencies.
-  Maven can produce different builds depending on which dependencies happen to be in the local repository cache.
+- **Non-reproducible builds.**
+  Because MVS is deterministic and the exact versions plus hashes are recorded in `go.mod` and `go.sum`, two developers checking out the same commit get bit-for-bit identical dependencies.
+  Maven and Gradle resolution can drift depending on what is cached or what repositories are reachable.
 
 **What MVS makes harder:**
 
 - **Staying current.**
-  MVS actively resists upgrading.
-  If your dependency graph has pinned a library at `v1.2.0`, you will stay there until someone runs `go get library@v1.4.0`.
-  In a large organisation this can mean security patches go unnoticed.
+  MVS deliberately resists upgrading.
+  If your graph pins a library at `v1.2.0`, you stay there until someone runs `go get library@v1.4.0`.
+  In a large organisation this means security patches can go unnoticed unless you actively check.
 - **Downgrading.**
-  If you want to use an older version than the graph currently requires, you have to remove or downgrade every module that requires the newer version.
+  To use an older version than the graph currently requires, you have to downgrade or remove every module that requires the newer one, because MVS always takes the maximum of the minimums.
 
 **Surprise from `go get pkg@latest`:**
-After you run `go get pkg@latest`, the upgraded module may itself require newer versions of transitive dependencies.
-MVS will bump those transitives to the versions the new module requires --- which might be substantially newer than before.
-Your `go.mod` can change in unexpected ways beyond the single module you asked to upgrade.
-Running `go mod tidy` afterward and reviewing the diff in `go.mod` and `go.sum` is a good habit.
+The newly upgraded module may itself require newer versions of its own transitive dependencies.
+MVS will then bump those transitives up to whatever the new `pkg` requires, so a single `go get` can ripple through `go.mod` and change versions you never named.
+Running `go mod tidy` afterward and reviewing the diff in `go.mod` and `go.sum` is the habit that keeps these surprises visible.
 
 ---
 
-**Exercise 2** (What does this print?):
+**Exercise 2** (Where is the bug?):
 
-Given the following three files in a module `github.com/zachbryan/demo`:
+Given the following three files in a module `github.com/angoscia/demo`:
 
 File `lyrics/lyrics.go`:
 ```go
@@ -2968,7 +3017,7 @@ package lyrics
 import "fmt"
 
 func Print() {
-    fmt.Println("something in the orange")
+    fmt.Println("Emerald Triangle 2012")
 }
 ```
 
@@ -2988,8 +3037,8 @@ File `main.go`:
 package main
 
 import (
-    "github.com/zachbryan/demo/lyrics"
-    "github.com/zachbryan/demo/lyrics/internal/detail"
+    "github.com/angoscia/demo/lyrics"
+    "github.com/angoscia/demo/lyrics/internal/detail"
 )
 
 func main() {
@@ -3004,61 +3053,61 @@ If not, explain why.
 
 **The build fails.**
 
-`main.go` is at the module root, which means its parent directory for the purposes of the `internal` rule is `github.com/zachbryan/demo`.
-The `internal` package's full path is `github.com/zachbryan/demo/lyrics/internal/detail`.
-For `main.go` to import it, `main.go` must live inside `github.com/zachbryan/demo/lyrics` or one of its subdirectories.
-`main.go` lives at the module root, which is `github.com/zachbryan/demo` --- it is not rooted under `github.com/zachbryan/demo/lyrics`, so the compiler rejects the import.
+The rule for `internal` is: an `internal` package may only be imported by code rooted at the directory that is the *parent* of `internal/`.
+Here the package lives at `github.com/angoscia/demo/lyrics/internal/detail`, so the parent of `internal/` is `github.com/angoscia/demo/lyrics`.
+Only code under `github.com/angoscia/demo/lyrics/...` is allowed to import it.
 
-The compiler error will say something like:
+`main.go` sits at the module root, `github.com/angoscia/demo`, which is *not* under `github.com/angoscia/demo/lyrics`, so the import is rejected.
+The import of the public `github.com/angoscia/demo/lyrics` package is fine; only the `internal/detail` import is the problem.
+
+Running `go build ./...` produces:
+
 ```
-use of internal package github.com/zachbryan/demo/lyrics/internal/detail not allowed
+package github.com/angoscia/demo
+	main.go:5:5: use of internal package github.com/angoscia/demo/lyrics/internal/detail not allowed
 ```
 
-The import of `github.com/zachbryan/demo/lyrics` (the public package) is fine.
-Only the `internal/detail` import is rejected.
-
-To fix this, either move `detail` out of `lyrics/internal/` into a location that `main.go` is allowed to reach (such as `internal/detail` directly under the module root), or move `main.go` into a directory under `lyrics/`.
+To fix it without changing the import semantics, either move `detail` to `internal/detail` directly under the module root (so its parent is the module root, which `main.go` can reach), or move `main.go` into a directory under `lyrics/` (so it is rooted under `lyrics`).
 
 ---
 
 **Exercise 3** (Calculation): A module's `go.mod` contains the following:
 
 ```
-module github.com/noahkahan/app
+module github.com/angoscia/app
 
 go 1.26
 
 require (
-    github.com/noahkahan/audio v1.4.0
-    github.com/noahkahan/catalog v0.9.2
+    github.com/angoscia/audio v1.4.0
+    github.com/angoscia/catalog v0.9.2
     golang.org/x/text v0.14.0 // indirect
 )
 ```
 
-`github.com/noahkahan/audio v1.4.0` itself requires `golang.org/x/text v0.12.0`.
-`github.com/noahkahan/catalog v0.9.2` requires `golang.org/x/text v0.14.0`.
+`github.com/angoscia/audio v1.4.0` itself requires `golang.org/x/text v0.12.0`.
+`github.com/angoscia/catalog v0.9.2` requires `golang.org/x/text v0.14.0`.
 
 Under Go's Minimum Version Selection, which version of `golang.org/x/text` will the final build use?
 Explain why.
 Now suppose you add a new dependency that requires `golang.org/x/text v0.16.0`.
 What version will MVS select then?
 
-**First scenario: `v0.14.0`.**
+**MVS selects `golang.org/x/text v0.14.0`.**
 
-MVS collects the minimum required version from every module in the graph:
-- `github.com/noahkahan/app` itself requires `v0.14.0` (explicit `// indirect` entry).
-- `github.com/noahkahan/audio` requires `v0.12.0`.
-- `github.com/noahkahan/catalog` requires `v0.14.0`.
+Collect every minimum requirement for `golang.org/x/text` across the graph:
 
-MVS takes the maximum of these minimums: `max(v0.14.0, v0.12.0, v0.14.0)` = **`v0.14.0`**.
-The `// indirect` entry in the main module's `go.mod` already encodes this selection; `go mod tidy` placed it there when one of the direct dependencies required `v0.14.0` and the other only `v0.12.0`.
+- the root `app` module requires `v0.14.0` (the `// indirect` line),
+- `audio v1.4.0` requires `v0.12.0`,
+- `catalog v0.9.2` requires `v0.14.0`.
 
-**Second scenario: `v0.16.0`.**
+MVS takes the *maximum of those minimums*, which is `v0.14.0`.
+It is the smallest version that satisfies all three requirements at once: it is at least `v0.12.0` (so `audio` is happy) and at least `v0.14.0` (so `catalog` and the root are happy).
+Note that "minimum version selection" does not mean "pick the lowest version present"; it means "pick the lowest version that still meets every requirement," which is the highest of the listed minimums.
 
-Adding a new dependency that requires `golang.org/x/text v0.16.0` raises the minimum for that module in the graph.
-MVS selects `max(v0.14.0, v0.12.0, v0.14.0, v0.16.0)` = **`v0.16.0`**.
-After `go mod tidy`, the `// indirect` entry in `go.mod` is updated to `golang.org/x/text v0.16.0`.
-No other dependency's version changes.
+**After adding a dependency that requires `golang.org/x/text v0.16.0`:**
+the set of minimums becomes `{v0.14.0, v0.12.0, v0.14.0, v0.16.0}`, and the maximum is now `v0.16.0`.
+So MVS selects `golang.org/x/text v0.16.0`.
 
 ---
 
@@ -3088,7 +3137,7 @@ func main() {
 }
 ```
 
-**Answer:** The program prints:
+**Output:**
 
 ```
 f called
@@ -3096,26 +3145,51 @@ init, a = 5
 main, a = 5
 ```
 
-Package-level variables are initialized in **dependency order**, not source order.
-`a = b + c` depends on `b` and `c`, so both must be initialized first.
-`c = 2` has no dependencies; `b = f()` calls `f`, which prints `f called` and returns `3`.
-Then `a = b + c = 3 + 2 = 5`.
-After every package-level variable initializer has run, `init()` runs and prints `init, a = 5`.
-Finally `main()` runs (only after all `init()` functions complete) and prints `main, a = 5`.
+Go does not initialise package-level variables top to bottom; it initialises them in *dependency order*.
+A variable is initialised only after every variable it references has been initialised, and ties are broken by declaration order.
 
-The takeaways: (1) variable initialization follows dependency order, falling back to source order within a dependency level, so `b` and `c` initialize before `a` even though `a` is declared first; (2) `init()` runs after all package-level variables are initialized; (3) `main()` runs only after every `init()` has completed.
+- `a` depends on `b` and `c`, so it cannot go first.
+- `b` depends on `f()`; `f()` has no variable dependencies, so `b` can be initialised, which calls `f()` and prints `f called`. `b` becomes `3`.
+- `c` depends on nothing, so it becomes `2`.
+- `a` now has both operands ready: `a = b + c = 3 + 2 = 5`.
+
+After all package-level variables are initialised, Go runs `init()`, which prints `init, a = 5`.
+Finally `main` runs and prints `main, a = 5`.
+The key point is that even though `a` is declared first in the source, it is initialised last because of its dependencies, and `f` is called exactly once during variable initialisation, before `init` and `main`.
 
 ---
 
 **Exercise 5** (Where is the bug?): The following module has this layout and code:
 
 ```
-northernattitude/
-├── go.mod           (module github.com/noahkahan/northernattitude)
+betteroffalone/
+├── go.mod           (module github.com/djcobra/betteroffalone)
 ├── main.go
 └── internal/
     └── config/
         └── config.go
+```
+
+`main.go`:
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/djcobra/betteroffalone/internal/config"
+)
+
+func main() {
+    fmt.Println(config.DefaultRegion)
+}
+```
+
+A second module lives alongside it:
+
+```
+player/
+├── go.mod           (module github.com/djcobra/player)
+└── main.go
 ```
 
 `player/main.go`:
@@ -3124,7 +3198,7 @@ package main
 
 import (
     "fmt"
-    "github.com/noahkahan/northernattitude/internal/config"
+    "github.com/djcobra/betteroffalone/internal/config"
 )
 
 func main() {
@@ -3135,91 +3209,107 @@ func main() {
 What happens when you run `go build ./...` inside the `player/` module?
 Identify the bug and describe how to fix it without moving the `config` package out of `internal/`.
 
-**The build fails.**
+**The build fails inside `player/`.**
 
-The `internal/` package belongs to the module `github.com/noahkahan/northernattitude`.
-The compiler's rule is that only code whose import path has `github.com/noahkahan/northernattitude` as a prefix may import packages under that module's `internal/`.
-The `player` module has path `github.com/noahkahan/player`, which does not share that prefix.
-The build error will be:
+The `internal` rule is enforced by import path, and it does not care about module boundaries --- if anything, crossing a module boundary makes it stricter.
+The parent of `internal/` here is `github.com/djcobra/betteroffalone`, so only code rooted under `github.com/djcobra/betteroffalone/...` may import `github.com/djcobra/betteroffalone/internal/config`.
+
+Inside the `betteroffalone` module, `main.go` is rooted at `github.com/djcobra/betteroffalone`, so its import is fine.
+The `player` module is a *different* module (`github.com/djcobra/player`); none of its code is under `github.com/djcobra/betteroffalone`, so importing that module's `internal/config` is forbidden.
+
+`go build ./...` inside `player/` produces:
 
 ```
-use of internal package github.com/noahkahan/northernattitude/internal/config not allowed
+package github.com/djcobra/player
+	main.go:5:5: use of internal package github.com/djcobra/betteroffalone/internal/config not allowed
 ```
 
-**The fix --- without moving `config` out of `internal/`:**
+The bug is that `player` is trying to reach into another module's `internal` tree, which the toolchain refuses by design --- `internal` packages are private to the module (and subtree) that contains them.
 
-The `config` package contains information that `northernattitude` treats as a private implementation detail.
-If `player` genuinely needs access to it, the right solution is for `northernattitude` to expose the data through a **public API**.
-Create an exported package, for example `github.com/noahkahan/northernattitude/region`, that wraps or re-exports the value from `internal/config`:
+**How to fix it without moving `config` out of `internal/`:**
+keep `config` exactly where it is and instead expose what `player` needs through a *public* package in `betteroffalone`.
+For example, add `github.com/djcobra/betteroffalone/region/region.go` (a non-`internal` package) that re-exports `DefaultRegion`:
 
 ```go
-// northernattitude/region/region.go
 package region
 
-import "github.com/noahkahan/northernattitude/internal/config"
+import "github.com/djcobra/betteroffalone/internal/config"
 
-// DefaultRegion is the default geographic region.
-var DefaultRegion = config.DefaultRegion
+const DefaultRegion = config.DefaultRegion
 ```
 
-`player` then imports `github.com/noahkahan/northernattitude/region` instead of the internal package.
-The internal package remains private; its values are accessible only through the deliberately designed public surface.
-
-Alternatively, if `player` and `northernattitude` are developed together and the restriction is inconvenient, use a Go workspace (`go work init ./northernattitude ./player`) and promote `config` to a shared module or to a non-`internal` path.
+That re-export is legal because `region` is itself rooted under `github.com/djcobra/betteroffalone`, so it may import the `internal` package.
+Then `player/main.go` imports the public `github.com/djcobra/betteroffalone/region` instead of the internal path.
+`config` stays private, and `player` only ever touches the public surface you deliberately chose to expose.
 
 ---
 
-**Exercise 6** (Write a program):
+**Exercise 6** (Write a program): Create a small multi-package module with the following layout:
 
-A complete implementation:
-
-File `stickseason/go.mod`:
 ```
-module github.com/noahkahan/stickseason
+children/
+├── go.mod           (module github.com/robertdreamhouse/children)
+├── main.go
+├── tracks/
+│   └── tracks.go
+└── internal/
+    └── format/
+        └── format.go
+```
+
+`tracks.go` should define an exported `Track` struct with `Title` and `Artist` string fields and a slice `Catalog` containing at least two entries.
+`format.go` should define an unexported-to-outside but exported-within-module function `Label(t tracks.Track) string` that returns `"Title by Artist"`.
+`main.go` should import both `tracks` and `internal/format`, iterate over `tracks.Catalog`, and print the label for each track using `format.Label`.
+Build and run the program with `go run ./...` (or `go run main.go`) and confirm it prints the expected output.
+
+Here is a complete implementation that builds and runs under go1.26.3.
+
+`go.mod`:
+```
+module github.com/robertdreamhouse/children
 
 go 1.26
 ```
 
-File `stickseason/tracks/tracks.go`:
+`tracks/tracks.go`:
 ```go
 package tracks
 
-// Track holds the title and artist of a song.
 type Track struct {
-    Title  string // song title
-    Artist string // performing artist
+    Title  string
+    Artist string
 }
 
-// Catalog is the list of tracks in this module.
 var Catalog = []Track{
-    {Title: "Stick Season",     Artist: "Noah Kahan"},
-    {Title: "Northern Attitude", Artist: "Noah Kahan"},
+    {Title: "Childhood Dreams", Artist: "Robert Dreamhouse"},
+    {Title: "Paper Houses", Artist: "Robert Dreamhouse"},
 }
 ```
 
-File `stickseason/internal/format/format.go`:
+`internal/format/format.go`:
 ```go
 package format
 
 import (
     "fmt"
-    "github.com/noahkahan/stickseason/tracks"
+
+    "github.com/robertdreamhouse/children/tracks"
 )
 
-// Label returns a human-readable label for a track.
 func Label(t tracks.Track) string {
     return fmt.Sprintf("%s by %s", t.Title, t.Artist)
 }
 ```
 
-File `stickseason/main.go`:
+`main.go`:
 ```go
 package main
 
 import (
     "fmt"
-    "github.com/noahkahan/stickseason/internal/format"
-    "github.com/noahkahan/stickseason/tracks"
+
+    "github.com/robertdreamhouse/children/internal/format"
+    "github.com/robertdreamhouse/children/tracks"
 )
 
 func main() {
@@ -3229,20 +3319,15 @@ func main() {
 }
 ```
 
-Output:
+The `internal/format` import is allowed here because `main.go` is rooted at the module root `github.com/robertdreamhouse/children`, which is the parent of `internal/`.
+Running `go run ./...` prints:
+
 ```
-Stick Season by Noah Kahan
-Northern Attitude by Noah Kahan
+Childhood Dreams by Robert Dreamhouse
+Paper Houses by Robert Dreamhouse
 ```
 
-**Key observations:**
-
-- `main.go` can import `internal/format` because it is inside the same module (`github.com/noahkahan/stickseason`).
-  An external module attempting the same import would receive a compile error.
-- `format.Label` is exported (capital `L`) so `main.go` can call it; it is still unreachable from outside the module because the package itself is under `internal/`.
-- The `tracks` package is public --- any module that depends on `github.com/noahkahan/stickseason` could import it.
-  Only `internal/format` is module-private.
-
+`Label` is exported (capital `L`) so other packages *inside* the module can call it, but because it lives under `internal/`, no code outside `github.com/robertdreamhouse/children` can import it --- exactly the "exported within the module, private outside it" behaviour the exercise asked for.
 
 ---
 
@@ -3253,22 +3338,25 @@ Go has two interfaces --- `io.Reader` and `io.Writer` --- and a set of compositi
 What design decision makes Go's two-interface model work where Java needed four base classes?
 What would be harder to express cleanly in Go's model?
 
-The key difference is that Java's hierarchy distinguishes between **byte-oriented** I/O (`InputStream`/`OutputStream`) and **character-oriented** I/O (`Reader`/`Writer`), with four root types as a result.
+The key difference is that Java's hierarchy distinguishes between byte-oriented I/O (`InputStream`/`OutputStream`) and character-oriented I/O (`Reader`/`Writer`), giving four root types as a result.
 Go does not make that split at the interface level: `io.Reader` and `io.Writer` always deal in `[]byte`.
-Character encoding is handled separately --- either at the edges (e.g., `bufio.Scanner` which returns `string` tokens), or by explicit conversion.
+Character encoding is handled separately --- either at the edges (for example `bufio.Scanner`, which returns `string` tokens) or by explicit conversion.
 This simplification is possible because Go treats `string` and `[]byte` as first-class, cheaply convertible types, so the language does not need a parallel hierarchy to make text feel natural.
 
-The composition functions (`io.TeeReader`, `io.MultiWriter`, etc.) are ordinary functions that return an interface value.
-In Java the same decorators are abstract classes (`FilterInputStream`, `BufferedInputStream`) because the language needed a concrete supertype to share implementation; Go can express the same patterns with zero-allocation wrappers because interfaces are structural.
+The composition functions (`io.TeeReader`, `io.MultiWriter`, and friends) are ordinary functions that return an interface value.
+In Java the same decorators are abstract classes (`FilterInputStream`, `BufferedInputStream`) because the language needed a concrete supertype to share implementation; Go can express the same patterns with lightweight wrappers because interfaces are structural.
 
 What is harder in Go's model:
 
-- **Seeking and positioning.** Java's `RandomAccessFile` supports `seek` directly.
+- Seeking and positioning.
+  Java's `RandomAccessFile` supports `seek` directly.
   Go separates this into `io.Seeker` (a third interface) and requires callers to do a type assertion or accept an `io.ReadSeeker` parameter.
-- **Buffered reads with unread/pushback.** Java's `PushbackInputStream` is a first-class class.
+- Buffered reads with unread/pushback.
+  Java's `PushbackInputStream` is a first-class class.
   In Go you use `bufio.Reader.UnreadByte()` or `bufio.Reader.UnreadRune()`, which requires wrapping in `bufio` first.
-- **Encoding-aware text I/O.** Java's `InputStreamReader` bridges bytes to characters with a named charset.
-  In Go you must use third-party packages (e.g., `golang.org/x/text/encoding`) or write the conversion yourself.
+- Encoding-aware text I/O.
+  Java's `InputStreamReader` bridges bytes to characters with a named charset.
+  In Go you must use third-party packages (for example `golang.org/x/text/encoding`) or write the conversion yourself.
 
 ---
 
@@ -3310,25 +3398,25 @@ func main() {
 ```
 
 Output:
+
 ```
 level=INFO msg="scan complete" lines=3 elapsed=0s
 ```
 
-Step-by-step:
+Step by step:
 
 1. A `slog.TextHandler` is created writing to `os.Stdout`.
    The `ReplaceAttr` function strips the `time` attribute, so no timestamp appears.
-2. `strings.NewReader` wraps the literal string as an `io.Reader`.
-   `bufio.NewScanner` wraps that reader.
-3. The scanner splits on newlines (the default).
-   The input has three non-empty lines (`"Café Del Mar"`, `"Zombie"`, `"Crazy Train"`) followed by a trailing newline.
+2. `strings.NewReader` wraps the literal string as an `io.Reader`, and `bufio.NewScanner` wraps that reader.
+3. The scanner splits on newlines (the default `ScanLines`).
+   The input has three lines (`"Café Del Mar"`, `"Zombie"`, `"Crazy Train"`) each terminated by a newline.
    `Scan` returns `true` three times and then `false` at EOF, so `count` ends up as `3`.
 4. `logger.Info` emits a text-format log line.
    The `time` key is suppressed by `ReplaceAttr`.
    `slog.Int("lines", 3)` formats as `lines=3`.
-   `slog.Duration("elapsed", 0)` formats as `elapsed=0s` --- `time.Duration` zero-value formats as `"0s"`.
+   `slog.Duration("elapsed", 0)` formats as `elapsed=0s` --- a zero `time.Duration` formats as `"0s"`.
 
-The exact key ordering in `log/slog` text format is: `level`, `msg`, then attributes in the order they were passed.
+The key ordering in `log/slog` text format is `level`, `msg`, then the attributes in the order they were passed.
 
 ---
 
@@ -3339,34 +3427,34 @@ The exact key ordering in `log/slog` text format is: `level`, `msg`, then attrib
 For each approach, estimate the peak heap allocation in MiB, assuming the file contains 100,000 lines of 100 bytes each.
 Which approach is best for counting lines without storing the content?
 
-The file is 100,000 lines × 100 bytes = 10,000,000 bytes, or about **9.5 MiB**.
+The file is 100,000 lines times 100 bytes = 10,000,000 bytes, or about 9.5 MiB.
 
-**(a) `os.ReadFile`**
+(a) `os.ReadFile`
 
 `os.ReadFile` reads the entire file into a single `[]byte`.
-Peak heap allocation: about **9.5 MiB** (the whole file in one slice).
-Additionally, if you process the result into strings or split on newlines, you may double or triple the allocation.
+Peak heap allocation: about 9.5 MiB (the whole file in one slice).
+If you then process the result into strings or split on newlines, you may double or triple the allocation.
 This is the simplest approach but the most memory-hungry for large files.
 
-**(b) `bufio.NewScanner`**
+(b) `bufio.NewScanner`
 
-`Scanner` uses an internal buffer (default 64 KiB maximum token size, starting at 4 KiB).
+`Scanner` uses an internal buffer (default starting size 4 KiB, default maximum token size 64 KiB).
 It reads the file in chunks, scanning for newline boundaries.
-At any instant, only the current chunk plus the current token are in memory.
-Peak heap allocation: about **64 KiB** (the scanner's internal buffer) plus the length of the longest individual line.
+At any instant only the current chunk plus the current token are in memory.
+Peak heap allocation: about 64 KiB (the scanner's internal buffer) plus the length of the longest individual line.
 For 100-byte lines this is well under 1 MiB.
 
-**(c) `io.Copy(io.Discard, f)`**
+(c) `io.Copy(io.Discard, f)`
 
-`io.Copy` uses a single 32 KiB stack-allocated copy buffer (it uses `*[32*1024]byte` internally; in practice this ends up on the heap due to escape analysis, but it is still a single fixed allocation).
-Peak heap allocation: about **32 KiB**.
+`io.Copy` uses a single 32 KiB copy buffer when neither side implements a fast path.
+Peak heap allocation: about 32 KiB.
 However, this approach does not count lines --- it just discards all bytes.
 
-**Best for counting lines without storing content: `bufio.NewScanner`.**
+Best for counting lines without storing content: `bufio.NewScanner`.
 
 `io.Copy(io.Discard, f)` uses the least memory but cannot count lines without inspecting the bytes.
-`bufio.NewScanner` counts lines with a constant-size buffer (< 1 MiB peak) and is the idiomatic Go choice.
-`os.ReadFile` uses the most memory and should be avoided for large files.
+`bufio.NewScanner` counts lines with a constant-size buffer (under 1 MiB peak) and is the idiomatic Go choice.
+`os.ReadFile` uses the most memory and should be avoided for large files when you only need a count.
 
 ---
 
@@ -3397,12 +3485,12 @@ func main() {
 }
 ```
 
-**The bug:** `regexp.MustCompile(pattern)` is called inside the `for` loop, so the pattern is compiled on every iteration.
+The bug: `regexp.MustCompile(pattern)` is called inside the `for` loop, so the pattern is recompiled on every iteration.
 With four strings this is merely wasteful, but inside a hot path processing millions of records it becomes a serious performance problem --- `regexp.MustCompile` parses the pattern, builds a finite automaton, and allocates memory each time.
 
-The output is correct (it prints `4` --- all four titles start with an uppercase ASCII letter), so this is a **performance bug**, not a logic bug.
+The output is correct (it prints `4` --- all four titles start with an uppercase ASCII letter), so this is a performance bug, not a logic bug.
 
-**The fix:** Compile the pattern once, before the loop.
+The fix: compile the pattern once, before the loop.
 If the pattern is constant, hoist it to a package-level variable:
 
 ```go
@@ -3437,12 +3525,15 @@ func countMatches(texts []string, pattern string) (int, error) {
 }
 ```
 
-Note the switch from `MustCompile` to `Compile` with a returned error --- caller-supplied patterns should never `MustCompile` because a bad pattern would crash the program.
+Note the switch from `MustCompile` to `Compile` with a returned error --- caller-supplied patterns should never use `MustCompile`, because a bad pattern would crash the program.
 `MustCompile` is reserved for compile-time-constant patterns where a bad pattern is a programmer error, not a user error.
 
 ---
 
-**Exercise 5** (Write a program):
+**Exercise 5** (Write a program): Write a CLI tool that accepts three flags: `-dir` (a directory path, default `"."`), `-ext` (a file extension like `".go"`, default `".go"`), and `-verbose` (a boolean, default `false`).
+The tool should walk the directory tree, count files whose name ends with the given extension, and print the total.
+When `-verbose` is set, log each matching file path using `slog` at the `Info` level with a `"file"` attribute.
+Use `log/slog` with a text handler writing to `os.Stderr`, `path/filepath.WalkDir`, and `flag`.
 
 ```go
 package main
@@ -3487,25 +3578,24 @@ func main() {
 }
 ```
 
-Sample runs:
+Sample runs (note that the `slog` line goes to stderr and the summary to stdout):
 
 ```
 $ go run main.go -dir . -ext .go -verbose
-time=... level=INFO msg=match file=main.go
+time=2026-06-04T13:41:55.983-07:00 level=INFO msg=match file=main.go
 found 1 .go file(s) in .
 
 $ go run main.go -dir /usr/local/go/src -ext .go
-found 1847 .go file(s) in /usr/local/go/src
+found 8412 .go file(s) in /usr/local/go/src
 ```
 
 Key points in the solution:
 
 - `flag.Parse()` is called at the start of `main`, after all flag variables are defined, so all flags are parsed before use.
 - `slog.New(slog.NewTextHandler(os.Stderr, nil))` writes structured logs to stderr, leaving stdout clean for program output.
-- `filepath.WalkDir` is preferred over `filepath.Walk` because it passes `fs.DirEntry` (which avoids an extra `os.Stat` call per entry).
-- `strings.HasSuffix(d.Name(), *ext)` matches only the file name, not the full path, so `--ext .go` does not accidentally match a directory named `foo.go/`.
-- The error from `WalkDir` is checked and reported; a non-nil error from the callback halts the walk.
-
+- `filepath.WalkDir` is preferred over `filepath.Walk` because it passes an `fs.DirEntry`, which avoids an extra `os.Stat` call per entry.
+- `strings.HasSuffix(d.Name(), *ext)` matches only the file name, not the full path, so `-ext .go` does not accidentally match a directory whose name happens to end in `.go`.
+- The error from `WalkDir` is checked and reported; a non-nil error returned from the callback halts the walk.
 
 ---
 
@@ -3522,24 +3612,25 @@ Consider startup time, debuggability, IDE navigation, and what happens when two 
   For large applications this can add seconds --- sometimes tens of seconds.
   Spring Boot's startup time is a well-known pain point for serverless and container workloads.
 - *IDE navigation:* IDEs understand Spring annotations deeply; `@GetMapping` provides clickable navigation to the handler.
-  However, understanding the full request path often requires tracing through a chain of `@RequestMapping` annotations on the class, the method, and any inherited base classes.
-- *Debuggability:* Routing bugs can be subtle; the framework discovers handlers at runtime, so a typo in a path annotation compiles cleanly and only fails when a request is made.
-  Error messages from annotation-driven frameworks can be verbose and hard to relate back to specific source lines.
-- *Duplicate pattern:* Spring raises a `BeanDefinitionOverrideException` or similar at startup.
+  However, reconstructing the full request path often means tracing through a chain of `@RequestMapping` annotations on the class, the method, and any inherited base classes.
+- *Debuggability:* Routing bugs can be subtle.
+  The framework discovers handlers at runtime, so a typo in a path annotation compiles cleanly and only fails when a request is made.
+  Error messages from annotation-driven frameworks can be verbose and hard to relate back to a specific source line.
+- *Duplicate pattern:* Spring raises a startup-time exception (for example, an ambiguous-mapping error) when two methods map to the same path and method.
 
 **Explicit registration (Go `ServeMux`):**
 
 - *Startup time:* Registration happens in `main` --- it is just function calls.
-  There is no scanning; startup overhead is negligible.
-- *IDE navigation:* `mux.HandleFunc("GET /songs/{id}/", getSong)` --- `getSong` is a direct function reference.
+  There is no scanning, so startup overhead is negligible.
+- *IDE navigation:* In `mux.HandleFunc("GET /songs/{id}/", getSong)`, `getSong` is a direct function reference.
   Your IDE can jump to it with a single click, with no framework-specific plugin needed.
 - *Debuggability:* The routing table is built from ordinary Go code.
-  If you register the wrong path, you can add a `fmt.Println` or set a debugger breakpoint in `main` and see exactly what is registered.
-- *Duplicate pattern:* Go 1.22 `ServeMux` panics at registration time if two patterns conflict.
+  If you register the wrong path, you can add a `fmt.Println` or set a breakpoint in `main` and see exactly what is registered.
+- *Duplicate pattern:* The Go 1.22 `ServeMux` panics at registration time if two patterns conflict.
   This is a startup crash rather than a silent routing bug, which is the right trade-off --- it catches the mistake before any request is served.
 
-The Go approach is more explicit and has less magic.
-The annotation approach provides more convenience in large teams where developers add handlers in many files and rely on the framework to assemble the routing table.
+The Go approach is more explicit and has less magic, at the cost of writing each registration by hand.
+The annotation approach is more convenient in large teams where developers add handlers across many files and rely on the framework to assemble the routing table.
 Neither is universally better; the right choice depends on team size, application complexity, and how much framework overhead you are willing to accept.
 
 ---
@@ -3561,34 +3652,35 @@ type Artist struct {
 }
 
 func main() {
-    a := Artist{Name: "Kali Uchis", Country: "", Secret: "Colombia"}
+    a := Artist{Name: "Chicane", Country: "", Secret: "UK"}
     data, _ := json.Marshal(a)
     fmt.Println(string(data))
 
     var b Artist
-    json.Unmarshal([]byte(`{"name":"Rauw Alejandro","secret":"Puerto Rico"}`), &b)
+    json.Unmarshal([]byte(`{"name":"Darude","secret":"Finland"}`), &b)
     fmt.Printf("Name: %s, Secret: %q\n", b.Name, b.Secret)
 }
 ```
 
 Output:
+
 ```
-{"name":"Kali Uchis"}
-Name: Rauw Alejandro, Secret: ""
+{"name":"Chicane"}
+Name: Darude, Secret: ""
 ```
 
 **First `Println`:**
-`a.Country` is `""`, which is the zero value for `string`.
-The tag `json:"country,omitempty"` causes `encoding/json` to omit the `country` field from the output.
-`a.Secret` is `"Colombia"`, but the tag `json:"-"` instructs the encoder to always skip this field regardless of its value.
-The result is `{"name":"Kali Uchis"}` --- only `name` survives.
+`a.Country` is `""`, the zero value for `string`.
+The tag `json:"country,omitempty"` tells `encoding/json` to omit the `country` field when its value is empty, so it disappears from the output.
+`a.Secret` is `"UK"`, but the tag `json:"-"` instructs the encoder to always skip this field regardless of its value.
+The result is `{"name":"Chicane"}` --- only `name` survives.
 
 **Second `Printf`:**
 The JSON input contains a `"secret"` key.
-However, the Go struct has `Secret string \`json:"-"\``.
+However, the struct field is `Secret string \`json:"-"\``.
 The `json:"-"` tag means `encoding/json` ignores this field during both marshalling **and** unmarshalling.
-The `"secret"` key in the JSON is silently discarded; `b.Secret` remains the zero value `""`.
-`b.Name` is correctly set to `"Rauw Alejandro"` from the `"name"` key.
+The `"secret"` key in the JSON is silently discarded, so `b.Secret` keeps its zero value `""`.
+`b.Name` is correctly set to `"Darude"` from the `"name"` key.
 
 `%q` formats a string with Go double-quote syntax, so an empty string prints as `""`.
 
@@ -3607,26 +3699,27 @@ mux.HandleFunc("POST /tracks/",      createTrack)
 
 a. `GET /tracks/` --- **`listTracks`**
 
-The request method is `GET` and the path is exactly `/tracks/`.
-The pattern `GET /tracks/` is a subtree match that includes the exact path `/tracks/`.
-`GET /tracks/{id}/` requires at least one additional path segment between the slashes (e.g., `/tracks/42/`), so it does not match `/tracks/` alone.
+The method is `GET` and the path is exactly `/tracks/`.
+The pattern `GET /tracks/` ends in a slash, so it matches the subtree rooted at `/tracks/`, including the exact path `/tracks/`.
+The pattern `GET /tracks/{id}/` requires at least one non-empty segment for `{id}` between the slashes (for example `/tracks/42/`), so it does not match `/tracks/` on its own.
 `listTracks` is called.
 
 b. `GET /tracks/42/` --- **`getTrack`**
 
-The request method is `GET` and the path is `/tracks/42/`.
-The pattern `GET /tracks/{id}/` matches: `{id}` captures `42`.
-`r.PathValue("id")` would return `"42"` inside the handler.
-`getTrack` is called.
+The method is `GET` and the path is `/tracks/42/`.
+The pattern `GET /tracks/{id}/` matches, with `{id}` capturing `42`.
+A more specific pattern wins over the less specific `GET /tracks/`, so `getTrack` is chosen.
+Inside the handler, `r.PathValue("id")` returns `"42"`.
 
 c. `DELETE /tracks/7/` --- **`405 Method Not Allowed`**
 
-None of the three registered patterns match a `DELETE` method on any path.
-`GET /tracks/{id}/` matches the path shape but requires `GET`.
-`ServeMux` returns a 405 Method Not Allowed response in Go 1.22 when the path matches a pattern but the method does not.
-Effectively the caller receives an HTTP error response, not a call to any registered handler.
+The path `/tracks/7/` matches the pattern `GET /tracks/{id}/`, but its method is `GET`, not `DELETE`.
+Because some registered pattern matches the path while none matches the method, the Go 1.22 `ServeMux` returns `405 Method Not Allowed` rather than `404`.
+No registered handler runs.
 
-(Note: technically Go 1.22 `ServeMux` sends `405 Method Not Allowed` with an `Allow` header listing valid methods when the path matches but the method does not --- this is more precise than a plain 404.)
+The mux also sets an `Allow` header listing the methods that are valid for that path.
+Verified with `httptest`, the response is `405` with `Allow: GET, HEAD, POST`.
+`HEAD` appears automatically because a registered `GET` pattern also serves `HEAD`, and `POST` appears because `POST /tracks/` is registered for the same subtree.
 
 ---
 
@@ -3648,11 +3741,10 @@ func fetchLyrics(url string) (string, error) {
 
 **The bug:** `resp.Body` is never closed.
 
-When `http.Get` succeeds, `resp.Body` is a live network connection wrapped as an `io.ReadCloser`.
-If the function returns the body as a string but never calls `resp.Body.Close()`, the underlying TCP connection is not returned to the connection pool --- it is leaked.
-Under load, a server making many requests will exhaust its file descriptors and connection pool, eventually causing all new HTTP requests to fail.
-
-Note that the early-return error path `return "", err` after `io.ReadAll` also leaks the body.
+When `http.Get` succeeds, `resp.Body` is a live network stream wrapped as an `io.ReadCloser`.
+If the function reads the body but never calls `resp.Body.Close()`, the underlying TCP connection is not returned to the connection pool --- it is leaked.
+Under load, a program making many requests will exhaust its file descriptors and connection pool, eventually causing new HTTP requests to fail.
+Note that the early-return error path after `io.ReadAll` (`return "", err`) leaks the body too.
 
 **The fix:**
 
@@ -3662,7 +3754,7 @@ func fetchLyrics(url string) (string, error) {
     if err != nil {
         return "", err
     }
-    defer resp.Body.Close()  // close on any return, success or error
+    defer resp.Body.Close() // close on every return, success or error
 
     body, err := io.ReadAll(resp.Body)
     if err != nil {
@@ -3672,8 +3764,12 @@ func fetchLyrics(url string) (string, error) {
 }
 ```
 
-`defer resp.Body.Close()` immediately after the `err` check ensures the body is closed on every code path out of the function, including early returns.
+Placing `defer resp.Body.Close()` immediately after the `err` check ensures the body is closed on every path out of the function, including early returns.
 This is the canonical Go idiom for HTTP client response bodies.
+
+A secondary point worth noting: this code never checks `resp.StatusCode`.
+A `404` or `500` response still returns a non-nil `resp` with `err == nil`, so the "lyrics" you get back may actually be an error page.
+In production you would also check `resp.StatusCode` before trusting the body, but the connection leak is the load-bearing bug here.
 
 ---
 
@@ -3695,8 +3791,8 @@ type Song struct {
 }
 
 var catalog = map[int]Song{
-    1: {ID: 1, Title: "Todo De Ti",      Artist: "Rauw Alejandro"},
-    2: {ID: 2, Title: "I Wish You Roses", Artist: "Kali Uchis"},
+    1: {ID: 1, Title: "Saltwater", Artist: "Chicane"},
+    2: {ID: 2, Title: "Sandstorm", Artist: "Darude"},
 }
 
 func listSongs(w http.ResponseWriter, r *http.Request) {
@@ -3709,8 +3805,7 @@ func listSongs(w http.ResponseWriter, r *http.Request) {
 }
 
 func getSong(w http.ResponseWriter, r *http.Request) {
-    idStr := r.PathValue("id")
-    id, err := strconv.Atoi(idStr)
+    id, err := strconv.Atoi(r.PathValue("id"))
     if err != nil {
         http.Error(w, "invalid id", http.StatusBadRequest)
         return
@@ -3736,10 +3831,10 @@ func main() {
 
 ```
 $ curl http://localhost:8080/songs/
-[{"id":1,"title":"Todo De Ti","artist":"Rauw Alejandro"},{"id":2,"title":"I Wish You Roses","artist":"Kali Uchis"}]
+[{"id":2,"title":"Sandstorm","artist":"Darude"},{"id":1,"title":"Saltwater","artist":"Chicane"}]
 
 $ curl http://localhost:8080/songs/1/
-{"id":1,"title":"Todo De Ti","artist":"Rauw Alejandro"}
+{"id":1,"title":"Saltwater","artist":"Chicane"}
 
 $ curl http://localhost:8080/songs/99/
 not found
@@ -3749,12 +3844,11 @@ Key points illustrated by this solution:
 
 - `json.NewEncoder(w).Encode(songs)` streams the JSON directly to the `http.ResponseWriter` without allocating an intermediate `[]byte`.
 - `r.PathValue("id")` retrieves the wildcard captured by `{id}` in the Go 1.22 pattern.
-- `strconv.Atoi` converts the string path segment to an integer; a malformed segment returns `400 Bad Request` rather than panicking.
-- The `Content-Type` header is set before writing the body.
-  Headers must be set before the first call to `Write` or `Encode` --- once the body starts, the headers are sent and cannot be changed.
-- The map iteration order in `listSongs` is random (Chapter 7).
+- `strconv.Atoi` converts the path segment to an integer; a malformed segment returns `400 Bad Request` instead of panicking.
+- The `Content-Type` header is set before the body is written.
+  Headers must be set before the first `Write` (or `Encode`) call --- once the body starts, the headers are already sent and cannot be changed.
+- Map iteration order is random (Chapter 7), so the array in `/songs/` may come back in either order.
   In a real service you would sort the result before encoding it to give clients a stable response.
-
 
 ---
 
@@ -3796,8 +3890,8 @@ import (
 )
 
 func main() {
-    a := sql.Null[string]{V: "Evergreen", Valid: true}
-    b := sql.Null[string]{V: "Killing Me", Valid: false}
+    a := sql.Null[string]{V: "J'ai pas vingt ans !", Valid: true}
+    b := sql.Null[string]{V: "Gouryella", Valid: false}
     c := sql.Null[int64]{V: 0, Valid: false}
 
     fmt.Println(a.Valid, a.V)
@@ -3808,18 +3902,18 @@ func main() {
 
 Output:
 ```
-true Evergreen
-false Killing Me
+true J'ai pas vingt ans !
+false Gouryella
 false 0
 ```
 
 `sql.Null[T]` is a plain struct with two exported fields: `V` (the value) and `Valid` (a bool).
 It has no logic in its fields; they are whatever you set them to.
 
-- `a` has `Valid: true` and `V: "Evergreen"`, so `fmt.Println` prints `true Evergreen`.
-- `b` has `Valid: false` but `V` is still `"Killing Me"` --- setting `Valid` to `false` does not zero out `V`.
+- `a` has `Valid: true` and `V: "J'ai pas vingt ans !"`, so `fmt.Println` prints `true J'ai pas vingt ans !`.
+- `b` has `Valid: false` but `V` is still `"Gouryella"` --- setting `Valid` to `false` does not zero out `V`.
   This might be surprising: the struct remembers the value even though it would represent `NULL` in the database.
-  `fmt.Println` prints `false Killing Me`.
+  `fmt.Println` prints `false Gouryella`.
 - `c` has `Valid: false` and `V: 0` (the zero value for `int64`).
   `fmt.Println` prints `false 0`.
 
@@ -3828,14 +3922,14 @@ When scanning from a database, `Scan` sets `V` to the zero value and `Valid` to 
 
 ---
 
-**Exercise 3** (Calculation): Trace the following transaction sequence.
+**Exercise 3** (Calculation): Trace the following transaction sequence and state whether the database ends up with the row inserted or not, and why.
 
 ```go
 tx, _ := db.BeginTx(ctx, nil)
 defer tx.Rollback()
 
 _, err := tx.ExecContext(ctx, "INSERT INTO songs (title, artist) VALUES (?, ?)",
-    "On My Mama", "Victoria Monét")
+    "Sounds of Slashdot", "San Mehat")
 if err != nil {
     return err
 }
@@ -3934,7 +4028,7 @@ Calling `rows.Close()` on already-closed rows is a no-op, so it is always safe.
 
 ---
 
-**Exercise 5** (Write a program):
+**Exercise 5** (Write a program): Using `database/sql` and the `github.com/mattn/go-sqlite3` driver, open an in-memory SQLite database, create a `playlists` table, insert at least three rows inside a single transaction using the deferred rollback pattern, query and print all rows with `QueryContext` and `Scan`, and use `sql.Null[string]` for a nullable `description` column.
 
 ```go
 package main
@@ -4024,18 +4118,18 @@ func insertPlaylists(ctx context.Context, db *sql.DB) error {
 
     playlists := []Playlist{
         {
-            Name:        "Victoria Vibes",
-            Owner:       "coastin_fan",
-            Description: sql.Null[string]{V: "Best of Victoria Monét", Valid: true},
+            Name:        "Trance Essentials",
+            Owner:       "gamemaster",
+            Description: sql.Null[string]{V: "Gouryella and friends", Valid: true},
         },
         {
-            Name:        "Omar After Midnight",
-            Owner:       "coastin_fan",
-            Description: sql.Null[string]{V: "Evergreen on repeat", Valid: true},
+            Name:        "Slashdot Sounds",
+            Owner:       "gamemaster",
+            Description: sql.Null[string]{V: "San Mehat sets", Valid: true},
         },
         {
             Name:        "Late Night Mix",
-            Owner:       "apollo_stan",
+            Owner:       "alizee_fan",
             Description: sql.Null[string]{}, // NULL description
         },
     }
@@ -4052,18 +4146,22 @@ func insertPlaylists(ctx context.Context, db *sql.DB) error {
 
 Output:
 ```
-1: Victoria Vibes by coastin_fan --- Best of Victoria Monét
-2: Omar After Midnight by coastin_fan --- Evergreen on repeat
-3: Late Night Mix by apollo_stan --- (no description)
+1: Trance Essentials by gamemaster --- Gouryella and friends
+2: Slashdot Sounds by gamemaster --- San Mehat sets
+3: Late Night Mix by alizee_fan --- (no description)
 ```
 
 Key points demonstrated:
+
 - `sql.Open` + `PingContext` verifies connectivity before doing any work.
 - The transaction uses the **deferred rollback pattern**: `defer tx.Rollback()` is unconditional; `Commit` at the end makes it a no-op on success.
 - A prepared statement is created once inside the transaction and reused for each insert.
 - `sql.Null[string]` handles the nullable `description` column; `Valid: false` results in a `NULL` stored in the database and scanned back correctly.
 - `rows.Err()` is checked after the loop to catch any mid-stream errors.
 
+Note that the SQLite driver requires `CGO_ENABLED=1` (the default on most systems with a C compiler installed) because `github.com/mattn/go-sqlite3` links against the C SQLite library.
+
+---
 
 ---
 
@@ -4131,16 +4229,17 @@ func main() {
     fast := Filter(beats, func(b BPM) bool { return b >= 120 })
     fmt.Println(fast)
 
-    words := []string{"greedy", "Heather", "Astronomy", "you broke me first"}
+    words := []string{"Escape", "J'ai pas vingt ans !", "J'en ai marre !", "$100 Bills"}
     long := Filter(words, func(s string) bool { return len(s) > 7 })
     fmt.Println(long)
 }
 ```
 
 Output:
+
 ```
 [128 140]
-[Astronomy you broke me first]
+[J'ai pas vingt ans ! J'en ai marre ! $100 Bills]
 ```
 
 For the first call, `T` is inferred as `BPM`.
@@ -4149,8 +4248,9 @@ The predicate keeps elements greater than or equal to 120.
 `128` and `140` pass and are appended to `out`.
 
 For the second call, `T` is inferred as `string`.
-The predicate keeps strings longer than 7 characters.
-`"greedy"` has 6 characters (excluded), `"Heather"` has 7 (excluded, because 7 is not greater than 7), `"Astronomy"` has 9 (included), and `"you broke me first"` has 18 (included).
+The predicate keeps strings whose length in bytes is greater than 7.
+`"Escape"` has 6 bytes (excluded), `"J'ai pas vingt ans !"` has 20 bytes (included), `"J'en ai marre !"` has 15 bytes (included), and `"$100 Bills"` has 10 bytes (included).
+Note that `len` on a string counts bytes, not runes, but these titles are all ASCII so byte count and character count happen to agree.
 
 ---
 
@@ -4163,7 +4263,7 @@ What value does the function return, and what are the intermediate values of `ac
 `T` is bound to `int` (the element type of `[]int{1, 2, 3, 4}`).
 `U` is also bound to `int` (the type of the initial accumulator `0` and the return type of `f`).
 
-The function body would be:
+A reasonable implementation of `Reduce` is:
 
 ```go
 func Reduce[T, U any](s []T, init U, f func(U, T) U) U {
@@ -4178,11 +4278,11 @@ func Reduce[T, U any](s []T, init U, f func(U, T) U) U {
 Tracing each call to `f`:
 
 | Iteration | `acc` before | `v` | `acc` after (`acc + v`) |
-|-----------|-------------|-----|------------------------|
-| 1         | 0           | 1   | 1                      |
-| 2         | 1           | 2   | 3                      |
-| 3         | 3           | 3   | 6                      |
-| 4         | 6           | 4   | 10                     |
+|-----------|--------------|-----|-------------------------|
+| 1         | 0            | 1   | 1                       |
+| 2         | 1            | 2   | 3                       |
+| 3         | 3            | 3   | 6                       |
+| 4         | 6            | 4   | 10                      |
 
 The function returns **10**.
 
@@ -4210,22 +4310,22 @@ func Dedupe[T any](s []T) []T {
 }
 
 func main() {
-    p := Playlist{"greedy", "Heather", "greedy", "Astronomy", "Heather"}
+    p := Playlist{"Escape", "J'ai pas vingt ans !", "Escape", "J'en ai marre !", "J'ai pas vingt ans !"}
     fmt.Println(Dedupe(p))
 }
 ```
 
 **The bug:** `T` is constrained to `any`, but `map[T]bool` requires `T` to be `comparable`.
-The compiler rejects this with an error like:
+The compiler rejects this with:
 
 ```
-invalid map key type T (missing comparable constraint)
+./prog.go:8:22: invalid map key type T (missing comparable constraint)
 ```
 
 Using a type as a map key requires that it support `==` and `!=`.
 `any` does not guarantee this.
 
-**The fix:** The constraint must be `comparable`, because `map[T]bool` requires a comparable key:
+**The fix:** Change the constraint from `any` to `comparable`:
 
 ```go
 func Dedupe[T comparable](s []T) []T {
@@ -4241,25 +4341,27 @@ func Dedupe[T comparable](s []T) []T {
 }
 ```
 
-But tightening the constraint exposes a second problem: the call in `main` passes `p`, whose type `Playlist` has underlying type `[]string`, and slices are **never** comparable in Go.
-So `Playlist` does not satisfy `comparable`, and `Dedupe(p)` still will not compile.
+That is the only change required.
+The call `Dedupe(p)` then compiles and runs.
 
-The full fix is therefore two-fold: constrain `T` to `comparable`, and pass a slice of comparable elements rather than the slice-typed value. Change the call to use the individual strings:
+It is tempting to worry about a second bug here: `Playlist` has underlying type `[]string`, and slices are never comparable in Go, so surely passing a `Playlist` cannot satisfy `comparable`?
+But that worry is misplaced.
+`Dedupe(p)` passes a value of type `Playlist`, which is itself a `[]string`.
+The parameter is `s []T`, so type inference matches `[]T` against `Playlist` (underlying `[]string`) and infers `T = string`, the **element** type --- not `T = Playlist`.
+The map key is therefore `string`, which is perfectly comparable.
 
-```go
-func main() {
-    p := []string{"Escape", "J'ai pas vingt ans !", "Escape", "J'en ai marre !", "J'ai pas vingt ans !"}
-    fmt.Println(Dedupe(p))
-}
-```
+You can confirm the inference with reflection: inside `Dedupe`, `reflect.TypeOf` of a zero `T` reports `string`, and the returned slice has dynamic type `[]string`, not `Playlist`.
 
-With `T comparable` and `p` as `[]string`, the program compiles and prints:
+With the constraint changed to `comparable`, the program compiles and prints:
 
 ```
 [Escape J'ai pas vingt ans ! J'en ai marre !]
 ```
 
-In short, there are two bugs: the constraint must be `comparable`, not `any`, and a slice type like `Playlist` cannot be a map key because slices are not comparable.
+The duplicate `"Escape"` and the duplicate `"J'ai pas vingt ans !"` are dropped, preserving first-seen order.
+
+In short, there is exactly one bug: the constraint must be `comparable`, not `any`.
+No change to the call in `main` is needed, because `T` is inferred as `string` (the element type), not as the slice type `Playlist`.
 
 ---
 
@@ -4278,7 +4380,7 @@ type Set[T comparable] struct {
 // Add inserts v into the set.
 func (s *Set[T]) Add(v T) {
     if s.m == nil {
-        s.m = make(map[T]struct{})  // lazy initialization
+        s.m = make(map[T]struct{}) // lazy initialization
     }
     s.m[v] = struct{}{}
 }
@@ -4293,37 +4395,40 @@ func (s *Set[T]) Contains(v T) bool {
 func (s *Set[T]) Values() []T {
     out := make([]T, 0, len(s.m))
     for v := range s.m {
-        out = append(out, v)  // iteration order is random
+        out = append(out, v) // iteration order is random
     }
     return out
 }
 
 func main() {
     var songs Set[string]
-    songs.Add("greedy")
-    songs.Add("you broke me first")
-    songs.Add("Heather")
-    songs.Add("Astronomy")
-    songs.Add("Heather") // duplicate --- should be ignored
+    songs.Add("Escape")
+    songs.Add("$100 Bills")
+    songs.Add("J'ai pas vingt ans !")
+    songs.Add("J'en ai marre !")
+    songs.Add("J'ai pas vingt ans !") // duplicate --- should be ignored
 
-    fmt.Println("length:", len(songs.Values()))          // 4
-    fmt.Println("contains Heather:", songs.Contains("Heather"))      // true
-    fmt.Println("contains Levitating:", songs.Contains("Levitating")) // false
+    fmt.Println("length:", len(songs.Values()))
+    fmt.Println("contains Escape:", songs.Contains("Escape"))
+    fmt.Println("contains Legend:", songs.Contains("Legend"))
 }
 ```
 
 Output:
+
 ```
 length: 4
-contains Heather: true
-contains Levitating: false
+contains Escape: true
+contains Legend: false
 ```
 
 `map[T]struct{}` is the standard Go idiom for a set.
 An empty struct (`struct{}`) occupies zero bytes, so only the keys consume memory.
-The second `Add("Heather")` call is a no-op because the map key already exists --- map assignment is idempotent.
+The second `Add("J'ai pas vingt ans !")` call is a no-op because the map key already exists --- map assignment is idempotent.
 `Values()` returns four strings because the duplicate was silently dropped, but their order will vary between runs since Go map iteration is randomized.
+The `Set[T comparable]` constraint is required because the map key type `T` must be comparable.
 
+---
 
 ---
 
@@ -4397,13 +4502,13 @@ FAIL
 **Key points to trace:**
 
 - `checkPositive(t, 1)`: `1 > 0`, so no error is recorded.
-- `t.Log("checked 1")`: message is queued.
-- `checkPositive(t, -1)`: `-1 <= 0`, so `t.Errorf` is called.
+- `t.Log("checked 1")`: message is queued (line 13).
+- `checkPositive(t, -1)`: `-1 <= 0`, so `t.Errorf` fires (line 7 inside the helper).
   `t.Errorf` is `t.Error` with formatting --- it records a failure message and marks the test failed, but **does not stop execution**.
   The test keeps running.
-- `t.Log("checked -1")`: message is queued.
+- `t.Log("checked -1")`: message is queued (line 15).
 - `checkPositive(t, 2)`: `2 > 0`, no error.
-- `t.Log("checked 2")`: message is queued.
+- `t.Log("checked 2")`: message is queued (line 17).
 - With `-v`, all `t.Log` and error output is printed, and it appears in the order the calls executed (not errors first).
 
 The buffered output prints in chronological call order, so "checked 1" (line 13) appears before the error (line 7), followed by "checked -1" (line 15) and "checked 2" (line 17).
@@ -4412,8 +4517,8 @@ Execution continues past the failing check because `t.Errorf` is used, not `t.Fa
 
 **Note on `t.Helper()` absence:**
 `checkPositive` does not call `t.Helper()`.
-As a result, the failure line reported is inside `checkPositive` (the `t.Errorf` call), not in `TestSoundOfSilence` where `checkPositive(-1)` was called.
-Adding `t.Helper()` as the first line of `checkPositive` would make the reported line point to `checkPositive(t, -1)` in `TestSoundOfSilence` instead.
+As a result, the failure line reported is inside `checkPositive` (the `t.Errorf` call on line 7), not in `TestSoundOfSilence` where `checkPositive(t, -1)` was called.
+Adding `t.Helper()` as the first line of `checkPositive` would make the reported line point to the `checkPositive(t, -1)` call inside `TestSoundOfSilence` instead.
 
 ---
 
@@ -4435,7 +4540,7 @@ What is the reported ns/op value?
 
 **Answer:**
 
-Total elapsed time = `b.N × 2 µs` = `b.N × 2000 ns`.
+Total elapsed time = `b.N * 2 µs` = `b.N * 2000 ns`.
 
 | b.N       | Total time             |
 |-----------|------------------------|
@@ -4455,7 +4560,7 @@ This matches `processTrack`'s actual per-call cost of 2 µs --- the benchmark is
 
 ---
 
-**Exercise 4** (Where is the bug?): The following test helper is supposed to make failure output point to the call site in `TestAboutDamnTime`, but it does not.
+**Exercise 4** (Where is the bug?): The following test helper is supposed to make failure output point to the call site in `TestBadApple`, but it does not.
 Identify the bug and show the fix.
 
 ```go
@@ -4470,9 +4575,9 @@ func assertNormalized(t *testing.T, input, want string) {
     }
 }
 
-func TestAboutDamnTime(t *testing.T) {
-    assertNormalized(t, "about damn time", "About Damn Time")
-    assertNormalized(t, "good as hell",    "Good as Hell")
+func TestBadApple(t *testing.T) {
+    assertNormalized(t, "bad apple!!", "Bad Apple!!")
+    assertNormalized(t, "better off alone", "Better Off Alone")
 }
 ```
 
@@ -4482,10 +4587,10 @@ When `t.Fatalf` fires inside `assertNormalized`, Go's test framework records the
 The reported failure location is something like:
 
 ```
-music_test.go:8: normalize("about damn time"): got "about Damn Time", want "About Damn Time"
+music_test.go:8: normalize("bad apple!!"): got "bad apple!!", want "Bad Apple!!"
 ```
 
-That points inside `assertNormalized`, not to the line in `TestAboutDamnTime` that triggered the failure.
+That points inside `assertNormalized`, not to the line in `TestBadApple` that triggered the failure.
 You have to manually trace back to find which call site is responsible.
 
 **The fix:** add `t.Helper()` as the first statement in `assertNormalized`:
@@ -4500,22 +4605,31 @@ func assertNormalized(t *testing.T, input, want string) {
 }
 ```
 
-With `t.Helper()` present, the reported failure location becomes:
+With `t.Helper()` present, the reported failure location moves up to the line inside `TestBadApple` that called the helper:
 
 ```
-music_test.go:13: normalize("about damn time"): got "about Damn Time", want "About Damn Time"
+music_test.go:13: normalize("bad apple!!"): got "bad apple!!", want "Bad Apple!!"
 ```
 
-That line number points directly to `assertNormalized(t, "about damn time", "About Damn Time")` in `TestAboutDamnTime`, which is exactly where the problematic call lives.
+That line number points directly to `assertNormalized(t, "bad apple!!", "Bad Apple!!")` in `TestBadApple`, which is exactly where the problematic call lives.
 
-**Secondary note:** `t.Fatalf` inside a helper is fine when subsequent checks in the same test function would be meaningless if this check fails.
-Here, if `normalize("about damn time")` returns a wrong value the second check can still run independently, so `t.Errorf` could be argued as a better choice --- but whether to use `Fatal` or `Error` is a judgment call; the `t.Helper()` omission is the clear bug.
+**Secondary note:** `t.Fatalf` inside a helper is a reasonable choice here --- once `normalize` returns a wrong value there is little point continuing.
+But whether to use `Fatal` or `Error` is a judgment call; the `t.Helper()` omission is the clear bug.
 
 ---
 
 **Exercise 5** (Write a program): Write a table-driven test for `TitleCase`.
 Your test must include at least five cases covering normal input, empty string, all-caps input, and a multi-word title.
 Use `t.Run` for each case and `t.Helper` in any helper you write.
+
+```go
+// TitleCase converts a string to title case.
+// Each word's first letter is uppercased; the rest are lowercased.
+// Words are separated by spaces.
+func TitleCase(s string) string
+```
+
+A complete solution, including a reference implementation of `TitleCase` so the test compiles and passes:
 
 ```go
 package music_test
@@ -4545,7 +4659,7 @@ func TitleCase(s string) string {
     return strings.Join(words, " ")
 }
 
-// assertEqual is a helper that reports mismatches at the caller's site.
+// assertEqual reports mismatches at the caller's site.
 func assertEqual(t *testing.T, got, want, label string) {
     t.Helper()
     if got != want {
@@ -4559,12 +4673,12 @@ func TestTitleCase(t *testing.T) {
         input string
         want  string
     }{
-        {name: "empty",        input: "",                    want: ""},
-        {name: "single word",  input: "golden",              want: "Golden"},
-        {name: "multi-word",   input: "good as hell",        want: "Good As Hell"},
-        {name: "all caps",     input: "ABOUT DAMN TIME",     want: "About Damn Time"},
-        {name: "mixed case",   input: "wOmAn",               want: "Woman"},
-        {name: "already title", input: "Good As Hell",       want: "Good As Hell"},
+        {name: "empty",         input: "",                want: ""},
+        {name: "single word",   input: "golden",          want: "Golden"},
+        {name: "multi-word",    input: "good as hell",     want: "Good As Hell"},
+        {name: "all caps",      input: "ABOUT DAMN TIME",  want: "About Damn Time"},
+        {name: "mixed case",    input: "wOmAn",            want: "Woman"},
+        {name: "already title", input: "Good As Hell",     want: "Good As Hell"},
     }
 
     for _, tc := range cases {
@@ -4598,11 +4712,11 @@ PASS
 
 **Notes on the solution:**
 
-- The `name` field in each case struct is passed to `t.Run`, producing descriptive subtest names in the output.
+- The `name` field in each case struct is passed to `t.Run`, producing descriptive subtest names.
   A failing case shows up as `--- FAIL: TestTitleCase/all_caps` rather than just `--- FAIL: TestTitleCase`.
+  Note that `t.Run` replaces spaces in subtest names with underscores, which is why `single word` appears as `single_word` in the output.
 - `assertEqual` calls `t.Helper()` so that any failure message points to the line inside the `t.Run` body that called `assertEqual`, not to the `t.Errorf` line inside `assertEqual` itself.
 - `t.Errorf` (not `t.Fatalf`) is used in the helper because each subtest has only one assertion; there is no reason to stop early.
   If the helper checked multiple things, `t.Fatalf` could be appropriate for a critical precondition.
 - The six cases satisfy the problem requirements: empty string, single word (normal), multi-word, all-caps, and mixed case.
   The "already title" case is a bonus regression check.
-
