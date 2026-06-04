@@ -3319,7 +3319,8 @@ func main() {
 }
 ```
 
-The `internal/format` import is allowed here because `main.go` is rooted at the module root `github.com/robertdreamhouse/children`, which is the parent of `internal/`.
+The `internal/format` import is allowed here because `main.go` sits at the module root.
+Its module path `github.com/robertdreamhouse/children` is the parent of `internal/`, which is exactly what the internal-package rule requires.
 Running `go run ./...` prints:
 
 ```
