@@ -1,5 +1,23 @@
 ---
 title: "Gorgo Go for Java Programmers --- Answer Key"
+mainfont: "TeX Gyre Pagella"
+monofont: "JetBrains Mono"
+header-includes:
+  - |
+    ```{=latex}
+    \directlua{luaotfload.add_fallback("main_fallback", {
+      "NotoSerifCJKJP:mode=harf;",
+      "DejaVuSerif:mode=harf;",
+      "NotoColorEmoji:mode=harf;",
+    })}
+    \directlua{luaotfload.add_fallback("mono_fallback", {
+      "NotoSansMonoCJKJP:mode=harf;",
+      "DejaVuSansMono:mode=harf;",
+      "NotoColorEmoji:mode=harf;",
+    })}
+    \setmainfont{TeX Gyre Pagella}[RawFeature={fallback=main_fallback}]
+    \setmonofont{JetBrains Mono}[Scale=MatchLowercase, RawFeature={-calt,-liga,-dlig,fallback=mono_fallback}]
+    ```
 ---
 
 # About This Answer Key
@@ -1027,62 +1045,39 @@ Both calls produce identical output.
 
 ---
 
-**Exercise 3** (Calculation): Trace the following program by hand.
+**Exercise 3** (Calculation): Given the types below, count the methods in each method set.
 
 ```go
-package main
-
-import "fmt"
-
 type Track struct {
     Title  string
     Artist string
-    BPM    int
 }
 
-func (t Track) String() string {
-    return fmt.Sprintf("%s by %s", t.Title, t.Artist)
-}
+func (t *Track) String() string     { /* ... */ }
+func (t *Track) ScaleBPM(f float64) { /* ... */ }
+func (t Track) IsLong() bool        { /* ... */ }
 
 type FeaturedTrack struct {
     Track
     Feature string
 }
 
-func (ft FeaturedTrack) String() string {
-    return ft.Track.String() + " ft. " + ft.Feature
-}
-
-func main() {
-    t := Track{Title: "Golden Hour", Artist: "JVKE", BPM: 97}
-    ft := FeaturedTrack{Track: t, Feature: "Rosalía"}
-
-    fmt.Println(t.String())
-    fmt.Println(ft.String())
-    fmt.Println(ft.Track.String())
-    fmt.Println(ft.BPM)
-}
+func (ft *FeaturedTrack) String() string { /* ... */ }
 ```
 
-Output:
-```
-Golden Hour by JVKE
-Golden Hour by JVKE ft. Rosalía
-Golden Hour by JVKE
-97
-```
+**Answer:**
 
-Step by step:
+- a. `Track` (the value type): **1** --- only `IsLong`, the sole value-receiver method.
+  `String` and `ScaleBPM` have pointer receivers, so they are *not* in the value type's method set.
+- b. `*Track`: **3** --- `String`, `ScaleBPM`, and `IsLong`.
+  A pointer type's method set includes both pointer-receiver and value-receiver methods.
+- c. `FeaturedTrack` (the value type), counting promoted methods: **1** --- only the promoted `IsLong`.
+  Embedding a value `Track` promotes `Track`'s value-receiver method (`IsLong`) into `FeaturedTrack`'s value method set; the pointer-receiver methods (`Track.String`, `Track.ScaleBPM`) are not promoted into a value method set.
+  `FeaturedTrack`'s own `String` has a pointer receiver, so it is not in the value method set either.
+- d. `*FeaturedTrack`, counting promoted methods: **3** --- its own `String` (which shadows the promoted `Track.String`), plus the promoted `ScaleBPM` and `IsLong`.
+  Embedding a value `Track` promotes the full `*Track` method set onto `*FeaturedTrack`; the outer `String` shadows the inner one, so the count stays **3**, not 4.
 
-- `t.String()`: calls `Track.String()` directly on `t`. Returns `"Golden Hour by JVKE"`.
-- `ft.String()`: `FeaturedTrack` has its own `String()` method, so the promoted `Track.String()` is shadowed.
-  `FeaturedTrack.String()` calls `ft.Track.String()` (returns `"Golden Hour by JVKE"`) and appends `" ft. "` and `ft.Feature`.
-  Returns `"Golden Hour by JVKE ft. Rosalía"`.
-- `ft.Track.String()`: calls `Track.String()` through the explicit embedded path, bypassing `FeaturedTrack.String()`.
-  Returns `"Golden Hour by JVKE"`.
-- `ft.BPM`: promoted from `ft.Track.BPM`. The value is `97`.
-
-The key insight: writing `ft.String()` calls `FeaturedTrack.String()` (the outer type's method), while `ft.Track.String()` bypasses the outer method and calls `Track.String()` directly.
+The key insight: pointer-receiver methods join only the *pointer* type's method set, and an outer method with the same name shadows the promoted method rather than adding to the count.
 
 ---
 
@@ -1698,7 +1693,7 @@ The `if` body prints `ce.Track`, which is `"Tití Me Preguntó"`.
 ---
 
 **Exercise 3** (Calculation): Consider the following code.
-How many distinct, non-nil error values does `validateSong` return for the input `Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}`?
+For the input `Song{Title: "", Artist: "Karol G", Year: 2021, BPM: -1}`, how many sub-errors does the joined error returned by `validateSong` contain?
 What is the output of `fmt.Println(err)` for that input?
 
 ```go
@@ -3067,7 +3062,52 @@ No other dependency's version changes.
 
 ---
 
-**Exercise 4** (Where is the bug?): The following module has this layout and code:
+**Exercise 4** (What does this print?): A single-file `package main` contains the following.
+Predict the exact output, then explain the order in which the package-level `var` declarations and the `init` function run.
+
+```go
+package main
+
+import "fmt"
+
+var a = b + c
+var b = f()
+var c = 2
+
+func f() int {
+    fmt.Println("f called")
+    return 3
+}
+
+func init() {
+    fmt.Println("init, a =", a)
+}
+
+func main() {
+    fmt.Println("main, a =", a)
+}
+```
+
+**Answer:** The program prints:
+
+```
+f called
+init, a = 5
+main, a = 5
+```
+
+Package-level variables are initialized in **dependency order**, not source order.
+`a = b + c` depends on `b` and `c`, so both must be initialized first.
+`c = 2` has no dependencies; `b = f()` calls `f`, which prints `f called` and returns `3`.
+Then `a = b + c = 3 + 2 = 5`.
+After every package-level variable initializer has run, `init()` runs and prints `init, a = 5`.
+Finally `main()` runs (only after all `init()` functions complete) and prints `main, a = 5`.
+
+The takeaways: (1) variable initialization follows dependency order, falling back to source order within a dependency level, so `b` and `c` initialize before `a` even though `a` is declared first; (2) `init()` runs after all package-level variables are initialized; (3) `main()` runs only after every `init()` has completed.
+
+---
+
+**Exercise 5** (Where is the bug?): The following module has this layout and code:
 
 ```
 northernattitude/
@@ -3129,7 +3169,7 @@ Alternatively, if `player` and `northernattitude` are developed together and the
 
 ---
 
-**Exercise 5** (Write a program):
+**Exercise 6** (Write a program):
 
 A complete implementation:
 
@@ -3299,12 +3339,12 @@ The exact key ordering in `log/slog` text format is: `level`, `msg`, then attrib
 For each approach, estimate the peak heap allocation in MiB, assuming the file contains 100,000 lines of 100 bytes each.
 Which approach is best for counting lines without storing the content?
 
-The file is 100,000 lines × 100 bytes = 10,000,000 bytes ≈ **9.5 MiB**.
+The file is 100,000 lines × 100 bytes = 10,000,000 bytes, or about **9.5 MiB**.
 
 **(a) `os.ReadFile`**
 
 `os.ReadFile` reads the entire file into a single `[]byte`.
-Peak heap allocation: ≈ **9.5 MiB** (the whole file in one slice).
+Peak heap allocation: about **9.5 MiB** (the whole file in one slice).
 Additionally, if you process the result into strings or split on newlines, you may double or triple the allocation.
 This is the simplest approach but the most memory-hungry for large files.
 
@@ -3313,13 +3353,13 @@ This is the simplest approach but the most memory-hungry for large files.
 `Scanner` uses an internal buffer (default 64 KiB maximum token size, starting at 4 KiB).
 It reads the file in chunks, scanning for newline boundaries.
 At any instant, only the current chunk plus the current token are in memory.
-Peak heap allocation: ≈ **64 KiB** (the scanner's internal buffer) plus the length of the longest individual line.
+Peak heap allocation: about **64 KiB** (the scanner's internal buffer) plus the length of the longest individual line.
 For 100-byte lines this is well under 1 MiB.
 
 **(c) `io.Copy(io.Discard, f)`**
 
 `io.Copy` uses a single 32 KiB stack-allocated copy buffer (it uses `*[32*1024]byte` internally; in practice this ends up on the heap due to escape analysis, but it is still a single fixed allocation).
-Peak heap allocation: ≈ **32 KiB**.
+Peak heap allocation: about **32 KiB**.
 However, this approach does not count lines --- it just discards all bytes.
 
 **Best for counting lines without storing content: `bufio.NewScanner`.**

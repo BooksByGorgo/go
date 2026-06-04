@@ -32,7 +32,7 @@ The main text cites a rule by its short name in bold italics, written as ***[sho
 
 **CR-6. ctx-for-context** Functions that use `context.Context` should accept it as the first parameter, named `ctx`.
 
-**CR-7. no-cxt-for-struct** Never store a `Context` in a struct; pass it as a method parameter instead (exception: signatures forced by third-party interfaces).
+**CR-7. no-ctx-for-struct** Never store a `Context` in a struct; pass it as a method parameter instead (exception: signatures forced by third-party interfaces).
 
 **CR-8. pass-ctx-by-default** Prefer passing `context.Context` even when you think you don't need it; only use `context.Background()` with a clear reason.
 

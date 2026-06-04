@@ -105,6 +105,10 @@ Do not repeat any reference already listed here.
 - BT --- "Flaming June" (used in errgroup fan-out and exercise 2)
 - Chicane --- "Saltwater" (used in errgroup fan-out and exercise 2)
 - Matt Darey & Lost Tribe --- "Gamemaster" (used in goroutine leak example)
+- Harry Styles --- "As It Was" (used as a job/request label in the worker pool and rate limiter examples)
+- Olivia Rodrigo --- "Vampire" (used as a job/request label in the worker pool and rate limiter examples)
+- Taylor Swift --- "Anti-Hero" (used as a job/request label in the worker pool and rate limiter examples)
+- Dua Lipa --- "Houdini" (used as a request label in the rate limiter example)
 
 ## Chapter 13: Packages and Modules
 - Angoscia --- "Emerald Triangle 2012" (used in module path and import path examples, exercise 2)

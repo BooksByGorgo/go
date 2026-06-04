@@ -95,6 +95,7 @@ The runtime decides how much parallelism you get based on `GOMAXPROCS`.
 
 Goroutines give you concurrency cheaply.
 How much parallelism you get is controlled by `runtime.GOMAXPROCS`, which defaults to the number of CPU cores.
+Since Go 1.25 it also respects the container's cgroup CPU limit, so a process pinned to two cores in a container no longer spins up a goroutine scheduler sized for the whole host.
 You almost never set it manually --- the default is right.
 
 The practical lesson for Java programmers: the goal of channels and goroutines is clean problem decomposition, not raw throughput.
@@ -106,7 +107,7 @@ A pipeline of three goroutines connected by channels is concurrent design even i
 \index{interface!size}
 
 In Java, interfaces commonly carry dozens of methods.
-`java.util.List` has 25 methods; `java.util.Collection` has 15.
+`java.util.List` declares roughly two dozen methods; `java.util.Collection` more than a dozen.
 Implementing them requires either a large amount of code or inheriting a skeletal implementation.
 
 Go's standard library tells a different story.
@@ -154,7 +155,8 @@ Define the small interface at the call site rather than defining a large interfa
 \index{proverb!accept interfaces return concrete types}
 \index{interface!function parameters}
 
-This proverb describes the idiomatic direction of abstraction in Go function signatures.
+This one is not actually from Pike's *Go Proverbs* talk --- it is a closely related community idiom that gets repeated alongside the canonical proverbs, and it fits right in here.
+It describes the idiomatic direction of abstraction in Go function signatures.
 
 **Accept interfaces** because it makes your function flexible.
 A function that accepts `io.Reader` works with a file, a byte buffer, a network socket, a gzip stream, or a test mock --- anything that implements `Read`.
@@ -476,6 +478,8 @@ The Go community's attitude toward Cgo mirrors the Java community's attitude tow
 \index{proverb!cgo build constraints}
 \index{build constraint!cgo}
 
+(The proverb is originally stated as "Cgo must always be guarded with build tags"; the mechanism is the same thing modern Go calls a build constraint.)
+
 When you do use Cgo, you must tell the Go build system which platforms your C code supports.
 Without build constraints, your package will fail to compile on any platform where the C toolchain is absent or where the C code does not compile.
 
@@ -503,6 +507,8 @@ Run `go build ./...` for a representative set of target platforms in CI to catch
 \index{proverb!syscall build constraints}
 \index{build constraint!syscall}
 \index{syscall package}
+
+(As with Cgo, the proverb is originally phrased "Syscall must always be guarded with build tags"; "build constraint" is the modern term for the same mechanism.)
 
 The `syscall` package exposes operating-system system calls directly.
 System calls are platform-specific: the numbers, arguments, and available calls differ between Linux, macOS, Windows, and other platforms.
