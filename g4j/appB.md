@@ -114,22 +114,22 @@ Configuration lives in `.golangci.yml` at the module root.
 A minimal starting config:
 
 ```yaml
+version: "2"
+
 linters:
   enable:
     - govet        # go vet findings
     - errcheck     # unchecked errors
-    - staticcheck  # advanced static analysis
-    - gosimple     # simplification suggestions
+    - staticcheck  # advanced static analysis (now includes the old gosimple checks)
     - ineffassign  # assignments that are never read
     - unused       # unused code
-
-linters-settings:
-  govet:
-    enable-all: true
-
-issues:
-  exclude-use-default: false
+  settings:
+    govet:
+      enable-all: true
 ```
+
+In golangci-lint v2 the built-in exclusion presets are off by default, so there is no key to disable them.
+If you *want* the common false-positive exclusions, opt in under `linters.exclusions.presets` (for example `common-false-positives` or `legacy`).
 
 ::: {.tip}
 **Tip:** Start with a small, agreed-upon set of linters and expand over time.

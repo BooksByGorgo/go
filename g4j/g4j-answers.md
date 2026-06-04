@@ -55,8 +55,8 @@ package main
 import "fmt"
 
 func main() {
-    name := "Chappell Roan"
-    plays := 1_500_000
+    name := "Ozzy Osbourne"
+    plays := 2_100_000_000
     fmt.Printf("%s has %d plays\n", name, plays)
     fmt.Printf("type of plays: %T\n", plays)
     fmt.Println(fmt.Sprintf("quoted: %q", name))
@@ -65,13 +65,13 @@ func main() {
 
 Output:
 ```
-Chappell Roan has 1500000 plays
+Ozzy Osbourne has 2100000000 plays
 type of plays: int
-quoted: "Chappell Roan"
+quoted: "Ozzy Osbourne"
 ```
 
 `%s` formats the string without quotes.
-`%d` formats the integer in base 10; the `_` digit separator in the source literal `1_500_000` is purely cosmetic --- the value is `1500000`.
+`%d` formats the integer in base 10; the `_` digit separator in the source literal `2_100_000_000` is purely cosmetic --- the value is `2100000000`.
 `%T` prints the Go type name, which for an integer literal assigned with `:=` is `int`.
 `%q` wraps the string in double quotes and escapes any characters that need it.
 `fmt.Sprintf` returns the formatted string; `fmt.Println` then prints it with a newline appended.
@@ -81,7 +81,7 @@ quoted: "Chappell Roan"
 **Exercise 3** (Calculation): You run the following program as:
 
 ```
-go run main.go Espresso Gresso Sabrina
+go run main.go Sandstorm Remix Darude
 ```
 
 ```go
@@ -101,13 +101,13 @@ func main() {
 What does it print?
 
 `os.Args` contains every token on the command line including the program name at index 0.
-The full slice is `["<binary>", "Espresso", "Gresso", "Sabrina"]`, so `len(os.Args)` is `4`.
-`os.Args[2]` is `"Gresso"` (the second user-supplied argument, at index 2).
+The full slice is `["<binary>", "Sandstorm", "Remix", "Darude"]`, so `len(os.Args)` is `4`.
+`os.Args[2]` is `"Remix"` (the second user-supplied argument, at index 2).
 
 Output:
 ```
 4
-Gresso
+Remix
 ```
 
 ---
@@ -164,8 +164,8 @@ func main() {
 
 Sample run:
 ```
-$ go run main.go "Espresso" 1500000
-"Espresso" has 1500000 plays
+$ go run main.go "Sandstorm" 2100000000
+"Sandstorm" has 2100000000 plays
 ```
 
 Notes:
@@ -205,7 +205,7 @@ import "fmt"
 type StreamingTier int
 
 const (
-    Free StreamingTier = iota
+    Free     StreamingTier = iota
     Standard
     Premium
     Lossless
@@ -213,36 +213,43 @@ const (
 
 func main() {
     fmt.Println(Free, Standard, Premium, Lossless)
-    fmt.Printf("Premium = %d\n", Premium)
+    tier := Premium
+    fmt.Printf("tier type: %T, value: %d\n", tier, tier)
 }
 ```
 
 Output:
 ```
 0 1 2 3
-Premium = 2
+tier type: main.StreamingTier, value: 2
 ```
 
-`iota` starts at `0` for the first constant in a `const` block and increments by `1` for each subsequent constant.
-`Free` gets `0`, `Standard` gets `1`, `Premium` gets `2`, and `Lossless` gets `3`.
-Because `StreamingTier` is a named type based on `int`, `%d` formats it as a plain integer.
-`fmt.Println` with multiple arguments separates them with spaces and appends a newline.
+`iota` starts at `0` for the first constant in a `const` block and increments by `1` for each subsequent constant, so `Free`/`Standard`/`Premium`/`Lossless` are `0`/`1`/`2`/`3`.
+`tier := Premium` infers the type of `tier` as `StreamingTier` (not plain `int`), so `%T` prints `main.StreamingTier` --- the package-qualified named type --- while `%d` prints its underlying integer value `2`.
 
 ---
 
-**Exercise 3** (Calculation): What is the zero value of each of the following types: `int`, `float64`, `bool`, `string`, `*int`?
+**Exercise 3** (Calculation): Given the declarations, which assignments compile and which produce errors?
 
-| Type      | Zero value |
-|-----------|------------|
-| `int`     | `0`        |
-| `float64` | `0.0`      |
-| `bool`    | `false`    |
-| `string`  | `""` (empty string, length 0) |
-| `*int`    | `nil`      |
+```go
+type Bpm float64
 
-Every variable declared with `var` and no initializer gets its type's zero value.
-`nil` is the zero value for all pointer types, as well as slices, maps, channels, functions, and interfaces.
-A `nil` pointer is safe to declare but will panic if you dereference it.
+var tempo Bpm    = 120.0
+var raw  float64 = tempo         // line A
+var cvt  float64 = float64(tempo) // line B
+var same Bpm     = cvt           // line C
+```
+
+| Line | Result | Reason |
+|------|--------|--------|
+| A    | error  | `tempo` is type `Bpm`; Go does not implicitly convert a named type to its underlying `float64`. |
+| B    | compiles | `float64(tempo)` is an explicit conversion from `Bpm` to `float64`. |
+| C    | error  | `cvt` is `float64`; assigning it to a `Bpm` variable needs an explicit `Bpm(cvt)`. |
+
+`type Bpm float64` creates a new, distinct type, not an alias.
+Even though `Bpm` and `float64` share the same underlying representation, the compiler treats them as separate types and requires an explicit conversion in each direction.
+Lines A and C fail with messages like `cannot use tempo (variable of float64 type Bpm) as float64 value` and `cannot use cvt (variable of type float64) as Bpm value`.
+The fix for both is an explicit conversion: `float64(tempo)` and `Bpm(cvt)`.
 
 ---
 
@@ -255,98 +262,151 @@ import "fmt"
 
 func main() {
     x := 10
-    x := 20
-    fmt.Println(x)
+    y := 20
+    x, y := x + y, x  // reassign both
+    fmt.Println(x, y)
 }
 ```
 
-`:=` requires at least one new variable on the left side.
-Because `x` is already declared in the same scope, the second `:=` is a compile error:
+`:=` requires at least one *new* variable on the left side.
+Both `x` and `y` already exist in the same scope, so the third line uses `:=` with no new variables and fails to compile:
 
 ```
-./main.go:7:4: no new variables on left side of :=
+./main.go:8:10: no new variables on left side of :=
 ```
 
-The fix depends on intent.
-To reassign `x`, use a plain `=`:
+The intent is to reassign both at once, so use plain `=`:
 
 ```go
-x := 10
-x = 20
-fmt.Println(x)
+x, y = x + y, x
 ```
 
-`:=` is valid the second time only if you are introducing at least one new variable alongside the existing one, for example `x, y := 20, 30`.
+That compiles and prints `30 10` --- Go evaluates all right-hand expressions before assigning, so `y` receives the *old* `x` (10) even though `x` is updated to `30` in the same statement.
+(If you genuinely needed a new variable here, introducing one --- e.g. `x, z := x + y, x` --- would also satisfy the "at least one new variable" rule.)
 
 ---
 
-**Exercise 5** (Write a program): Define types `Celsius` and `Fahrenheit` based on `float64`.
-Write conversion functions.
-Print the boiling and freezing points of water in both scales.
+**Exercise 5** (Write a program): Declare a `const` block using `iota + 1` for five chart positions (`Debut`, `Rising`, `Peak`, `Declining`, `Legacy`, numbered 1--5), print each name and value, then declare a variable of that type set to `Peak` and print its Go type with `%T`.
 
 ```go
 package main
 
 import "fmt"
 
-type Celsius float64
-type Fahrenheit float64
+type ChartPosition int
 
-func CToF(c Celsius) Fahrenheit {
-    return Fahrenheit(c*9/5 + 32)
-}
-
-func FToC(f Fahrenheit) Celsius {
-    return Celsius((f - 32) * 5 / 9)
-}
+const (
+    Debut     ChartPosition = iota + 1 // 1
+    Rising                             // 2
+    Peak                               // 3
+    Declining                          // 4
+    Legacy                             // 5
+)
 
 func main() {
-    freezingC := Celsius(0)
-    boilingC := Celsius(100)
+    fmt.Printf("Debut=%d Rising=%d Peak=%d Declining=%d Legacy=%d\n",
+        Debut, Rising, Peak, Declining, Legacy)
 
-    fmt.Printf("Freezing: %.1f°C = %.1f°F\n", freezingC, CToF(freezingC))
-    fmt.Printf("Boiling:  %.1f°C = %.1f°F\n", boilingC, CToF(boilingC))
-
-    freezingF := Fahrenheit(32)
-    boilingF := Fahrenheit(212)
-
-    fmt.Printf("Freezing: %.1f°F = %.1f°C\n", freezingF, FToC(freezingF))
-    fmt.Printf("Boiling:  %.1f°F = %.1f°C\n", boilingF, FToC(boilingF))
+    pos := Peak
+    fmt.Printf("pos type: %T, value: %d\n", pos, pos)
 }
 ```
 
 Output:
 ```
-Freezing: 0.0°C = 32.0°F
-Boiling:  100.0°C = 212.0°F
-Freezing: 32.0°F = 0.0°C
-Boiling:  212.0°F = 100.0°C
+Debut=1 Rising=2 Peak=3 Declining=4 Legacy=5
+pos type: main.ChartPosition, value: 3
 ```
 
-The key insight is that `Celsius` and `Fahrenheit` are distinct types even though both are backed by `float64`.
-You cannot pass a `Celsius` where a `Fahrenheit` is expected without an explicit conversion.
-This is why type definitions exist: they let the compiler catch unit errors at compile time rather than at runtime.
+`iota` is `0` on the first line of the block, and `iota + 1` shifts the whole sequence to start at `1`.
+Because the expression is omitted on the following lines, Go repeats the first expression `iota + 1` for each, and `iota` keeps incrementing --- giving `2`, `3`, `4`, `5`.
+Starting an enum at `1` is a common idiom: it reserves `0` (the zero value) to mean "unset," so a `var p ChartPosition` that nobody assigned is distinguishable from a real position.
+`%T` reports the named type `main.ChartPosition`, confirming `pos` is not a bare `int`.
+
+---
+
+**Exercise 6** (What does this print?):
+
+```go
+package main
+
+import "fmt"
+
+func double(n *int) {
+    *n *= 2
+}
+
+func main() {
+    a := 5
+    b := &a
+    double(b)
+    fmt.Println(a)
+    fmt.Println(*b)
+}
+```
+
+Output:
+```
+10
+10
+```
+
+`b := &a` makes `b` a pointer to `a`, so `b` and `&a` refer to the same memory.
+`double(b)` passes that pointer by value, but the pointer still points at `a`, and `*n *= 2` writes through it, doubling `a` from `5` to `10`.
+After the call, `a` is `10`, and `*b` dereferences the same address, so it also prints `10`.
+This is how Go functions modify a caller's variable: take a pointer parameter and write through it.
+
+---
+
+**Exercise 7** (Where is the bug?):
+
+```go
+package main
+
+import "fmt"
+
+func addExcitement(s *string) {
+    s += "!"
+}
+
+func main() {
+    msg := "Out Of The Blue"
+    addExcitement(&msg)
+    fmt.Println(msg)
+}
+```
+
+This does not compile.
+Inside `addExcitement`, `s` has type `*string` (a pointer), so `s += "!"` tries to add a `string` to a pointer:
+
+```
+./main.go:6:2: invalid operation: s += "!" (mismatched types *string and untyped string)
+```
+
+You meant to modify the string the pointer points at, not the pointer itself.
+Dereference first:
+
+```go
+func addExcitement(s *string) {
+    *s += "!" // append through the pointer
+}
+```
+
+With the fix, `*s` is the underlying `string`, `*s += "!"` builds a new string and stores it back through the pointer, and the program prints `Out Of The Blue!`.
+This mirrors Exercise 6: to mutate the caller's value through a pointer parameter, operate on `*p`, never on `p`.
 
 ---
 
 # Chapter 3: Strings, Bytes, and Runes
 
-**Exercise 1** (Think about it): If Go strings are byte sequences and not character sequences, what happens when you index into a string containing a multibyte character like `é`?
-How does `for range` behave differently from `for i := 0; i < len(s); i++`?
+**Exercise 1** (Think about it): Go strings are immutable byte sequences and Java strings are immutable too, yet Go's `for range` over a string behaves differently from Java's enhanced `for` loop over a `String`. Why? What would have to be true for both to give the same result?
 
-Indexing with `s[i]` yields the byte at position `i`, not the character.
-For ASCII, one byte is one character, so `s[0]` on `"cafe"` gives `'c'` as a `byte` (`uint8` value `99`).
-But `é` in UTF-8 is encoded as two bytes (`0xC3 0xA9`).
-If `"café"` starts at index 0, then `s[3]` is `0xC3` --- the first byte of `é` --- not the character `é` itself.
-This is often surprising and is a common source of bugs when programmers index into strings that may contain non-ASCII characters.
-
-`for i := 0; i < len(s); i++` walks byte by byte, so iterating `"café"` visits 5 bytes (c, a, f, and the two bytes of é).
-
-`for i, r := range s` decodes the string as UTF-8 on each iteration.
-`i` is the byte offset of the start of the rune, and `r` is the decoded `rune` (a full Unicode code point as `int32`).
-Iterating `"café"` with range visits 4 runes: `'c'`, `'a'`, `'f'`, and `'é'`.
-When `range` reaches the two-byte sequence for `é`, it decodes both bytes together and advances `i` by 2.
-Use `range` when you care about characters; use byte indexing only when you are sure the string is pure ASCII or when you genuinely need to operate on raw bytes.
+Java's enhanced `for` loop does not iterate a `String` directly (a `String` is not `Iterable`); you iterate `char` values via index/`charAt` or a stream.
+Either way the unit is a UTF-16 **code unit**.
+Go's `for range` decodes the string as **UTF-8** and yields one `rune` (full code point) per iteration, with the index being the byte offset of the rune's first byte.
+So the difference is the unit of iteration and the encoding being walked: UTF-16 code units in Java versus decoded UTF-8 code points in Go.
+The two loops give the same sequence only when the text is restricted to the Basic Multilingual Plane characters that are also a single byte in UTF-8 --- i.e. pure ASCII.
+For any non-ASCII character the counts and per-iteration values diverge: e.g. `é` is one `char` in Java but two bytes (one rune) in Go, and a non-BMP emoji is two Java `char` values but one Go `rune`.
 
 ---
 
@@ -358,92 +418,68 @@ package main
 import "fmt"
 
 func main() {
-    s := "café"
-    fmt.Println("len:", len(s))
-    fmt.Printf("s[3] = %d (0x%X)\n", s[3], s[3])
-
-    for i, r := range s {
-        fmt.Printf("index %d: %c (%d)\n", i, r, r)
-    }
+    s := "Alizée"
+    fmt.Println(s[4])
 }
 ```
 
 Output:
 ```
-len: 5
-s[3] = 195 (0xC3)
-index 0: c (99)
-index 1: a (97)
-index 2: f (102)
-index 3: é (233)
+195
 ```
 
-`"café"` is 5 bytes long: `c` `a` `f` are one byte each, and `é` is two bytes (`0xC3 0xA9`).
-`s[3]` returns the byte at position 3, which is `0xC3` (decimal 195) --- the first byte of the UTF-8 encoding of `é`, not the character itself.
-`range` decodes the UTF-8 properly: it sees the two bytes at position 3 as a single rune (`é`, code point U+00E9, decimal 233) and skips byte 4 entirely.
-Notice that index 4 never appears in the range output because `é` occupies two byte positions (3 and 4) but is a single rune.
+`"Alizée"` is `A l i z é e`.
+The accented `é` (U+00E9) is the fifth character but, because the four preceding letters are one byte each, `é` begins at byte index 4 and occupies bytes 4 and 5 (`0xC3 0xA9`).
+`s[4]` indexes a **byte**, so it returns `195` (`0xC3`), the first byte of the UTF-8 encoding of `é` --- not the character `é`, and not the trailing plain `e` (which lives at byte index 6).
 
 ---
 
-**Exercise 3** (Calculation): How many bytes does `len("Beyoncé")` return?
-How many runes does `utf8.RuneCountInString("Beyoncé")` return?
+**Exercise 3** (Calculation): How many bytes does `len("Alizée")` return?
+How many runes does `utf8.RuneCountInString("Alizée")` return?
 
-`len("Beyoncé")` returns `8`.
-`B`, `e`, `y`, `o`, `n`, `c` are each one byte (6 bytes total), and `é` (U+00E9) encodes to two bytes in UTF-8, giving 8 bytes.
+`len("Alizée")` returns `7`.
+The letters `A`, `l`, `i`, `z`, `e` are each one byte (5 bytes), and `é` (U+00E9) encodes to two bytes in UTF-8, for 7 bytes total.
 
-`utf8.RuneCountInString("Beyoncé")` returns `7`.
-The string contains 7 characters: `B`, `e`, `y`, `o`, `n`, `c`, and `é`.
-`len` counts bytes; `utf8.RuneCountInString` counts Unicode code points.
-They agree on pure ASCII strings and diverge the moment any character requires more than one byte.
+`utf8.RuneCountInString("Alizée")` returns `6`: six characters --- `A`, `l`, `i`, `z`, `é`, `e`.
+`len` counts bytes; `RuneCountInString` counts code points.
+They agree only on pure ASCII.
 
 ---
 
-**Exercise 4** (Where is the bug?):
+**Exercise 4** (Where is the bug?): the `swapCase` function operates on raw bytes.
 
 ```go
-package main
-
-import "fmt"
-
-func shout(s string) string {
-    result := make([]byte, len(s))
-    for i := 0; i < len(s); i++ {
-        result[i] = s[i] - 32
+func swapCase(s string) string {
+    b := []byte(s)
+    for i := range b {
+        switch {
+        case b[i] >= 'A' && b[i] <= 'Z':
+            b[i] += 32
+        case b[i] >= 'a' && b[i] <= 'z':
+            b[i] -= 32
+        }
     }
-    return string(result)
+    return string(b)
 }
 
 func main() {
-    fmt.Println(shout("café"))
+    fmt.Println(swapCase("Héroe"))
 }
 ```
 
-The function assumes every character is a single byte and that subtracting 32 uppercases it.
-Both assumptions are wrong for non-ASCII input.
+The bug: the function treats every byte as an independent ASCII letter.
+For ASCII that works (`H`(72) + 32 -> 104 `h`; `r`, `o`, `e` -> `R`, `O`, `E`).
+But `é` is the two bytes `0xC3` (195) and `0xA9` (169).
+Neither byte falls in the `A`--`Z` or `a`--`z` ranges, so the `switch` leaves them unchanged --- the accented vowel survives by luck, not design.
+The program prints `héROE`: `H` becomes `h`, the two bytes of `é` pass through untouched, and `roe` becomes `ROE`.
 
-For ASCII letters, subtracting 32 from a lowercase byte gives the corresponding uppercase byte (e.g., `'a'` - 32 = `'A'`).
-But `"café"` is 5 bytes, and bytes 3 and 4 are the UTF-8 encoding of `é` (0xC3 and 0xA9).
-Subtracting 32 from each gives 0xA3 and 0x89, which are not a valid UTF-8 sequence for any meaningful character.
-The result is garbled output or a replacement character, not `"CAFÉ"`.
-
-The correct approach for Unicode-aware uppercasing is `strings.ToUpper`:
-
-```go
-import "strings"
-
-func shout(s string) string {
-    return strings.ToUpper(s)
-}
-```
-
-Output:
-```
-CAFÉ
-```
+The fundamental problem is that byte-wise case logic is only valid for ASCII.
+Had `é`'s bytes happened to land in the ASCII ranges, adding or subtracting 32 byte-wise would corrupt the multibyte sequence and produce invalid UTF-8.
+The correct approach is to work on runes (`for range` or `[]rune`), or simply use `strings.ToUpper` / `strings.ToLower`, which are Unicode-aware.
 
 ---
 
-**Exercise 5** (Write a program): Write a program that reverses a string correctly --- by rune, not by byte --- and prints the result.
+**Exercise 5** (Write a program): Write a function `reverseString(s string) string` that returns `s` with its runes in reverse order (e.g. `reverseString("café")` returns `"éfac"`), and test it on a string with a multibyte character.
 
 ```go
 package main
@@ -482,33 +518,26 @@ Reversing the raw `[]byte` instead would shuffle the individual bytes of multiby
 
 # Chapter 4: Control Flow
 
-**Exercise 1** (Think about it): Go has only one loop keyword, `for`.
-Java has `for`, `while`, and `do...while`.
-Is this limiting, or does it simplify the language?
-Can you think of a pattern where a `do...while` loop cannot be elegantly expressed with Go's `for`?
+**Exercise 1** (Think about it): Go's `switch` does not fall through by default, while Java's does.
+Imagine you are reviewing a Go codebase written by a Java programmer.
+What kind of bug would you look for in their `switch` statements?
 
-Having one loop keyword is not limiting in practice.
-Go's `for` covers all three Java forms:
+Look for stray `break` statements and, more importantly, for cases that were *meant* to share logic via fall-through.
+A Java programmer used to writing
 
-- C-style `for`: `for i := 0; i < n; i++ { ... }`
-- while-style: `for condition { ... }`
-- infinite: `for { ... }` with a `break` inside
-
-The `do...while` pattern --- execute the body at least once, then check the condition --- requires a small idiom in Go:
-
-```go
-for {
-    // body
-    if !condition {
-        break
-    }
+```java
+switch (level) {
+    case ERROR:
+    case WARN:
+        log(msg);   // intended: ERROR also logs
+        break;
 }
 ```
 
-This is slightly less elegant than Java's `do { ... } while (condition)` because the loop-exit logic is inside the body rather than at the bottom of the statement.
-For readers scanning code quickly, the exit condition is less visible.
-In practice, `do...while` is rare enough in both languages that this is a minor inconvenience.
-The benefit is a smaller language: one keyword to teach, one loop construct to remember, and fewer edge cases around scoping and control flow.
+might translate it to Go as two separate cases, each with its own body, and only put the logging in one of them --- assuming `case ERROR:` would "fall into" `case WARN:`.
+In Go it does not, so an `ERROR` value silently does nothing.
+The fix is either to list both values in one case (`case ERROR, WARN:`) or to add an explicit `fallthrough`.
+The bug is silent because the code compiles and runs --- it just quietly skips the shared work.
 
 ---
 
@@ -552,39 +581,39 @@ package main
 
 import "fmt"
 
-func grade(score int) string {
+func classify(n int) {
     switch {
-    case score >= 90:
-        return "A"
-    case score >= 80:
-        return "B"
-    case score >= 70:
-        return "C"
+    case n < 0:
+        fmt.Println("negative")
+    case n == 0:
+        fmt.Println("zero")
+    case n%2 == 0:
+        fmt.Println("positive even")
     default:
-        return "F"
+        fmt.Println("positive odd")
     }
 }
 
 func main() {
-    fmt.Println(grade(95))
-    fmt.Println(grade(83))
-    fmt.Println(grade(70))
-    fmt.Println(grade(55))
+    classify(-3)
+    classify(0)
+    classify(4)
+    classify(7)
 }
 ```
 
 Output:
 ```
-A
-B
-C
-F
+negative
+zero
+positive even
+positive odd
 ```
 
 An expression-less `switch` is equivalent to `switch true` --- each case is a boolean expression, and the first one that evaluates to `true` wins.
 Cases are evaluated top to bottom; once a match is found, the remaining cases are skipped.
-There is no fallthrough, so `grade(83)` matches `score >= 80`, returns `"B"`, and never reaches `score >= 70`.
-The `default` clause matches when no case is true.
+`classify(4)` skips `n < 0` and `n == 0`, then matches `n%2 == 0` and prints "positive even".
+`classify(7)` matches none of the cases, so the `default` clause prints "positive odd".
 
 ---
 
@@ -633,48 +662,62 @@ Now each closure captures a distinct `factor` variable, and the output is `50`, 
 
 ---
 
-**Exercise 5** (Write a program): Write a program using `defer` and `recover` to catch a panic from a function that calls `panic("something went wrong")`, print the recovered message, and continue execution normally.
+**Exercise 5** (Write a program): Write a function `processFile(path string)` that opens a file, defers closing it, reads the first 64 bytes, and prints them as a string. Call it with a valid path and a missing path.
 
 ```go
 package main
 
-import "fmt"
+import (
+    "fmt"
+    "io"
+    "os"
+)
 
-func safeRun(f func()) {
-    defer func() {
-        if r := recover(); r != nil {
-            fmt.Println("recovered:", r)
-        }
-    }()
-    f()
-}
+func processFile(path string) error {
+    f, err := os.Open(path)
+    if err != nil {
+        return err
+    }
+    defer f.Close() // runs on every return path below
 
-func riskyOperation() {
-    fmt.Println("starting risky operation")
-    panic("something went wrong")
+    buf := make([]byte, 64)
+    n, err := f.Read(buf)
+    if err != nil && err != io.EOF {
+        return err
+    }
+    fmt.Printf("%s: %q\n", path, string(buf[:n]))
+    return nil
 }
 
 func main() {
-    fmt.Println("before safeRun")
-    safeRun(riskyOperation)
-    fmt.Println("after safeRun --- execution continues normally")
+    if err := processFile("cancion.txt"); err != nil {
+        fmt.Println("error:", err)
+    }
+    if err := processFile("missing.txt"); err != nil {
+        fmt.Println("error:", err)
+    }
 }
 ```
 
-Output:
-```
-before safeRun
-starting risky operation
-recovered: something went wrong
-after safeRun --- execution continues normally
+The `defer f.Close()` is registered immediately after a successful `os.Open`, so the file is closed no matter which `return` the function takes --- the successful path, the read-error path, or a panic.
+For the missing path, `os.Open` fails before the `defer` is registered (there is nothing to close), and `processFile` returns the wrapped `*PathError`, which `main` prints as something like `error: open missing.txt: no such file or directory`.
+Note that a single `Read` is not guaranteed to fill the buffer; using `io.ReadFull` would be the robust choice when you truly need all 64 bytes.
+
+---
+
+**Exercise 6** (Calculation):
+
+```go
+count := 0
+for i := 2; i < 100; i *= 2 {
+    count++
+}
 ```
 
-`recover` only works when called directly inside a deferred function.
-The deferred anonymous function runs when `riskyOperation` panics; at that point, `recover()` returns the value passed to `panic` and stops the panic from propagating up the call stack.
-After `safeRun` returns normally, `main` continues.
+The loop body executes **6** times, and the final value of `i` after the loop exits is **128**.
 
-Note that `panic` and `recover` are not Go's primary error handling mechanism --- that role belongs to returning `error` values.
-Use `panic`/`recover` only for truly unrecoverable situations or at the boundary of a library to prevent a panic from escaping into caller code.
+`i` takes the values 2, 4, 8, 16, 32, 64 while the condition `i < 100` holds --- that is six iterations, so `count` ends at 6.
+After the body runs with `i == 64`, the post statement doubles `i` to 128; the condition `128 < 100` is false, so the loop exits with `i == 128`.
 
 ---
 
@@ -718,35 +761,38 @@ package main
 
 import "fmt"
 
-func makeAdder(n int) func(int) int {
-    return func(x int) int {
-        return x + n
-    }
+func makeAdder(n int) (func() int, func() int) {
+    inc := func() int { n++; return n }
+    dec := func() int { n--; return n }
+    return inc, dec
 }
 
 func main() {
-    add5 := makeAdder(5)
-    add10 := makeAdder(10)
-    fmt.Println(add5(3))
-    fmt.Println(add10(3))
-    fmt.Println(add5(add10(1)))
+    inc, dec := makeAdder(5)
+    fmt.Println(inc())
+    fmt.Println(inc())
+    fmt.Println(dec())
+    fmt.Println(dec())
 }
 ```
 
 Output:
 ```
-8
-13
-16
+6
+7
+6
+5
 ```
 
-`makeAdder(5)` returns a closure that captures `n = 5`.
-`makeAdder(10)` returns a separate closure that captures `n = 10`.
-Each closure has its own independent copy of `n` because each call to `makeAdder` creates a new variable.
+`makeAdder(5)` creates a single variable `n` initialized to `5`.
+Both `inc` and `dec` are closures that capture that *same* `n` by reference, so they share one piece of state --- mutating `n` through one closure is visible to the other.
 
-`add5(3)` returns `3 + 5 = 8`.
-`add10(3)` returns `3 + 10 = 13`.
-`add5(add10(1))` evaluates inside-out: `add10(1)` returns `1 + 10 = 11`, then `add5(11)` returns `11 + 5 = 16`.
+- `inc()`: `n = 5 + 1 = 6`; prints `6`.
+- `inc()`: `n = 6 + 1 = 7`; prints `7`.
+- `dec()`: `n = 7 - 1 = 6`; prints `6`.
+- `dec()`: `n = 6 - 1 = 5`; prints `5`.
+
+The key point: returning two closures that close over the same variable gives you a pair of functions that operate on shared, hidden state --- the closure equivalent of two methods on one struct field.
 
 ---
 
@@ -1126,6 +1172,8 @@ func (c *Counter) String() string {     // pointer receiver for consistency
 }
 
 func main() {
+    defer fmt.Println("done") // runs last, after main's body returns
+
     c := NewCounter(10)
     c.Increment()
     c.Increment()
@@ -1140,12 +1188,14 @@ Output:
 ```
 count: 13
 count: 0
+done
 ```
 
 Notes:
 - `NewCounter` returns `*Counter` so every method call works without taking an address at the call site.
 - All three methods use pointer receivers for consistency --- since `Increment` and `Reset` must mutate `c.Value`, all methods on `*Counter` use the pointer form.
 - `fmt.Println(c)` calls `c.String()` automatically because `*Counter` satisfies `fmt.Stringer` (which requires `String() string`).
+- `defer fmt.Println("done")` is registered first but runs last, when `main` returns, so `done` is the final line of output --- the same LIFO cleanup mechanism used for releasing resources.
 
 ---
 
@@ -1188,10 +1238,10 @@ import "fmt"
 
 func main() {
     catalog := map[string]int{
-        "Blinding Lights": 4_000_000_000,
-        "Shape of You":    3_600_000_000,
+        "Saltwater":       1_200_000_000,
+        "Out Of The Blue":  980_000_000,
     }
-    hits := []string{"Shape of You", "Watermelon Sugar", "Blinding Lights"}
+    hits := []string{"Out Of The Blue", "Watermelon Sugar", "Saltwater"}
     for _, title := range hits {
         if plays, ok := catalog[title]; ok {
             fmt.Printf("%s: %d\n", title, plays)
@@ -1204,15 +1254,15 @@ func main() {
 
 Output:
 ```
-Shape of You: 3600000000
+Out Of The Blue: 980000000
 Watermelon Sugar: not found
-Blinding Lights: 4000000000
+Saltwater: 1200000000
 ```
 
 The loop iterates the `hits` slice in order.
-`"Shape of You"` is in the catalog and its play count is printed.
+`"Out Of The Blue"` is in the catalog and its play count is printed.
 `"Watermelon Sugar"` is not in the catalog, so the comma-ok idiom sets `ok = false` and the `else` branch runs.
-`"Blinding Lights"` is in the catalog and is printed last.
+`"Saltwater"` is in the catalog and is printed last.
 Map lookup order is random, but slice range iteration is always in index order, so the output is deterministic here.
 
 ---
@@ -1250,7 +1300,7 @@ package main
 import "fmt"
 
 func main() {
-    words := []string{"Levitating", "Stay", "Heat Waves", "Stay", "As It Was"}
+    words := []string{"Gouryella", "Gamemaster", "Flaming June", "Gamemaster", "Sandstorm"}
     var freq map[string]int
     for _, w := range words {
         freq[w]++
@@ -1272,7 +1322,7 @@ The program panics at `freq[w]++` on the first iteration:
 panic: assignment to entry in nil map
 ```
 
-**Fix:** Initialise the map with `make` before the loop:
+**Fix:** Initialize the map with `make` before the loop:
 
 ```go
 freq := make(map[string]int)
@@ -1284,27 +1334,23 @@ for _, w := range words {
 With the fix, the program prints:
 
 ```
-Stay 2
+Gamemaster 2
 ```
 
 ---
 
-**Exercise 5** (Write a program): Write a program that reads a slice of song titles and builds a map from the first letter to a slice of titles starting with that letter, then prints each letter and its titles in sorted order.
+**Exercise 5** (Write a program): Write a program that reads a slice of song titles and builds a map from the first letter (as a `string`) to a slice of titles starting with that letter, then prints each letter and its titles in sorted order (sort both the letters and the titles within each group).
 
 ```go
 package main
 
 import (
     "fmt"
-    "maps"
     "slices"
 )
 
 func main() {
-    titles := []string{
-        "As It Was", "Blinding Lights", "Levitating",
-        "Bad Habit", "Kill Bill", "As The World Caves In",
-    }
+    titles := []string{"Sandstorm", "Bad Apple!!", "Gouryella", "Better Off Alone", "Flaming June", "Sandstorm"}
 
     byLetter := make(map[string][]string)
     for _, t := range titles {
@@ -1316,24 +1362,27 @@ func main() {
         slices.Sort(ts) // sort titles within each group
     }
 
-    letters := slices.Collect(maps.Keys(byLetter))
-    slices.Sort(letters) // sort the letter keys
+    keys := make([]string, 0, len(byLetter))
+    for k := range byLetter {
+        keys = append(keys, k)
+    }
+    slices.Sort(keys) // sort the letter keys
 
-    for _, letter := range letters {
-        fmt.Printf("%s: %v\n", letter, byLetter[letter])
+    for _, k := range keys {
+        fmt.Printf("%s: %v\n", k, byLetter[k])
     }
 }
 ```
 
 Output:
 ```
-A: [As It Was As The World Caves In]
-B: [Bad Habit Blinding Lights]
-K: [Kill Bill]
-L: [Levitating]
+B: [Bad Apple!! Better Off Alone]
+F: [Flaming June]
+G: [Gouryella]
+S: [Sandstorm Sandstorm]
 ```
 
-Key points: always initialise a map with `make` before writing; `maps.Keys` returns an iterator (Go 1.23+) that `slices.Collect` converts to a sortable slice.
+Key points: always initialize a map with `make` before writing; collect the map's keys into a slice with a `for range` loop, then `slices.Sort` both the keys and the titles within each group for deterministic output (map iteration order is randomized).
 
 
 ---
@@ -1717,9 +1766,9 @@ Note that `Artist` has no validation rule, so `"Karol G"` (a valid, non-empty va
 package main
 
 import (
-    "errors"
     "fmt"
     "io"
+    "strings"
 )
 
 func readAll(r io.Reader) ([]byte, error) {
@@ -1739,7 +1788,7 @@ func readAll(r io.Reader) ([]byte, error) {
 }
 
 func main() {
-    r := strings.NewReader("TQG")
+    r := strings.NewReader("Children")
     data, err := readAll(r)
     if err != nil {
         fmt.Println("error:", err)
@@ -1749,23 +1798,11 @@ func main() {
 }
 ```
 
-**The bug:** There are actually two problems.
+**The bug:** The program compiles and runs as written, but it has one idiomatic-correctness bug.
 
-**Bug 1 --- missing import:** `strings.NewReader` is used in `main` but `"strings"` is not in the import list.
-The program will not compile.
-The import block should be:
-
-```go
-import (
-    "errors"
-    "fmt"
-    "io"
-    "strings"
-)
-```
-
-**Bug 2 --- comparing `err == io.EOF` directly instead of using `errors.Is`:** The sentinel check `if err == io.EOF` works correctly for `io.EOF` itself, but it will silently miss `io.EOF` if the reader ever wraps it (e.g., `fmt.Errorf("read: %w", io.EOF)`).
-The idiomatic fix is:
+**The bug --- comparing `err == io.EOF` directly instead of using `errors.Is`:** The sentinel check `if err == io.EOF` happens to work for the bare `io.EOF` returned by `strings.Reader`, but it silently misses `io.EOF` if any reader in the future wraps it (e.g., `fmt.Errorf("read: %w", io.EOF)`).
+The chapter recommends never comparing errors with `==` when they might be wrapped.
+The idiomatic fix is to use `errors.Is`, which walks the entire chain:
 
 ```go
 if errors.Is(err, io.EOF) {
@@ -1773,8 +1810,8 @@ if errors.Is(err, io.EOF) {
 }
 ```
 
-Using `errors.Is` is consistent, future-proof, and is what the chapter recommends.
-The `errors` import is already present, so this is a zero-cost change.
+That fix also requires adding `"errors"` to the import list (the current program does not import it).
+With `errors.Is` in place the read loop is consistent with the rest of the chapter and robust to wrapped EOF.
 
 **Corrected `readAll`:**
 
@@ -1796,10 +1833,10 @@ func readAll(r io.Reader) ([]byte, error) {
 }
 ```
 
-With both fixes applied, the program compiles and prints:
+With the fix applied, the program prints:
 
 ```
-TQG
+Children
 ```
 
 ---
@@ -1818,43 +1855,42 @@ import (
 
 var ErrInvalidTimecode = errors.New("invalid timecode")
 
-func parseTimecode(s string) (int, int, int, error) {
+func parseTimecode(s string) (int, int, error) {
     parts := strings.Split(s, ":")
     if len(parts) != 2 {
-        return 0, 0, 0, fmt.Errorf("parseTimecode: expected MM:SS, got %q: %w", s, ErrInvalidTimecode)
+        return 0, 0, fmt.Errorf("parseTimecode: expected MM:SS, got %q: %w", s, ErrInvalidTimecode)
     }
 
     minutes, err := strconv.Atoi(parts[0])
     if err != nil {
-        return 0, 0, 0, fmt.Errorf("parseTimecode: invalid minutes %q: %w", parts[0], ErrInvalidTimecode)
+        return 0, 0, fmt.Errorf("parseTimecode: invalid minutes %q: %w", parts[0], ErrInvalidTimecode)
     }
 
     seconds, err := strconv.Atoi(parts[1])
     if err != nil {
-        return 0, 0, 0, fmt.Errorf("parseTimecode: invalid seconds %q: %w", parts[1], ErrInvalidTimecode)
+        return 0, 0, fmt.Errorf("parseTimecode: invalid seconds %q: %w", parts[1], ErrInvalidTimecode)
     }
 
     if minutes < 0 {
-        return 0, 0, 0, fmt.Errorf("parseTimecode: minutes %d is negative: %w", minutes, ErrInvalidTimecode)
+        return 0, 0, fmt.Errorf("parseTimecode: minutes %d is negative: %w", minutes, ErrInvalidTimecode)
     }
     if seconds < 0 || seconds > 59 {
-        return 0, 0, 0, fmt.Errorf("parseTimecode: seconds %d out of range [0,59]: %w", seconds, ErrInvalidTimecode)
+        return 0, 0, fmt.Errorf("parseTimecode: seconds %d out of range [0,59]: %w", seconds, ErrInvalidTimecode)
     }
 
-    total := minutes*60 + seconds
-    return minutes, seconds, total, nil
+    return minutes, seconds, nil
 }
 
 func main() {
     inputs := []string{"03:45", "345", "01:61"}
 
     for _, tc := range inputs {
-        m, s, total, err := parseTimecode(tc)
+        m, s, err := parseTimecode(tc)
         if err != nil {
             fmt.Printf("%-10s => error: %s\n", tc, err)
             fmt.Printf("           is ErrInvalidTimecode: %v\n", errors.Is(err, ErrInvalidTimecode))
         } else {
-            fmt.Printf("%-10s => %dm %ds (%d total seconds)\n", tc, m, s, total)
+            fmt.Printf("%-10s => %dm %ds\n", tc, m, s)
         }
     }
 }
@@ -1863,7 +1899,7 @@ func main() {
 Output:
 
 ```
-03:45      => 3m 45s (225 total seconds)
+03:45      => 3m 45s
 345        => error: parseTimecode: expected MM:SS, got "345": invalid timecode
            is ErrInvalidTimecode: true
 01:61      => error: parseTimecode: seconds 61 out of range [0,59]: invalid timecode
@@ -1878,8 +1914,8 @@ Exporting it (capital `E`) lets callers in other packages use `errors.Is` to dis
 - Every error path uses `fmt.Errorf("...: %w", ErrInvalidTimecode)` to wrap the sentinel.
 This means the returned error has a human-readable message that includes the context (the bad input, the specific reason) **and** a chain that `errors.Is` can walk to find `ErrInvalidTimecode`.
 
-- The function returns four values: `(int, int, int, error)`.
-The three `int` values are zero on error, consistent with the Go convention of returning zero values alongside a non-nil error.
+- The function returns three values: `(int, int, error)`, matching the requested signature.
+Both `int` values are zero on error, consistent with the Go convention of returning zero values alongside a non-nil error.
 
 - `strings.Split(s, ":")` with a check on `len(parts) != 2` is the idiomatic way to parse a two-part format.
 Using `fmt.Sscanf` or a regex are also valid; `strings.Split` is the most readable for this simple case.
@@ -2335,6 +2371,11 @@ go func(n int) {
 
 With this fix the result is always 0 + 1 + 2 + 3 = 6.
 
+**Go 1.21 vs Go 1.22:** No, the answer for part (b) would not differ.
+This is a C-style three-clause `for` loop, whose loop variable `i` has always been (and still is) a single variable shared across iterations --- you must write `i := i` or pass `i` as a parameter regardless of Go version.
+The Go 1.22 per-iteration loop-variable change affected only `for ... range` loop variables, not the variables declared in a C-style `for` loop's init clause.
+So the capture hazard in part (b) exists identically in Go 1.21 and Go 1.22.
+
 ---
 
 **Exercise 4** (Where is the bug?):
@@ -2499,6 +2540,61 @@ Key points of the implementation:
 
 ---
 
+**Exercise 6** (Where is the bug?):
+
+```go
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+func main() {
+    var wg sync.WaitGroup
+    results := make([]int, 5)
+    for i := 0; i < 5; i++ {
+        go func(n int) {
+            wg.Add(1)
+            defer wg.Done()
+            results[n] = n * n
+        }(i)
+    }
+    wg.Wait()
+    fmt.Println(results)
+}
+```
+
+**The bug:** `wg.Add(1)` is called *inside* the goroutine instead of before launching it.
+
+`wg.Wait()` blocks only while the counter is greater than zero.
+But the counter is incremented inside each goroutine, and the main goroutine reaches `wg.Wait()` immediately after the `for` loop dispatches the five goroutines --- before any of them have necessarily run.
+If `Wait` observes the counter at zero (which it can, because no goroutine has executed `wg.Add(1)` yet), it returns instantly, and `main` prints `results` while the goroutines are still writing to it.
+
+This produces two distinct problems:
+
+- **Premature `Wait`:** the program usually prints a partial or all-zero slice such as `[0 0 0 0 0]` instead of `[0 1 4 9 16]`. The output is non-deterministic and changes run to run.
+- **Data race:** `main` reads `results` (via `fmt.Println`) at the same time the surviving goroutines write to `results[n]`. `go run -race` reports a `DATA RACE`. Even `go vet` flags this statically with the diagnostic "WaitGroup.Add called from inside new goroutine".
+
+**The fix:** call `wg.Add(1)` in the main goroutine *before* the `go` statement, so the counter is guaranteed non-zero before `Wait` can observe it:
+
+```go
+for i := 0; i < 5; i++ {
+    wg.Add(1)
+    go func(n int) {
+        defer wg.Done()
+        results[n] = n * n
+    }(i)
+}
+wg.Wait()
+fmt.Println(results) // [0 1 4 9 16]
+```
+
+With `Add` moved out, `Wait` cannot return until all five `Done` calls have happened, which establishes a happens-before relationship so the subsequent read of `results` is race-free.
+Go 1.25 added a `WaitGroup.Go` helper that runs a function in a new goroutine and handles the matching `Add`/`Done` automatically, which sidesteps this whole class of mistake.
+
+---
+
 # Chapter 12: Context and Concurrency Patterns --- Answers
 
 **Exercise 1** (Think about it): In Java, cancelling an in-flight operation typically means calling `Future.cancel(true)` or interrupting a thread via `Thread.interrupt()`.
@@ -2567,8 +2663,8 @@ func main() {
     ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
     defer cancel()
 
-    go work(ctx, "Bewitched")
-    go work(ctx, "Too Sweet")
+    go work(ctx, "Flaming June")
+    go work(ctx, "Saltwater")
     time.Sleep(400 * time.Millisecond)
     fmt.Println("main done")
 }
@@ -2576,8 +2672,8 @@ func main() {
 
 Output (order of the first two lines may vary):
 ```
-Bewitched cancelled: context deadline exceeded
-Too Sweet cancelled: context deadline exceeded
+Flaming June cancelled: context deadline exceeded
+Saltwater cancelled: context deadline exceeded
 main done
 ```
 
@@ -2779,6 +2875,50 @@ Sample output when the timeout fires:
 error: context deadline exceeded
 ```
 
+
+---
+
+**Exercise 6** (What does this print?):
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+)
+
+type ctxKey string
+
+func main() {
+    const userKey ctxKey = "user"
+
+    ctx := context.Background()
+    ctx = context.WithValue(ctx, userKey, "ana")
+    ctx = context.WithValue(ctx, ctxKey("user"), "beto")
+
+    fmt.Println(ctx.Value(userKey))
+    fmt.Println(ctx.Value("user"))
+}
+```
+
+Output:
+```
+beto
+<nil>
+```
+
+A context key is matched by **both its type and its value**, not by value alone.
+`userKey` is a `ctxKey` whose value is `"user"`, and `ctxKey("user")` is also a `ctxKey` with value `"user"` --- they are the *same key*.
+So the second `WithValue` shadows the first: looking up that key returns the most recently attached value, `"beto"`.
+(`Value` walks from the innermost derived context outward, so the last value attached for a given key wins.)
+
+The final line passes a plain `string` literal `"user"`, whose type is `string`, not `ctxKey`.
+Because the key types differ, no match is found anywhere in the tree, so `ctx.Value("user")` returns `nil`, which prints as `<nil>`.
+This is exactly why idiomatic Go uses an unexported key type: a `string` key from another package can never collide with your typed key.
+
+Note: this program uses a named string-based key type purely to demonstrate the type-matching rule; `go vet` does not flag it because the key type is not a built-in type.
+In production, prefer an unexported empty-struct key type as shown in the chapter.
 
 ---
 
@@ -3099,7 +3239,6 @@ package main
 
 import (
     "bufio"
-    "fmt"
     "log/slog"
     "os"
     "strings"
@@ -3116,7 +3255,7 @@ func main() {
         },
     }))
 
-    input := "Physical\nDon't Start Now\nPositions\n"
+    input := "Café Del Mar\nZombie\nCrazy Train\n"
     scanner := bufio.NewScanner(strings.NewReader(input))
     count := 0
     for scanner.Scan() {
@@ -3142,7 +3281,7 @@ Step-by-step:
 2. `strings.NewReader` wraps the literal string as an `io.Reader`.
    `bufio.NewScanner` wraps that reader.
 3. The scanner splits on newlines (the default).
-   The input has three non-empty lines (`"Physical"`, `"Don't Start Now"`, `"Positions"`) followed by a trailing newline.
+   The input has three non-empty lines (`"Café Del Mar"`, `"Zombie"`, `"Crazy Train"`) followed by a trailing newline.
    `Scan` returns `true` three times and then `false` at EOF, so `count` ends up as `3`.
 4. `logger.Info` emits a text-format log line.
    The `time` key is suppressed by `ReplaceAttr`.
@@ -3213,7 +3352,7 @@ func countMatches(texts []string, pattern string) int {
 }
 
 func main() {
-    titles := []string{"positions", "Physical", "Don't Start Now", "thank u, next"}
+    titles := []string{"Crazy Train", "Café Del Mar", "Zombie", "The Sound of Silence"}
     fmt.Println(countMatches(titles, `^[A-Z]`))
 }
 ```
@@ -3221,7 +3360,7 @@ func main() {
 **The bug:** `regexp.MustCompile(pattern)` is called inside the `for` loop, so the pattern is compiled on every iteration.
 With four strings this is merely wasteful, but inside a hot path processing millions of records it becomes a serious performance problem --- `regexp.MustCompile` parses the pattern, builds a finite automaton, and allocates memory each time.
 
-The output is correct (it prints `2`, matching `"Physical"` and `"Don't Start Now"`), so this is a **performance bug**, not a logic bug.
+The output is correct (it prints `4` --- all four titles start with an uppercase ASCII letter), so this is a **performance bug**, not a logic bug.
 
 **The fix:** Compile the pattern once, before the loop.
 If the pattern is constant, hoist it to a package-level variable:
@@ -3416,7 +3555,8 @@ The `"secret"` key in the JSON is silently discarded; `b.Secret` remains the zer
 ---
 
 **Exercise 3** (Calculation): Consider the following `ServeMux` registration and the three incoming requests.
-For each request, state which handler function is called, or `404` if none matches.
+For each request, state which handler function is called.
+If no handler runs, give the HTTP error status the mux returns, and say whether the mux failed to match the path at all (`404 Not Found`) or matched the path pattern but not the request method (`405 Method Not Allowed`).
 
 ```go
 mux := http.NewServeMux()
@@ -3439,7 +3579,7 @@ The pattern `GET /tracks/{id}/` matches: `{id}` captures `42`.
 `r.PathValue("id")` would return `"42"` inside the handler.
 `getTrack` is called.
 
-c. `DELETE /tracks/7/` --- **`404`**
+c. `DELETE /tracks/7/` --- **`405 Method Not Allowed`**
 
 None of the three registered patterns match a `DELETE` method on any path.
 `GET /tracks/{id}/` matches the path shape but requires `GET`.
@@ -3572,7 +3712,7 @@ Key points illustrated by this solution:
 - `strconv.Atoi` converts the string path segment to an integer; a malformed segment returns `400 Bad Request` rather than panicking.
 - The `Content-Type` header is set before writing the body.
   Headers must be set before the first call to `Write` or `Encode` --- once the body starts, the headers are sent and cannot be changed.
-- The map iteration order in `listSongs` is random (Chapter 8).
+- The map iteration order in `listSongs` is random (Chapter 7).
   In a real service you would sort the result before encoding it to give clients a stable response.
 
 
@@ -4045,7 +4185,7 @@ invalid map key type T (missing comparable constraint)
 Using a type as a map key requires that it support `==` and `!=`.
 `any` does not guarantee this.
 
-**The fix:** Change the constraint from `any` to `comparable`:
+**The fix:** The constraint must be `comparable`, because `map[T]bool` requires a comparable key:
 
 ```go
 func Dedupe[T comparable](s []T) []T {
@@ -4061,28 +4201,25 @@ func Dedupe[T comparable](s []T) []T {
 }
 ```
 
-`string` and `Playlist` (whose underlying type is `[]string`) --- wait: `Playlist` is `[]string`, and slices are **not** comparable.
-So even with `comparable`, passing `Playlist` would fail because `[]string` does not satisfy `comparable`.
+But tightening the constraint exposes a second problem: the call in `main` passes `p`, whose type `Playlist` has underlying type `[]string`, and slices are **never** comparable in Go.
+So `Playlist` does not satisfy `comparable`, and `Dedupe(p)` still will not compile.
 
-The call in `main` passes `p` (of type `Playlist`, underlying type `[]string`) directly.
-Slices are never comparable in Go.
-
-The correct fix is to change the call to pass the string slice elements rather than the slice type:
+The full fix is therefore two-fold: constrain `T` to `comparable`, and pass a slice of comparable elements rather than the slice-typed value. Change the call to use the individual strings:
 
 ```go
 func main() {
-    p := []string{"greedy", "Heather", "greedy", "Astronomy", "Heather"}
+    p := []string{"Escape", "J'ai pas vingt ans !", "Escape", "J'en ai marre !", "J'ai pas vingt ans !"}
     fmt.Println(Dedupe(p))
 }
 ```
 
-With `T comparable` and `p` as `[]string`, the output is:
+With `T comparable` and `p` as `[]string`, the program compiles and prints:
 
 ```
-[greedy Heather Astronomy]
+[Escape J'ai pas vingt ans ! J'en ai marre !]
 ```
 
-In summary, there are two bugs: the constraint must be `comparable`, and `Playlist` (a `[]string`) cannot be used as a map key because slices are not comparable.
+In short, there are two bugs: the constraint must be `comparable`, not `any`, and a slice type like `Playlist` cannot be a map key because slices are not comparable.
 
 ---
 
@@ -4195,7 +4332,7 @@ func checkPositive(t *testing.T, n int) {
     }
 }
 
-func TestGolden(t *testing.T) {
+func TestSoundOfSilence(t *testing.T) {
     checkPositive(t, 1)
     t.Log("checked 1")
     checkPositive(t, -1)
@@ -4208,12 +4345,12 @@ func TestGolden(t *testing.T) {
 Output (with `go test -v`):
 
 ```
-=== RUN   TestGolden
+=== RUN   TestSoundOfSilence
+    music_test.go:13: checked 1
     music_test.go:7: expected positive, got -1
-    music_test.go:11: checked 1
-    music_test.go:13: checked -1
-    music_test.go:15: checked 2
---- FAIL: TestGolden (0.00s)
+    music_test.go:15: checked -1
+    music_test.go:17: checked 2
+--- FAIL: TestSoundOfSilence (0.00s)
 FAIL
 ```
 
@@ -4227,24 +4364,25 @@ FAIL
 - `t.Log("checked -1")`: message is queued.
 - `checkPositive(t, 2)`: `2 > 0`, no error.
 - `t.Log("checked 2")`: message is queued.
-- Because the test is marked failed, all `t.Log` output is printed (with `-v`, log output is always printed regardless of pass/fail).
+- With `-v`, all `t.Log` and error output is printed, and it appears in the order the calls executed (not errors first).
 
+The buffered output prints in chronological call order, so "checked 1" (line 13) appears before the error (line 7), followed by "checked -1" (line 15) and "checked 2" (line 17).
 The test finishes with `--- FAIL`.
 Execution continues past the failing check because `t.Errorf` is used, not `t.Fatalf`.
 
 **Note on `t.Helper()` absence:**
 `checkPositive` does not call `t.Helper()`.
-As a result, the failure line reported is inside `checkPositive` (the `t.Errorf` call), not in `TestGolden` where `checkPositive(-1)` was called.
-Adding `t.Helper()` as the first line of `checkPositive` would make the reported line point to `checkPositive(t, -1)` in `TestGolden` instead.
+As a result, the failure line reported is inside `checkPositive` (the `t.Errorf` call), not in `TestSoundOfSilence` where `checkPositive(-1)` was called.
+Adding `t.Helper()` as the first line of `checkPositive` would make the reported line point to `checkPositive(t, -1)` in `TestSoundOfSilence` instead.
 
 ---
 
 **Exercise 3** (Calculation): A benchmark function has the following structure:
 
 ```go
-func BenchmarkWoman(b *testing.B) {
+func BenchmarkCrazyTrain(b *testing.B) {
     for range b.N {
-        _ = processTrack("Woman")
+        _ = processTrack("Crazy Train")
     }
 }
 ```
@@ -4252,36 +4390,28 @@ func BenchmarkWoman(b *testing.B) {
 On the first probe the framework sets `b.N = 1` and measures elapsed time.
 It then sets `b.N = 100`, then `b.N = 10_000`, then `b.N = 1_000_000`.
 The framework stops when the total elapsed time exceeds one second.
-If `processTrack` takes exactly 500 ns per call, at which value of `b.N` does the total elapsed time first exceed one second?
+If `processTrack` takes exactly 2 µs per call, at which value of `b.N` does the total elapsed time first exceed one second?
 What is the reported ns/op value?
 
 **Answer:**
 
-Total elapsed time = `b.N × 500 ns`.
+Total elapsed time = `b.N × 2 µs` = `b.N × 2000 ns`.
 
 | b.N       | Total time             |
 |-----------|------------------------|
-| 1         | 500 ns                 |
-| 100       | 50,000 ns = 50 µs      |
-| 10,000    | 5,000,000 ns = 5 ms    |
-| 1,000,000 | 500,000,000 ns = 500 ms |
+| 1         | 2 µs                   |
+| 100       | 200 µs                 |
+| 10,000    | 20,000 µs = 20 ms      |
+| 1,000,000 | 2,000,000 µs = 2 s     |
 
-None of those values exceeds one second.
-The framework continues increasing `b.N`.
-The next typical value after 1,000,000 is 2,000,000:
-
-| b.N       | Total time             |
-|-----------|------------------------|
-| 2,000,000 | 1,000,000,000 ns = 1 s |
-
-At `b.N = 2,000,000` the total time is exactly 1 second, which meets (ties) the threshold.
-
-**b.N = 2,000,000** is where the run stops (or the next step after, depending on exact rounding in the real framework).
+The first three probes are all well under one second.
+At `b.N = 1,000,000` the total is 2 s, which is the first probe whose total elapsed time reaches (and exceeds) the 1 s default `-benchtime`.
+So the framework stops at **b.N = 1,000,000**.
 
 **Reported ns/op:**
-The framework reports `total_time / b.N = 1,000,000,000 ns / 2,000,000 = 500 ns/op`.
+The framework reports `total_time / b.N = 2,000,000,000 ns / 1,000,000 = 2000 ns/op`.
 
-This matches `processTrack`'s actual per-call cost --- the benchmark is accurate.
+This matches `processTrack`'s actual per-call cost of 2 µs --- the benchmark is accurate.
 
 ---
 

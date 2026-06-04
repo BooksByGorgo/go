@@ -437,7 +437,7 @@ Every Go file in every repository in the world looks structurally the same.
 func add(a int,b int)int{return a+b}
 
 // gofmt produces:
-func add(a int, b int) int { return a+b }
+func add(a int, b int) int { return a + b }
 ```
 
 ::: {.tip}

@@ -30,8 +30,7 @@ Audience: Java programmers learning Go for industry use
 - Integer literal prefixes: `0b`, `0o`, `0x`; `_` digit separator
 - `clear`, `min`, `max` built-ins (Go 1.21)
 - Blank identifier (`_`)
-- Structs --- struct literals, value semantics, methods, embedding
-- `cmp` package (Go 1.21): `cmp.Compare`, `cmp.Ordered`
+- Structs --- struct literals, value semantics (methods and embedding come in Chapter 6)
 - Pointers --- `&` (address-of), `*` (dereference); nil pointer; no pointer arithmetic
 
 ### Chapter 3: Strings, Bytes, and Runes
