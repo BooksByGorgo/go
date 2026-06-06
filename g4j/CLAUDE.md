@@ -58,7 +58,7 @@ This book covers all the topics that a good Go programmer uses in daily life in 
 - place `\index{term}` at the primary introduction/definition of a term, not inside code blocks
 - use `\index{parent!child}` for sub-entries (e.g., `\index{pointer!arithmetic}`)
 - in `\index{}`, escape double quotes by doubling them (e.g., `\index{extern ""C""}`)
-- `\printindex` goes only in appF.md (the last file built into the book) --- do not add it to other chapters or appendices
+- `\printindex` goes only in appC.md (the last file built into the book) --- do not add it to other chapters or appendices
 
 ## Playlist References
 
@@ -83,7 +83,7 @@ This book covers all the topics that a good Go programmer uses in daily life in 
 ## Makefile Hygiene
 
 - every ch*.md and app*.md file must appear in the CHAPTERS list in Makefile; omitted files are silently excluded from the PDF
-- the last file in CHAPTERS must contain `\printindex` (currently appF.md)
+- the last file in CHAPTERS must contain `\printindex` (currently appC.md)
 - after renaming or deleting chapter files, update CHAPTERS, g4j-answers.md chapter headings, CHAPTER_OUTLINE.md, and PLAYLIST.md in the same commit
 
 ## Working with Claude
