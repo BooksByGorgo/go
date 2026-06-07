@@ -1223,6 +1223,27 @@ Notes:
 - `fmt.Println(c)` calls `c.String()` automatically because `*Counter` satisfies `fmt.Stringer` (which requires `String() string`).
 - `defer fmt.Println("done")` is registered first but runs last, when `main` returns, so `done` is the final line of output --- the same LIFO cleanup mechanism used for releasing resources.
 
+**Exercise 6** (Where is the bug?): The program does not compile because you cannot attach a method to a non-local type.
+`int` is a predeclared type defined by the language, not in this package, so `func (n int) IsFast() bool` is rejected with *cannot define new methods on non-local type int*.
+The same rule blocks attaching methods to types from other packages, such as `time.Duration`.
+
+The smallest fix is to define your own named type whose underlying type is `int`, and hang the method on that:
+
+```go
+type BPM int
+
+func (b BPM) IsFast() bool {       // method on a local named type --- allowed
+    return b >= 125
+}
+
+func main() {
+    bpm := BPM(128)
+    fmt.Println(bpm.IsFast())      // true
+}
+```
+
+`BPM` keeps all the arithmetic and comparison behavior of `int`, but because it is declared in this package you are free to give it methods.
+
 ---
 
 # Chapter 7: Maps and Slices --- Answers
