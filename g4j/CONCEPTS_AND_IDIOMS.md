@@ -247,7 +247,3 @@
 - When NOT to use generics (prefer concrete types for readability)
 
 ---
-
-## Unsafe and cgo (use sparingly)
-- `unsafe.Pointer` --- escape hatch for C interop and pointer arithmetic; no type-safety guarantees across Go versions
-- `cgo` --- "cgo is not Go"; mentioned in proverbs; avoid in application code

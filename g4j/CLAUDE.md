@@ -73,18 +73,11 @@ This book covers all the topics that a good Go programmer uses in daily life in 
 - after any chapter renumbering, run a cross-reference audit before the next structural change: `grep -rn "Chapter [0-9]" ch*.md app*.md | grep -v answers`
 - push after each structural reorganization; do not stack multiple reorganizations before auditing
 
-## Writing New Chapters
-
-- finalize the chapter structure (CHAPTER_OUTLINE.md) and get it approved before writing any content --- reorganizing after content is written costs significant rework
-- when launching agents to write chapters, include the complete chapter map (number → title) in every prompt so agents write correct cross-references from the start
-- after writing a new chapter file, immediately add it to the Makefile CHAPTERS list and run `make g4j.pdf` to catch LaTeX errors early
-- validate the build after every session, not just after large changes
-
 ## Makefile Hygiene
 
 - every ch*.md and app*.md file must appear in the CHAPTERS list in Makefile; omitted files are silently excluded from the PDF
 - the last file in CHAPTERS must contain `\printindex` (currently appC.md)
-- after renaming or deleting chapter files, update CHAPTERS, g4j-answers.md chapter headings, CHAPTER_OUTLINE.md, and PLAYLIST.md in the same commit
+- after renaming or deleting chapter files, update CHAPTERS, g4j-answers.md chapter headings, and PLAYLIST.md in the same commit
 
 ## Working with Claude
 
