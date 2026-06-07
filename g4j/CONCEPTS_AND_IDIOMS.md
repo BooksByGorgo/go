@@ -248,18 +248,6 @@
 
 ---
 
-## Reflection (use sparingly)
-- `reflect.TypeOf`, `reflect.ValueOf`
-- `reflect.Value.Kind()` vs `Type()` distinction
-- `reflect.Value.Elem()` for dereferencing pointers and unwrapping interfaces
-- `reflect.Value.CanSet()` --- mutation requires a pointer
-- Struct field iteration and `reflect.StructField.Tag` for custom tag parsing
-- The three laws of reflection as a conceptual framework
-- Performance cost --- reflection boxes values into `interface{}`, allocates; avoid in hot paths
-- When reflection is warranted (serialization, DI frameworks); prefer generics or interfaces when types are known at compile time
-
----
-
 ## Unsafe and cgo (use sparingly)
 - `unsafe.Pointer` --- escape hatch for C interop and pointer arithmetic; no type-safety guarantees across Go versions
 - `cgo` --- "cgo is not Go"; mentioned in proverbs; avoid in application code
