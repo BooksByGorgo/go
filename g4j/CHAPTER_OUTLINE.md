@@ -5,6 +5,15 @@ Audience: Java programmers learning Go for industry use
 
 ---
 
+## Chapter 0: How to Use This Booklet
+*Conventions used throughout the book --- read this first.*
+
+- Code review rules --- the `[rule-name]` markers used in the text point to Appendix C
+- Idioms, `Tip`/`Trap`/`Wut` callouts, and how function signatures are presented
+- Chapter layout --- intro, body, `Try It`, key points, exercises; separate answer key
+
+---
+
 ## Part I: Getting Off the Ground
 
 ### Chapter 1: Hello, Go
@@ -15,7 +24,7 @@ Audience: Java programmers learning Go for industry use
 - `go run`, `go build`, `go install`
 - `go mod init` --- your first module; `go.mod` and `go.sum`
 - Exported vs unexported identifiers (capitalization, not `public`/`private`)
-- The `fmt` package basics
+- The `fmt` package --- `Println`, `Printf`, `Sprintf`, `Fprintf`, reading input (`Scan`/`Scanln`), format verbs
 - Command-line arguments --- `os.Args[0]` is the binary; `os.Args[1:]` are the user's arguments
 
 ### Chapter 2: Types and Variables
@@ -26,6 +35,7 @@ Audience: Java programmers learning Go for industry use
 - Zero values --- every type has a meaningful zero; no null pointer surprises
 - `const` and `iota` --- typed and untyped constants, enumeration patterns
 - Type definitions vs type aliases (`type Celsius float64` vs `type = float64`)
+- Explicit type conversions (`T(x)`) --- no implicit numeric coercion between types
 - `new` --- `new(T)` returns a zeroed `*T`; `make` initializes slices, maps, and channels (covered in Chapters 7 and 10)
 - Integer literal prefixes: `0b`, `0o`, `0x`; `_` digit separator
 - `clear`, `min`, `max` built-ins (Go 1.21)
@@ -40,7 +50,7 @@ Audience: Java programmers learning Go for industry use
 - `byte` (`uint8`) vs `rune` (`int32`); `s[i]` yields a byte
 - `for range` over a string decodes UTF-8 runes; plain `for i` iterates bytes
 - Raw string literals (backticks); rune literals (`'⌘'`)
-- `strings` package: `Builder`, `Contains`, `Split`, `Join`, `TrimSpace`, `HasPrefix`, `SplitSeq` (1.24)
+- `strings` package: `Builder`, `Contains`, `Split`, `Join`, `TrimSpace`, `HasPrefix`
 - `strconv`: `Itoa`, `Atoi`, `ParseFloat`, `FormatFloat`
 - `bytes` package: mirrors `strings` for `[]byte`; `bytes.Buffer`
 - `unicode/utf8`: `RuneCountInString`, `DecodeRuneInString`, `ValidString`
@@ -71,16 +81,19 @@ Audience: Java programmers learning Go for industry use
 - First-class functions --- function types, function variables
 - Closures --- capturing variables by reference; common gotcha in loop closures
 - `init()` revisited --- ordering guarantees across files and packages
-- Function types as parameters --- callbacks, middleware, the strategy pattern
+- Function types as parameters --- callbacks, dispatch tables, middleware, the strategy pattern
+- Pointer vs value semantics --- pass-by-value, when mutation requires a pointer, reference-like types
+- Escape analysis --- stack vs heap; `new(T)` and `&T{}` are equivalent; inspecting decisions with `-gcflags=-m`
 
-### Chapter 6: Methods and Embedding
+### Chapter 6: Objects using Methods and Embedding
 *Go separates data, behavior, and code reuse. Methods are declared outside struct bodies; constructors are plain functions; embedding replaces inheritance.*
 
-- Receiver syntax --- value receivers and pointer receivers; method sets
+- Receiver syntax --- value receivers and pointer receivers; method sets; calling methods
+- Methods on non-struct named types --- any named type (including function and slice types) can have methods
 - File organization --- methods can be in any file in the package; one file per type is a common convention
-- `New*` constructor functions --- the Go convention replacing `new ClassName()`
-- Resource cleanup with `defer` instead of destructors
-- Embedding --- field and method promotion; embedded value vs embedded pointer
+- `New*` constructor functions --- the Go convention replacing `new ClassName()`; constructors that validate
+- Resource cleanup with `defer` instead of destructors; `runtime.SetFinalizer` (and why to avoid it)
+- Embedding --- field and method promotion; embedded value vs embedded pointer; name collisions
 - Embedding vs inheritance --- composition, not substitutability; how interfaces fill the gap
 
 
@@ -108,10 +121,9 @@ Audience: Java programmers learning Go for industry use
 - `any` (`interface{}`) --- the top type; use sparingly
 - Type assertions: `x.(T)`, panic form vs comma-ok form
 - Type switches: `switch v := i.(type)`
-- Key standard interfaces: `io.Reader`, `io.Writer`, `fmt.Stringer`, `sort.Interface`
+- Key standard interfaces: `io.Reader`, `io.Writer`, `fmt.Stringer`, `error`, `sort.Interface`
 - "Accept interfaces, return structs" idiom
 - Interface nil traps --- typed nil vs untyped nil; the classic gotcha
-- `http.HandlerFunc` --- function type implementing an interface; the strategy pattern in Go
 
 ---
 
@@ -128,6 +140,7 @@ Audience: Java programmers learning Go for industry use
 - Sentinel errors --- `io.EOF`, `sql.ErrNoRows`; comparing with `errors.Is`
 - Custom error types --- implement `error`; add context fields
 - `panic` / `recover` --- not for normal control flow; reserved for truly unrecoverable state
+- The `must` idiom --- helper that panics on error; used at startup for things that must not fail
 - Go proverbs: "Errors are values"; "Don't just check errors, handle them gracefully"
 
 ---
@@ -150,7 +163,7 @@ Audience: Java programmers learning Go for industry use
 
 - Go memory model --- visibility between goroutines; happens-before relationships
 - `sync.Mutex` and `sync.RWMutex` --- same role as Java `synchronized`
-- `sync.WaitGroup` --- fan-out/fan-in without a channel
+- `sync.WaitGroup` --- fan-out/fan-in without a channel; `WaitGroup.Go` (Go 1.25)
 - `sync.Once` --- lazy initialization; replaces double-checked locking
 - `sync.Cond` --- condition variables; broadcast wakeup and state-change coordination
 - `sync/atomic` --- typed atomics (Go 1.19+): `atomic.Int64`, `atomic.Pointer[T]`
@@ -166,6 +179,8 @@ Audience: Java programmers learning Go for industry use
 - `golang.org/x/sync/errgroup` --- fan-out with error collection and context cancellation
 - Goroutine leak detection --- every goroutine must have an exit path; `goleak` in tests
 - `GOMAXPROCS` --- OS thread count; defaults to CPU count
+- Worker pool --- bounded goroutines draining a jobs channel
+- Rate limiting --- `time.Ticker` and token-bucket pacing of work
 
 ---
 
@@ -198,6 +213,9 @@ Audience: Java programmers learning Go for industry use
 - `path/filepath` --- cross-platform path manipulation
 - `log/slog` (Go 1.21) --- structured logging: levels, `TextHandler`/`JSONHandler`, `LevelVar`, `SetDefault`, `slog.With`, `slog.Group`
 - `regexp` --- compile once, use many times
+- `cmp` (Go 1.21) --- `cmp.Compare`, `cmp.Or`; three-way comparison
+- `maps` (Go 1.21) --- `Clone`, `Keys` (and the other map utilities)
+- `iter` (Go 1.23) --- `iter.Seq`/`iter.Seq2`, range-over-func, `iter.Pull`
 - `encoding/base64` --- `StdEncoding`, `URLEncoding`, `RawStdEncoding`, `RawURLEncoding`
 - `crypto/rand` --- cryptographically secure random bytes; `math/rand/v2` for non-cryptographic use
 - `crypto/sha256`, `crypto/aes`, `crypto/cipher` --- SHA-256 hashing; AES-256-GCM authenticated encryption
@@ -205,14 +223,16 @@ Audience: Java programmers learning Go for industry use
 ### Chapter 15: JSON, HTTP, and the Web
 *`encoding/json` and `net/http` are the backbone of Go web services.*
 
-- `encoding/json` --- `Marshal`, `Unmarshal`, streaming `Encoder`/`Decoder`
+- `encoding/json` --- `Marshal`, `Unmarshal`, streaming `Encoder`/`Decoder`, `DisallowUnknownFields`
 - Struct tags for JSON: `json:"name,omitempty"`, `json:"-"`; tag mechanics
 - `net/http` server --- `http.Handler`, `http.HandlerFunc`, `ListenAndServe`
-- Go 1.22 `ServeMux` --- method routing (`GET /path/`), path wildcards (`/tasks/{id}/`)
-- Middleware chaining --- wrapping `http.Handler` for logging, auth, metrics
-- `net/http` client --- `http.Client`, `http.Request`, response body must be closed
+- Go 1.22 `ServeMux` --- method routing (`GET /path/`), path wildcards (`/songs/{id}/`), `r.PathValue`
+- Middleware chaining --- wrapping `http.Handler` for logging, auth, metrics; the `chain` helper
+- Live profiling with `net/http/pprof` --- blank import registers `/debug/pprof/`; `go tool pprof -http`; keep off public ports
+- `net/http` client --- `http.Get`, `http.Client`, `http.NewRequest`, response body must be closed
 - `encoding/xml` --- XML marshalling; same tag mechanism as JSON
-- `net` --- `net.Dial`, `net.Listen`; TCP/UDP below the HTTP layer
+- `net` --- `net.Dial`, `net.Listen`, `net.Conn` (an `io.Reader`/`io.Writer`); TCP/UDP below the HTTP layer
+- `crypto/tls` --- `http.ListenAndServeTLS`, `tls.Config`, custom CA trust; `tls.Dial`/`tls.Listen` for raw TLS
 
 ### Chapter 16: Database Access
 *`database/sql` is Go's JDBC. Connection pooling is built in.*
@@ -251,12 +271,16 @@ Audience: Java programmers learning Go for industry use
 - `testing.T` --- `t.Error`, `t.Fatal`, `t.Log`; test function naming
 - Table-driven tests --- slice of structs; `t.Run` subtests
 - `t.Helper()` --- clean failure attribution in helper functions
-- Benchmarks: `func BenchmarkFoo(b *testing.B)`; `b.N`, `b.ResetTimer`
+- `t.Cleanup` --- register teardown that runs at test end; the idiomatic alternative to `defer`
+- `t.Parallel` --- running tests concurrently
+- Benchmarks: `func BenchmarkFoo(b *testing.B)`; `b.Loop` (Go 1.24, the modern idiom), `b.ResetTimer`
 - Fuzzing: `func FuzzFoo(f *testing.F)`; `f.Add` seed corpus; runs until failure
+- Example tests --- `func ExampleFoo()` with `// Output:` comments
+- Testing HTTP handlers with `httptest` --- `NewRecorder`, `NewServer`
 - Race detector: `go test -race`; always on in CI
 - Goroutine leak detection: `goleak.VerifyNone(t)` in `TestMain`
 - Integration tests --- build tags to separate unit and integration tests
-- `go test ./...`, `-count=1` (disable caching), `-timeout`
+- `go test ./...`, `-count=1` (disable caching), `-timeout`, `-run`, `-bench`
 
 ---
 
@@ -269,11 +293,17 @@ Audience: Java programmers learning Go for industry use
 - "Concurrency is not parallelism"
 - "The bigger the interface, the weaker the abstraction"
 - "Accept interfaces, return concrete types"
-- "A little copying is better than a little dependency"
-- "Clear is better than clever"
+- "Make the zero value useful"
+- "The empty interface says nothing"
 - "Errors are values"
 - "Don't just check errors, handle them gracefully"
-- Full list with discussion of each in the context of Java habits to unlearn
+- "A little copying is better than a little dependency"
+- "Clear is better than clever"
+- "gofmt's style is no one's favorite, yet gofmt is everyone's favorite"
+- "Cgo is not Go" --- and: cgo and `syscall` must always be guarded with build constraints
+- "With the unsafe package there are no guarantees"
+- "Reflection is never clear"
+- Each proverb discussed in the context of Java habits to unlearn
 
 ### Appendix B: Tooling
 *The Go toolchain is opinionated. Lean into it.*
@@ -286,6 +316,17 @@ Audience: Java programmers learning Go for industry use
 - Delve (`dlv`) --- the standard Go debugger; `dlv debug`, `dlv test`, goroutine inspection
 - `go tool compile -gcflags=-m` --- see escape analysis decisions
 
+### Appendix C: Go Code Review Rules
+*The community code review rules, adapted for this book; the `[rule-name]` markers in the text link here.*
+
+- Formatting, comments, context, copying, cryptographic randomness
+- Declaring empty slices, error strings, "don't panic", examples
+- Goroutine lifetimes, handling errors, imports (blank, dot), in-band errors
+- Indent error flow, initialisms, interfaces, line length, mixed caps
+- Named result parameters, package comments and names, passing values
+- Receiver names and types, synchronous functions, useful test failures, variable names
+
 ---
 
 ## Index
+*Built from `\index{}` markers via LaTeX `makeidx`; `\printindex` lives in appC.md.*

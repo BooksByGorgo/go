@@ -7,6 +7,7 @@
 - Zero values (every type has a meaningful zero)
 - `const` and `iota` for enumerations
 - Type definitions vs type aliases (`type Celsius float64` vs `type = float64`)
+- Explicit type conversions (`T(x)`) --- no implicit numeric coercion; conversion is always spelled out
 - Named return values
 - Multiple return values
 - Blank identifier (`_`)
@@ -62,6 +63,8 @@
 - `&` (address-of) and `*` (dereference) --- no arithmetic
 - When to use pointer vs value receivers
 - Pointer receivers for mutation; value receivers for reads on small structs
+- Methods attach to any named type, not just structs (e.g. `type Celsius float64`, function types)
+- Escape analysis --- the compiler decides stack vs heap; `new(T)` and `&T{}` are equivalent
 
 ---
 
@@ -89,7 +92,7 @@
 
 ### sync Package
 - `sync.Mutex` and `sync.RWMutex`
-- `sync.WaitGroup`
+- `sync.WaitGroup` --- including `WaitGroup.Go` (Go 1.25)
 - `sync.Once`
 - `sync.Cond` --- condition variables for broadcast wakeup and state-change coordination
 
@@ -106,6 +109,8 @@
 - `golang.org/x/sync/errgroup` --- fan-out with automatic error collection and context cancellation
 - Goroutine leak detection --- goroutines that block forever; use `context` to bound lifetime; `goleak` in tests
 - `GOMAXPROCS` --- number of OS threads running Go code; defaults to CPU count; use `go.uber.org/automaxprocs` in containers
+- Worker pool --- a fixed set of goroutines draining a shared jobs channel
+- Rate limiting --- `time.Ticker` / token-bucket pacing to bound throughput
 
 ### Memory Model
 - Go memory model and happens-before --- visibility across goroutines requires synchronization
@@ -127,10 +132,10 @@
 - `os/exec` --- spawning subprocesses: `exec.Command`, `Cmd.Output`, `Cmd.Run`; piping stdio
 - `flag` --- standard command-line flag parsing
 - `embed` --- `//go:embed` directive embeds static files into the binary at compile time
-- `encoding/json` --- `Marshal`, `Unmarshal`, `Encoder`, `Decoder`, struct tags
+- `encoding/json` --- `Marshal`, `Unmarshal`, `Encoder`, `Decoder`, struct tags, `Decoder.DisallowUnknownFields`
 - `encoding/xml` --- XML marshalling; appears in enterprise integrations
 - `database/sql` --- `sql.DB` connection pool, `Query`/`QueryRow`/`Exec`, `Rows.Scan`, `sql.Tx`, context-aware cancellation, `sql.Null[T]` (Go 1.22)
-- `net/http` --- `ListenAndServe`, `Handler`, `HandleFunc`, `Client`, `Request`; Go 1.22 `ServeMux` method routing and path wildcards
+- `net/http` --- `ListenAndServe`, `Handler`, `HandleFunc`, `Client`, `Request`; Go 1.22 `ServeMux` method routing, path wildcards, and `r.PathValue`
 - `net/http` middleware chaining --- wrapping `http.Handler` to add logging, auth, metrics
 - `net/http/pprof` --- import for side-effect to expose profiling endpoints on a live HTTP server
 - `net` --- `net.Dial`, `net.Listen`, TCP/UDP below the HTTP layer
@@ -149,7 +154,7 @@
 - `crypto/rand` --- cryptographically secure random bytes
 - `math/rand/v2` (Go 1.22+) --- non-cryptographic random numbers: `rand.N`, `rand.Float64`
 - `crypto/sha256`, `crypto/aes`, `crypto/cipher` --- SHA-256 hashing; AES-256-GCM authenticated encryption
-- `crypto/tls` --- TLS client and server configuration; `tls.Config`, `tls.Dial`
+- `crypto/tls` --- TLS client and server configuration; `tls.Config`, `tls.Dial`, `tls.Listen`; `http.ListenAndServeTLS` for HTTPS
 
 ---
 
@@ -194,6 +199,8 @@
 - "Clear is better than clever"
 - "gofmt's style is no one's favorite, yet gofmt is everyone's favorite"
 - "Cgo is not Go"
+- "Cgo must always be guarded with build constraints"
+- "Syscall must always be guarded with build constraints"
 - "With the unsafe package there are no guarantees"
 - "Reflection is never clear"
 
@@ -215,9 +222,13 @@
 - `testing.T` --- `t.Error`, `t.Fatal`, `t.Log`; test function naming (`TestFoo`)
 - Table-driven tests --- slice of structs; `t.Run` subtests
 - `t.Helper()` --- attributes failure output to the call site, not the helper function
+- `t.Cleanup(func())` --- register teardown that runs at test end; composes better than `defer`
+- `t.Parallel()` --- mark a test to run concurrently with other parallel tests
 - `TestMain(m *testing.M)` --- package-level setup/teardown; Go's `@BeforeAll` equivalent
-- Benchmarks: `func BenchmarkFoo(b *testing.B)`; `b.N`, `b.ResetTimer`
+- Benchmarks: `func BenchmarkFoo(b *testing.B)`; `for b.Loop()` (Go 1.24, preferred), `b.N`, `b.ResetTimer`
 - Fuzzing: `func FuzzFoo(f *testing.F)`; `f.Add` seed corpus; coverage-guided; runs until failure
+- Example tests: `func ExampleFoo()` with `// Output:` comments --- compiled, run, and shown in docs
+- `httptest` --- `NewRecorder` and `NewServer` for testing `http.Handler`s without a real port
 - Race detector: `go test -race`; run in CI always
 - Goroutine leak detection: `goleak.VerifyTestMain(m)` in `TestMain`
 - Integration tests --- build tags to separate unit and integration test binaries
