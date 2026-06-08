@@ -130,7 +130,14 @@ Do not repeat any reference already listed here.
 - Chicane --- "Saltwater (feat. Moya Brennan)" (used in songHandler streaming Encoder example and catalog map)
 - "Hola!" --- Spanish greeting used in minimal HTTP server handler example
 
-## Chapter 16: Database Access
+## Chapter 16: gRPC
+- Bad Bunny --- "Monaco" (used in jukebox catalog map: GetSong server example)
+- Rosalía --- "Despechá" (used in jukebox catalog map: GetSong server example; abbreviated to "Rosalia" in code)
+- Rauw Alejandro --- "Todo De Ti" (used in Try It GetSong handler)
+- "no existe esa cancion" / "el servidor tardo demasiado" --- Spanish status-code messages in the errors example
+- "Bearer hunter2" --- placeholder auth token in the metadata example
+
+## Chapter 17: Database Access
 - San Mehat --- "Sounds of Slashdot" (used in bulk insert example, complete music store, exercise 3)
 - Matt Darey & Lost Tribe --- "Gamemaster" (used in bulk insert example, complete music store)
 - "DJ Essentials: Trance" (fictional album used as album value in Song struct inserts)
@@ -138,14 +145,14 @@ Do not repeat any reference already listed here.
 - Gouryella & Ferry Corsten --- "Gouryella" (used in bulk insert example as NULL-album song; abbreviated to "Gouryella" in code)
 - Alizée --- album "Mes Courants Électriques..." (referenced as album value)
 
-## Chapter 17: Generics
+## Chapter 18: Generics
 - Jaroslav Beck --- "Escape" (used in Map function example, Stack example, MapFromSlice example, ArtistTitles iterator, Filter exercise, Dedupe exercise, Set exercise)
 - Jaroslav Beck --- "$100 Bills" (used in Map function example, ArtistTitles iterator, Set exercise)
 - Alizée --- "J'ai pas vingt ans !" (used in Stack example, Map function example, ArtistTitles iterator, Filter exercise, Dedupe exercise, Set exercise)
 - Alizée --- "J'en ai marre !" (used in Map function example, Filter exercise, Dedupe exercise, Set exercise)
 - Jaroslav Beck --- "Legend" (used in Set exercise as a negative Contains test)
 
-## Chapter 18: Testing
+## Chapter 19: Testing
 - Richaadeb & Cristina Vee --- "Bad Apple!!" (used in test function name TestBadApple, table case name, and exercise 4 assertNormalized call)
 - DJ Cobra --- "Better Off Alone" (used in TestBetterOffAlone table-driven test, FuzzBetterOffAlone fuzz test, and exercise 1 discussion)
 - Disturbed --- "The Sound of Silence" (used in TestSoundOfSilence exercise 2 what-does-this-print question)

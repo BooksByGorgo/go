@@ -3874,7 +3874,175 @@ Key points illustrated by this solution:
 
 ---
 
-# Chapter 16: Database Access --- Answers
+# Chapter 16: gRPC --- Answers
+
+**Exercise 1** (Think about it): For a public API consumed by third-party web and mobile clients you do not control, versus high-volume internal traffic between your own services, which would you reach for --- REST/JSON or gRPC --- and why?
+
+**Public, third-party API: REST/JSON.**
+
+- *Browser support:* Browsers speak HTTP/1.1 and JSON natively. gRPC needs HTTP/2 trailers that browsers do not expose to JavaScript, so it requires gRPC-Web plus a translating proxy --- friction you are pushing onto every consumer.
+- *Debuggability:* Anyone can hit a JSON endpoint with `curl`, a browser, or Postman and read the response. A binary protobuf payload is opaque without the `.proto` and a decoder.
+- *Adoption:* Third parties do not want to compile your `.proto` or pull a generated client just to call you. A documented JSON contract is the lowest barrier to entry.
+
+**Internal, high-volume service-to-service traffic: gRPC.**
+
+- *Payload size and speed:* Binary protobuf is smaller and faster to (de)serialize than text JSON, which matters at high request rates.
+- *Schema evolution:* The `.proto` is a compile-time contract for every language; a renamed field is caught at generation time, not at 3 a.m. in production. Tag numbers let you add fields without breaking old peers.
+- *Streaming and deadlines:* gRPC has first-class streaming and propagates `context` deadlines across the network for free --- both awkward to bolt onto plain REST.
+
+Many systems do both: gRPC between internal services, with a REST/JSON edge (often via `grpc-gateway`) for the public face. The right answer is "REST at the boundary, gRPC in the core," not one universally.
+
+---
+
+**Exercise 2** (What does this do?):
+
+```protobuf
+// before
+message Song {
+  string id    = 1;
+  string title = 2;
+}
+// after
+message Song {
+  string id     = 2;
+  string title  = 1;
+}
+```
+
+Protobuf identifies fields on the wire by their **tag number**, never by their name.
+A new server built from the "after" proto encodes `id` under tag 2 and `title` under tag 1.
+An old client, built from the "before" proto, decodes tag 1 as `id` and tag 2 as `title`.
+So the old client reads the server's `title` into its `id` field and the server's `id` into its `title` field: the two values are silently swapped.
+
+Crucially, there is no error. Both fields are `string`, so the bytes decode cleanly --- the data is just wrong.
+(Had the swapped fields been different types, the client would instead see decode errors or garbage values.)
+The lesson: tag numbers *are* the contract. You may rename a field freely, but you must never reuse or renumber a tag.
+
+---
+
+**Exercise 3** (Calculation): A unary handler does 80 ms of work; the client calls it with a 50 ms timeout, and the handler never checks `ctx.Done()`.
+
+(a) The client observes **`codes.DeadlineExceeded`**. At 50 ms the client's context fires and the RPC is cancelled locally, regardless of what the server is still doing.
+
+(b) **Yes** --- the handler runs all 80 ms. Cancellation in Go is cooperative (Chapter 12): a context that is "done" does nothing on its own; code must check it. Since this handler ignores `ctx`, it finishes, and its response is then thrown away because the client already gave up and the stream is closed.
+
+(c) Make the handler **honor the context** --- check `ctx.Err()` (or `select` on `ctx.Done()`) at a cancellation point and return early, e.g.:
+
+```go
+if err := ctx.Err(); err != nil {
+    return nil, status.FromContextError(err).Err()  // DeadlineExceeded / Canceled
+}
+```
+
+and pass `ctx` to any downstream calls (database, other RPCs) so they cancel too.
+
+---
+
+**Exercise 4** (Where is the bug?):
+
+```go
+func (s *jukeboxServer) ListSongs(
+    req *musicpb.ListRequest,
+    stream grpc.ServerStreamingServer[musicpb.Song],
+) error {
+    for _, song := range s.catalog {
+        stream.Send(song)
+    }
+    return errors.New("done sending")
+}
+```
+
+**Bug 1 --- the `Send` error is ignored.**
+If the client disconnects or its deadline fires partway through, `stream.Send` starts returning an error, but the loop keeps calling `Send` into a dead stream and never notices.
+It should be `if err := stream.Send(song); err != nil { return err }`.
+*Client effect:* wasted work, and a real send failure is swallowed instead of surfaced.
+
+**Bug 2 --- it returns a non-`nil` error to end the stream.**
+A server-streaming handler ends the stream cleanly by returning `nil`; returning any error terminates the RPC with a failure status.
+Worse, `errors.New("done sending")` carries no gRPC status, so gRPC labels it `codes.Unknown`.
+*Client effect:* after receiving every song, the client's `Recv` returns that `Unknown`-coded error instead of the expected `io.EOF`, so a perfectly good response looks like a failure. The fix is to `return nil`.
+
+---
+
+**Exercise 5** (Write a program): The proto:
+
+```protobuf
+syntax = "proto3";
+package library.v1;
+option go_package = "example/librarypb";
+
+message Song {
+  string id     = 1;
+  string title  = 2;
+  string artist = 3;
+  int32  bpm    = 4;
+}
+
+message Summary {
+  int32 count     = 1;
+  int32 total_bpm = 2;
+}
+
+service Library {
+  rpc AddSongs(stream Song) returns (Summary);
+}
+```
+
+The server accumulates the count and BPM sum, rejecting any song with an empty `id`:
+
+```go
+func (s *libraryServer) AddSongs(
+    stream grpc.ClientStreamingServer[librarypb.Song, librarypb.Summary],
+) error {
+    var count, total int32
+    for {
+        song, err := stream.Recv()
+        if err == io.EOF {
+            return stream.SendAndClose(&librarypb.Summary{Count: count, TotalBpm: total})
+        }
+        if err != nil {
+            return err
+        }
+        if song.GetId() == "" {
+            return status.Errorf(codes.InvalidArgument, "song with empty id")
+        }
+        count++
+        total += song.GetBpm()
+    }
+}
+```
+
+The client streams three songs and prints the count and average:
+
+```go
+stream, err := client.AddSongs(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+songs := []*librarypb.Song{
+    {Id: "1", Title: "Monaco", Artist: "Bad Bunny", Bpm: 130},
+    {Id: "2", Title: "Despecha", Artist: "Rosalia", Bpm: 130},
+    {Id: "3", Title: "Todo De Ti", Artist: "Rauw Alejandro", Bpm: 92},
+}
+for _, song := range songs {
+    if err := stream.Send(song); err != nil {
+        log.Fatal(err)
+    }
+}
+sum, err := stream.CloseAndRecv()
+if err != nil {
+    log.Fatal(err)
+}
+avg := float64(sum.GetTotalBpm()) / float64(sum.GetCount())
+fmt.Printf("%d songs, avg %.1f BPM\n", sum.GetCount(), avg)
+// 3 songs, avg 117.3 BPM
+```
+
+The key moves: the client `Send`s in a loop and finishes with `CloseAndRecv`; the server `Recv`s until `io.EOF` and replies once with `SendAndClose`.
+
+---
+
+# Chapter 17: Database Access --- Answers
 
 **Exercise 1** (Think about it): JDBC requires explicit transaction management and connection pooling through a `DataSource`, usually provided by an application server or a library like HikariCP.
 Go's `database/sql` builds connection pooling directly into `sql.DB`.
@@ -4187,7 +4355,7 @@ Note that the SQLite driver requires `CGO_ENABLED=1` (the default on most system
 
 ---
 
-# Chapter 17: Generics --- Answers
+# Chapter 18: Generics --- Answers
 
 **Exercise 1** (Think about it): Java generics use **type erasure**: at runtime, `List<String>` and `List<Integer>` are both just `List`.
 Generic type information is only available at compile time.
@@ -4454,7 +4622,7 @@ The `Set[T comparable]` constraint is required because the map key type `T` must
 
 ---
 
-# Chapter 18: Testing --- Answers
+# Chapter 19: Testing --- Answers
 
 **Exercise 1** (Think about it): JUnit 5's `@ParameterizedTest` with `@CsvSource` and Go's table-driven tests with `t.Run` both let you run the same logic against many inputs.
 Describe two concrete advantages that Go's table-driven approach gives you over `@CsvSource`.
