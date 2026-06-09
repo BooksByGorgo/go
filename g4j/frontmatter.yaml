@@ -1,6 +1,7 @@
 ---
 title: "Gorgo Go for Java Programmers"
 bibliography: references.bib
+csl: references.csl
 toc: true
 toc-depth: 1
 colorlinks: true
