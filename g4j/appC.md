@@ -14,7 +14,7 @@ The main text cites a rule by its short name in bold italics, written as ***[sho
 
 **CR-1. gofmt** Run `gofmt` (or `go fmt`) on all code to automatically fix mechanical style issues before review.
 
-**CR-2. goimports** Prefer `goimports` over `gofmt`; it is a superset that also organizes import blocks.
+**CR-2. goimports** Prefer `goimports` over `gofmt`; it is a superset that also adds missing and removes unused imports.
 
 ## Comments
 
@@ -60,7 +60,7 @@ The main text cites a rule by its short name in bold italics, written as ***[sho
 
 \index{nil slice}
 
-**CR-14. nil-slice-preferred** Prefer `var t []string` (nil slice) over `t := []string{}` (non-nil empty slice); they are functionally equivalent for `len` and `cap` but a nil slice encodes to JSON `null` and is the idiomatic zero value.
+**CR-14. nil-slice-preferred** Prefer `var t []string` (nil slice) over `t := []string{}` (non-nil empty slice); they are functionally equivalent for `len` and `cap`, and nil is the idiomatic zero value --- but note a nil slice encodes to JSON `null` while a non-nil empty slice encodes to `[]`, so prefer the non-nil form when encoding JSON.
 
 **CR-15. no-nil-vs-empty-api** Avoid API designs that distinguish between nil and empty slices; the distinction is subtle and causes bugs.
 
@@ -89,7 +89,7 @@ The main text cites a rule by its short name in bold italics, written as ***[sho
 
 **CR-20. goroutine-must-exit** When you spawn a goroutine, make it clear when or whether it exits; goroutines that cannot exit are leaks.
 
-**CR-21. leaked-goroutine-grows-memory** Goroutines block garbage collection of the values they close over; a leaked goroutine causes unbounded memory growth.
+**CR-21. leaked-goroutine-grows-memory** Goroutines block garbage collection of the values they close over; goroutines that leak repeatedly (e.g., one per request) cause unbounded memory growth.
 
 **CR-22. obvious-goroutine-lifetimes** Keep concurrent code simple enough that goroutine lifetimes are obvious; document lifetime guarantees when simplicity is not achievable.
 
@@ -121,7 +121,7 @@ The main text cites a rule by its short name in bold italics, written as ***[sho
 
 \index{import dot}
 
-**CR-29. no-dot-import** Avoid `import .`; it makes code harder to read because it is unclear which identifiers come from the imported package. Use it only in tests that have circular dependencies and cannot be part of the tested package.
+**CR-29. no-dot-import** Avoid `import .`; it makes code harder to read because it is unclear which identifiers come from the imported package. Use it only in tests that, due to circular dependencies, cannot be made part of the package being tested.
 
 ## In-Band Errors
 
@@ -205,7 +205,7 @@ The main text cites a rule by its short name in bold italics, written as ***[sho
 
 **CR-51. no-pointer-to-save-bytes** Do not pass a pointer just to save a few bytes; if the function only dereferences `*x` throughout, the argument should not be a pointer.
 
-**CR-52. no-pointer-to-string-or-iface** Never pass pointers to strings (`*string`) or interface values (`*io.Reader`); both are already reference-sized values.
+**CR-52. no-pointer-to-string-or-iface** Do not pass pointers to strings (`*string`) or interface values (`*io.Reader`) just to save bytes; both are small fixed-size values that can be passed directly.
 
 **CR-53. pointer-for-large-structs** Exception: large structs or structs expected to grow should be passed by pointer for efficiency.
 

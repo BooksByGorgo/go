@@ -65,8 +65,8 @@ Common mistakes `go vet` catches:
 - `Printf`-family format string mismatches (`fmt.Printf("%d", "hello")`)
 - Passing a mutex by value (copying a `sync.Mutex` breaks its invariants)
 - Unreachable code after `return`
-- Incorrect use of `sync/atomic` on non-aligned types
-- Calling `t.Fatal` or `t.Error` from a goroutine inside a test
+- Misuse of `sync/atomic`, like `x = atomic.AddUint64(&x, 1)` (the assignment races with the atomic update)
+- Calling `t.Fatal` or `t.FailNow` from a goroutine inside a test (`t.Error` is goroutine-safe)
 
 ::: {.tip}
 **Tip:** Run `go vet ./...` as part of your normal build step, not just on CI.
@@ -92,10 +92,10 @@ Install it:
 
 ```sh
 # macOS / Linux via the official installer (preferred)
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.12.2
 
 # or via go install (slower, but always available)
-go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 ```
 
 Run it:
@@ -173,17 +173,13 @@ go doc -all fmt                 # show all exported names and their docs
 go doc -src fmt.Println         # show the source of the function
 ```
 
-`godoc` starts a local web server that serves documentation for all installed packages in the same HTML format as pkg.go.dev:
+Since Go 1.25, `go doc` can also serve documentation as HTML in the same format as pkg.go.dev --- no extra install needed:
 
 ```sh
-godoc -http=:6060               # serve docs at http://localhost:6060
+go doc -http=:6060              # serve docs at http://localhost:6060
 ```
 
-Install `godoc` if it is not already present:
-
-```sh
-go install golang.org/x/tools/cmd/godoc@latest
-```
+(The deprecated `golang.org/x/tools/cmd/godoc` command was the way to do this before Go 1.25; you may still see it referenced.)
 
 ::: {.tip}
 **Tip:** Write doc comments for every exported name.
@@ -261,7 +257,7 @@ Debug tests in a package:
 
 ```sh
 dlv test ./pkg/mypackage           # debug test binary
-dlv test ./pkg/mypackage -- -run TestFoo  # run only TestFoo under the debugger
+dlv test ./pkg/mypackage -- -test.run TestFoo  # run only TestFoo under the debugger
 ```
 
 Attach to an already-running process:
@@ -294,8 +290,8 @@ For day-to-day work you rarely need the `dlv` CLI directly.
 :::
 
 ::: {.tip}
-**Wut:** `go build` without flags strips debug information to reduce binary size.
-Delve re-adds it automatically when you use `dlv debug`, but if you attach to a production binary built with `-ldflags="-s -w"` you will have no symbols.
+**Wut:** A plain `go build` keeps DWARF debug info but compiles with optimizations and inlining, which makes stepping jumpy and variables invisible.
+`dlv debug` rebuilds with `-gcflags="all=-N -l"` to disable them, but if you attach to a production binary built with `-ldflags="-s -w"` you will have no symbols at all.
 Keep an unstripped build around when you need to debug a production issue.
 :::
 
@@ -307,7 +303,7 @@ The `goroutines` command lists every live goroutine with its current state and t
 The `goroutine <id>` command switches your debugging context to that goroutine, and `stack` then shows its full call stack.
 This makes diagnosing deadlocks and goroutine leaks far easier than thread dumps in Java.
 
-## go tool compile -gcflags=-m
+## go build -gcflags=-m
 
 \index{escape analysis}
 \index{go tool compile}
@@ -328,7 +324,7 @@ Sample output for a small function:
 
 ```
 ./main.go:12:6: can inline greet
-./main.go:18:12: greet escapes to heap
+./main.go:18:12: "hola " + name escapes to heap
 ./main.go:22:13: moved to heap: result
 ```
 
@@ -354,12 +350,12 @@ The table below maps each Go tool to its closest Java equivalent.
 
 | Go Tool | Purpose | Java Equivalent |
 |---|---|---|
-| `gofmt` | Canonical code formatter | Google Java Format, `prettier` |
+| `gofmt` | Canonical code formatter | Google Java Format, Spotless |
 | `goimports` | Format + manage imports | IntelliJ optimize imports, `google-java-format` |
 | `go vet` | Built-in static analysis | SpotBugs, ErrorProne |
 | `golangci-lint` | Linter aggregator | Checkstyle + SpotBugs + PMD combined |
 | `go doc` | Terminal doc viewer | `javadoc` CLI output |
-| `godoc` | Local documentation server | `javadoc` HTML output, pkg.go.dev |
+| `go doc -http` | Local documentation server (Go 1.25+) | `javadoc` HTML output, pkg.go.dev |
 | `gopls` | LSP language server | Eclipse JDT LS, IntelliJ built-in engine |
 | `dlv` (Delve) | Debugger with goroutine support | `jdb`, IntelliJ / Eclipse debugger |
 | `go build -gcflags=-m` | Escape analysis output | JVM `-XX:+PrintEscapeAnalysis` (JIT only) |

@@ -11,7 +11,7 @@ If you search for "Rob Pike Go Proverbs" you will find the original talk and the
 The proverbs are memorable precisely because they are terse.
 Each one encodes a design decision, a tradeoff, or a lesson learned from years of building large systems.
 For Java programmers, several of them describe habits you need to actively unlearn.
-This appendix states each proverb, unpacks what it means in practice, and connects it explicitly to the Java thinking it pushes back against.
+This appendix takes the proverbs most relevant to a Java programmer, unpacks what each means in practice, and connects it explicitly to the Java thinking it pushes back against.
 
 ## Don't communicate by sharing memory; share memory by communicating
 
@@ -22,7 +22,7 @@ This appendix states each proverb, unpacks what it means in practice, and connec
 This is the most famous Go proverb and the one that most directly contradicts the Java approach to concurrency.
 
 In Java, the default concurrency model is shared mutable state.
-Two threads access the same `ArrayList` or the same field, and you protect it with `synchronized`, `ReentrantLock`, or a `volatile` keyword.
+Two threads access the same `ArrayList` or the same field, and you protect it with `synchronized`, `ReentrantLock`, or a `volatile` field.
 The data lives in one place; the threads fight to access it; the locks prevent corruption.
 
 Go's preferred model flips this around.
@@ -42,6 +42,7 @@ func increment() {
 
 // Go-style thinking: send the work, not the shared state
 jobs := make(chan int, 100)
+done := make(chan struct{})
 
 go func() {
     total := 0
@@ -49,12 +50,14 @@ go func() {
         total += n
     }
     fmt.Println(total)
+    close(done)
 }()
 
 for i := 0; i < 100; i++ {
     jobs <- i
 }
 close(jobs)
+<-done // wait for the consumer to finish before exiting
 ```
 
 The second version has no lock, no shared variable visible to multiple goroutines, and no data race.
@@ -402,7 +405,7 @@ The person who reads your code in two years might be you after you have forgotte
 "Clear" code says what it does, even if it takes a few extra lines.
 
 ```go
-// Clever: hard to see that this initializes and conditionally overwrites
+// Clever: builds a throwaway map and indexes it in one expression
 x := map[string]int{"a": 1, "b": 2}["b"]
 
 // Clear: two lines, obvious intent
@@ -469,7 +472,7 @@ The proverb is a reminder that reaching for Cgo means stepping outside the Go ec
 For most application code, a pure Go alternative exists.
 
 ::: {.tip}
-**Wut:** Java programmers are familiar with JNI, which carries similar complexity costs.
+**Tip:** Java programmers are familiar with JNI, which carries similar complexity costs.
 The Go community's attitude toward Cgo mirrors the Java community's attitude toward JNI: use it when you must, avoid it when you can.
 :::
 
@@ -513,7 +516,7 @@ Run `go build ./...` for a representative set of target platforms in CI to catch
 The `syscall` package exposes operating-system system calls directly.
 System calls are platform-specific: the numbers, arguments, and available calls differ between Linux, macOS, Windows, and other platforms.
 
-A file that calls `syscall.Mmap` or `syscall.SIGTERM` will fail to compile on a platform where that call does not exist or has a different signature.
+A file that calls `syscall.Mmap` or `syscall.Kill` will fail to compile on a platform where that call does not exist or has a different signature.
 Build constraints ensure the file is only compiled on the platforms it supports.
 
 ```go

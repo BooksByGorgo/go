@@ -27,7 +27,7 @@ The explanations are meant to help you understand *why* the answer is what it is
 
 ---
 
-# Chapter 0: How to Use This Booklet
+# Chapter 0: How to use this booklet --- Answers
 
 There are no exercises in Chapter 0.
 
@@ -195,8 +195,6 @@ Notes:
 - The play count is kept as a string here; Chapter 3 covers `strconv.Atoi` for converting it to an integer.
 - `fmt.Fprintln(os.Stderr, ...)` sends the usage message to standard error, which is the convention for diagnostic output.
 - `os.Exit(1)` terminates the program immediately with a non-zero exit code, signalling failure to the shell.
-
----
 
 ---
 
@@ -425,7 +423,7 @@ This mirrors Exercise 6: to mutate the caller's value through a pointer paramete
 
 **Exercise 1** (Think about it): Go strings are described as "immutable sequences of bytes."
 Java strings are also immutable.
-Given that both languages have immutable strings, why does Go's `for range` behave differently from Java's enhanced `for` loop over a `String`?
+Given that both languages have immutable strings, why does Go's `for range` behave differently from Java's enhanced `for` loop over `s.toCharArray()`?
 What would have to be true about the loop for both languages to give the same result?
 
 Immutability is not the source of the difference --- the unit of iteration and the encoding being walked are.
@@ -463,8 +461,8 @@ Indexing a string with `s[4]` returns a **byte**, not a character, so you get `1
 
 ---
 
-**Exercise 3** (Calculation): How many bytes does `len("Alizée")` return?
-How many runes does `utf8.RuneCountInString("Alizée")` return?
+**Exercise 3** (Calculation): `len("Alizée")` returns how many bytes?
+And `utf8.RuneCountInString("Alizée")` returns how many runes?
 
 `len("Alizée")` returns `7`.
 The letters `A`, `l`, `i`, `z`, `e` are each one byte (5 bytes), and `é` (U+00E9) encodes to two bytes in UTF-8 (`0xC3 0xA9`), for 7 bytes total.
@@ -508,9 +506,8 @@ So the program prints:
 héROE
 ```
 
-The `é` survives intact only by luck: its two bytes happened to dodge the ASCII case ranges.
-That is exactly what is fundamentally wrong with the approach --- byte-wise case logic is only valid for ASCII.
-Had one of `é`'s bytes landed in `A`--`Z` or `a`--`z` (say a code point whose continuation byte happened to be a printable ASCII value), adding or subtracting 32 to that single byte would corrupt the multibyte sequence and produce invalid UTF-8.
+The `é` survives intact by design, not by luck: UTF-8 guarantees that every byte of a multibyte sequence is at least `0x80`, so it can never collide with the ASCII letter ranges and the function can never corrupt valid UTF-8.
+That guarantee is also exactly what exposes the fundamental flaw --- the function silently fails to change the case of any non-ASCII letter (`é` should have become `É`), because byte-wise case logic only handles ASCII.
 The correct approach is to work on runes (`for range` or `[]rune`), or simply use `strings.ToUpper` / `strings.ToLower`, which are Unicode-aware.
 
 ---
@@ -760,7 +757,7 @@ for i := 2; i < 100; i *= 2 {
 }
 ```
 
-The loop body executes **6** times, and the final value of `i` after the loop exits is **128**.
+The loop body executes **6** times, and the value of `i` when the loop condition is evaluated for the last time (and fails) is **128**.
 
 `i` takes the values 2, 4, 8, 16, 32, 64 while the condition `i < 100` holds --- that is six iterations, so `count` ends at 6.
 After the body runs with `i == 64`, the post statement doubles `i` to 128; the condition `128 < 100` is false, so the loop exits with `i == 128`.
@@ -939,8 +936,9 @@ The language change makes each loop iteration create its own variable automatica
 
 ---
 
-**Exercise 5** (Write a program):
-Write a function `pipeline(fns ...func(int) int) func(int) int` that takes any number of `func(int) int` functions and returns a new function that applies them in order.
+**Exercise 5** (Write a program): Write a function `pipeline(fns ...func(int) int) func(int) int` that takes any number of `func(int) int` functions and returns a new function that applies them in order.
+For example, given a double function and an add-ten function, `pipeline(double, addTen)(3)` should return `16`.
+Write the function, define at least two simple transforms, and demonstrate the pipeline with a few calls.
 
 ```go
 package main
@@ -1153,11 +1151,11 @@ panic: runtime error: invalid memory address or nil pointer dereference
 
 ```go
 s := Song{
-    Artist: &Artist{Name: "Feid"},
+    Artist: &Artist{Name: "System F"},
     Title:  "Out Of The Blue",
 }
 fmt.Println(s.Title)   // Out Of The Blue
-fmt.Println(s.Label()) // Artist: Feid
+fmt.Println(s.Label()) // Artist: System F
 ```
 
 Alternatively, construct `Song` through a constructor that enforces initialization:
@@ -1190,7 +1188,7 @@ func NewCounter(start int) *Counter {  // constructor: returns *Counter so calle
 }
 
 func (c *Counter) Increment()     { c.Value++ }       // pointer receiver: mutates Value
-func (c *Counter) Reset()         { c.Value = 0 }      // pointer receiver: mutates Value
+func (c *Counter) Reset()         { c.Value = 0 }     // pointer receiver: mutates Value
 func (c *Counter) String() string {                   // pointer receiver for consistency
     return fmt.Sprintf("count: %d", c.Value)
 }
@@ -1223,7 +1221,27 @@ Notes:
 - `fmt.Println(c)` calls `c.String()` automatically because `*Counter` satisfies `fmt.Stringer` (which requires `String() string`).
 - `defer fmt.Println("done")` is registered first but runs last, when `main` returns, so `done` is the final line of output --- the same LIFO cleanup mechanism used for releasing resources.
 
-**Exercise 6** (Where is the bug?): The program does not compile because you cannot attach a method to a non-local type.
+---
+
+**Exercise 6** (Where is the bug?): The following program does not compile.
+Explain the exact reason the compiler rejects it, and describe the smallest change that makes it work.
+
+```go
+package main
+
+import "fmt"
+
+func (n int) IsFast() bool {
+    return n >= 125
+}
+
+func main() {
+    bpm := 128
+    fmt.Println(bpm.IsFast())
+}
+```
+
+The program does not compile because you cannot attach a method to a non-local type.
 `int` is a predeclared type defined by the language, not in this package, so `func (n int) IsFast() bool` is rejected with *cannot define new methods on non-local type int*.
 The same rule blocks attaching methods to types from other packages, such as `time.Duration`.
 
@@ -1347,7 +1365,9 @@ The exact new capacity is implementation-defined, but it must be at least 6; in 
 
 ---
 
-**Exercise 4** (Where is the bug?):
+**Exercise 4** (Where is the bug?): The following program tries to build a word-frequency map and then print only the words that appear more than once.
+It compiles but panics at runtime, even though `"Gamemaster"` appears twice.
+What is wrong, and how do you fix it?
 
 ```go
 package main
@@ -1579,7 +1599,7 @@ But `connect` returns `error` (an interface), so returning `err` wraps that type
 
 An interface is `nil` only when both components are nil.
 Here the type component is non-nil (`*DBError`), so `e == nil` is `false`, and the `else` branch runs.
-The printed value is `<nil>` because `fmt` sees a non-nil interface, calls its `Error()` method path / default formatting on a nil pointer, and renders the nil pointer as `<nil>` (the `Error()` method is not actually invoked here since `fmt` detects the nil pointer first).
+The printed value is `<nil>` because `fmt` calls the `Error()` method, which panics dereferencing the nil receiver; `fmt` recovers from that panic and, seeing that the argument is a nil pointer, prints `<nil>` instead.
 
 The fix: do not declare the return holder as the concrete pointer type and then return it.
 Return an explicit `nil` (the untyped interface nil) on the success path:
@@ -1861,6 +1881,7 @@ func main() {
 
 **The bug --- comparing `err == io.EOF` directly instead of using `errors.Is`:** The sentinel check `if err == io.EOF` happens to work for the bare `io.EOF` returned by `strings.Reader`, but it silently misses `io.EOF` if any reader in the future wraps it (e.g., `fmt.Errorf("read: %w", io.EOF)`).
 The chapter recommends never comparing errors with `==` when they might be wrapped.
+To be fair, the `io` package documents that `Read` implementations return the bare, unwrapped `io.EOF`, so on a direct `Read` call `==` is exactly what the standard library itself does --- `errors.Is` here is a robustness and consistency improvement rather than a correctness fix.
 The idiomatic fix is to use `errors.Is`, which walks the entire chain:
 
 ```go
@@ -1900,7 +1921,11 @@ Children
 
 ---
 
-**Exercise 5** (Write a program):
+**Exercise 5** (Write a program): Write a function `parseTimecode(s string) (int, int, error)` that parses a string in the format `"MM:SS"` (e.g., `"03:45"`) and returns the minutes, seconds, and `nil`.
+Return a descriptive error using `fmt.Errorf` if the string is not in the expected format, if either part is not a valid integer, or if minutes or seconds are out of range (minutes >= 0, seconds 0--59).
+Define a sentinel `var ErrInvalidTimecode = errors.New("invalid timecode")` and wrap it with `%w` in your error returns so that callers can use `errors.Is(err, ErrInvalidTimecode)`.
+In `main`, call `parseTimecode` with at least three inputs: one valid (`"03:45"`), one with a bad format (`"345"`), and one with an out-of-range second (`"01:61"`).
+Print the result or error for each.
 
 ```go
 package main
@@ -2364,7 +2389,7 @@ Running with `go run -race` reports no race.
 
 ---
 
-**Exercise 3** (Calculation):
+**Exercise 3** (Calculation): Consider the following program fragment:
 
 ```go
 var counter atomic.Int64
@@ -2380,6 +2405,10 @@ for i := 0; i < 4; i++ {
 wg.Wait()
 fmt.Println(counter.Load())
 ```
+
+(a) What value does `counter.Load()` always print, regardless of goroutine scheduling order?
+(b) If `counter.Add(10)` were replaced by `counter.Add(int64(i))` (capturing `i` from the loop), what value would always be printed?
+Would your answer have differed in Go 1.21 or earlier, and if so, why?
 
 **(a)** `counter.Load()` always prints `40`.
 
@@ -2420,6 +2449,13 @@ You can confirm which loops the compiler rewrites with `go build -gcflags=-d=loo
 **Exercise 4** (Where is the bug?):
 
 ```go
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
 type SafeMap struct {
     mu sync.Mutex
     m  map[string]int
@@ -2439,6 +2475,20 @@ func (s SafeMap) Get(key string) int {
     s.mu.Lock()
     defer s.mu.Unlock()
     return s.m[key]
+}
+
+func main() {
+    sm := NewSafeMap()
+    var wg sync.WaitGroup
+    for i := 0; i < 100; i++ {
+        wg.Add(1)
+        go func() {
+            defer wg.Done()
+            sm.Inc("Escape")
+        }()
+    }
+    wg.Wait()
+    fmt.Println(sm.Get("Escape"))
 }
 ```
 
@@ -2851,7 +2901,10 @@ With this fix, `goleak.VerifyNone` reports no leaked goroutines.
 
 ---
 
-**Exercise 5** (Write a program):
+**Exercise 5** (Write a program): Implement a function `fanOutFetch(ctx context.Context, songs []string) ([]string, error)` that uses `errgroup` to fetch all song titles concurrently.
+Simulate each fetch with a `time.Sleep` of a random duration between 50 and 150 ms (use `math/rand`).
+If any fetch takes longer than 300 ms total (enforced by a timeout on the context passed to `fanOutFetch`), the entire operation should be cancelled and an error returned.
+Print either all results in order or the cancellation error.
 
 ```go
 package main
@@ -3016,7 +3069,7 @@ No module ever silently gets a version newer than the one its author actually te
 - **Staying current.**
   MVS deliberately resists upgrading.
   If your graph pins a library at `v1.2.0`, you stay there until someone runs `go get library@v1.4.0`.
-  In a large organisation this means security patches can go unnoticed unless you actively check.
+  In a large organization this means security patches can go unnoticed unless you actively check.
 - **Downgrading.**
   To use an older version than the graph currently requires, you have to downgrade or remove every module that requires the newer one, because MVS always takes the maximum of the minimums.
 
@@ -3106,8 +3159,8 @@ require (
 )
 ```
 
-`github.com/angoscia/audio v1.4.0` itself requires `golang.org/x/text v0.12.0`.
-`github.com/angoscia/catalog v0.9.2` requires `golang.org/x/text v0.14.0`.
+The `audio` module at `v1.4.0` itself requires `golang.org/x/text v0.12.0`.
+The `catalog` module at `v0.9.2` requires `golang.org/x/text v0.14.0`.
 
 Under Go's Minimum Version Selection, which version of `golang.org/x/text` will the final build use?
 Explain why.
@@ -3470,6 +3523,7 @@ For 100-byte lines this is well under 1 MiB.
 
 `io.Copy` uses a single 32 KiB copy buffer when neither side implements a fast path.
 Peak heap allocation: about 32 KiB.
+(In fact `io.Discard` implements `io.ReaderFrom`, so `io.Copy` takes that fast path, skips the 32 KiB buffer entirely, and uses a small pooled buffer --- even less memory.)
 However, this approach does not count lines --- it just discards all bytes.
 
 Best for counting lines without storing content: `bufio.NewScanner`.
@@ -3616,7 +3670,7 @@ Key points in the solution:
 - `flag.Parse()` is called at the start of `main`, after all flag variables are defined, so all flags are parsed before use.
 - `slog.New(slog.NewTextHandler(os.Stderr, nil))` writes structured logs to stderr, leaving stdout clean for program output.
 - `filepath.WalkDir` is preferred over `filepath.Walk` because it passes an `fs.DirEntry`, which avoids an extra `os.Stat` call per entry.
-- `strings.HasSuffix(d.Name(), *ext)` matches only the file name, not the full path, so `-ext .go` does not accidentally match a directory whose name happens to end in `.go`.
+- `!d.IsDir()` excludes directories, so a directory named `tools.go` is not counted; `d.Name()` is the base name of the entry, which is all that matters for an extension match.
 - The error from `WalkDir` is checked and reported; a non-nil error returned from the callback halts the walk.
 
 ---
@@ -3735,7 +3789,7 @@ Inside the handler, `r.PathValue("id")` returns `"42"`.
 
 c. `DELETE /tracks/7/` --- **`405 Method Not Allowed`**
 
-The path `/tracks/7/` matches the pattern `GET /tracks/{id}/`, but its method is `GET`, not `DELETE`.
+The path `/tracks/7/` matches the pattern `GET /tracks/{id}/`, but that pattern only accepts `GET`, and the request method is `DELETE`.
 Because some registered pattern matches the path while none matches the method, the Go 1.22 `ServeMux` returns `405 Method Not Allowed` rather than `404`.
 No registered handler runs.
 
@@ -3748,6 +3802,14 @@ Verified with `httptest`, the response is `405` with `Allow: GET, HEAD, POST`.
 **Exercise 4** (Where is the bug?):
 
 ```go
+package main
+
+import (
+    "fmt"
+    "io"
+    "net/http"
+)
+
 func fetchLyrics(url string) (string, error) {
     resp, err := http.Get(url)
     if err != nil {
@@ -3758,6 +3820,15 @@ func fetchLyrics(url string) (string, error) {
         return "", err
     }
     return string(body), nil
+}
+
+func main() {
+    lyrics, err := fetchLyrics("https://api.example.com/lyrics/sandstorm")
+    if err != nil {
+        fmt.Println("error:", err)
+        return
+    }
+    fmt.Println(lyrics)
 }
 ```
 
@@ -3795,7 +3866,16 @@ In production you would also check `resp.StatusCode` before trusting the body, b
 
 ---
 
-**Exercise 5** (Write a program):
+**Exercise 5** (Write a program): Build a small in-memory HTTP server that manages a list of songs.
+Define a `Song` struct with fields `ID int`, `Title string`, and `Artist string`, all with appropriate `json` tags.
+Store songs in a package-level `map[int]Song`.
+Register two routes using a `http.NewServeMux()`:
+
+- `GET /songs/` returns all songs as a JSON array.
+- `GET /songs/{id}/` returns the single song with that ID, or HTTP 404 if not found.
+
+Pre-populate the map with two songs (use Darude or Chicane tracks).
+Start the server on `:8080`.
 
 ```go
 package main
@@ -3894,7 +3974,7 @@ Many systems do both: gRPC between internal services, with a REST/JSON edge (oft
 
 ---
 
-**Exercise 2** (What does this do?):
+**Exercise 2** (What does this do?): A teammate writes this proto and regenerates, then is surprised the change "broke" old clients:
 
 ```protobuf
 // before
@@ -3908,6 +3988,9 @@ message Song {
   string title  = 1;
 }
 ```
+
+They only swapped the tag numbers, not the field names or types.
+What happens when a new server sends a `Song` to a client built from the *old* proto, and why?
 
 Protobuf identifies fields on the wire by their **tag number**, never by their name.
 A new server built from the "after" proto encodes `id` under tag 2 and `title` under tag 1.
@@ -3964,7 +4047,12 @@ Worse, `errors.New("done sending")` carries no gRPC status, so gRPC labels it `c
 
 ---
 
-**Exercise 5** (Write a program): The proto:
+**Exercise 5** (Write a program): Define a `.proto` with a `Library` service exposing `AddSongs(stream Song) returns (Summary)` where `Summary` has an `int32 count` and an `int32 total_bpm`.
+Implement the server so it accumulates the count and the sum of all `bpm` fields across the streamed songs, then returns the summary with `SendAndClose`.
+Write a client that streams three songs and prints the returned count and average BPM.
+Use `status.Errorf(codes.InvalidArgument, ...)` if any streamed song has an empty `id`.
+
+The proto:
 
 ```protobuf
 syntax = "proto3";
@@ -4444,7 +4532,7 @@ Note that `len` on a string counts bytes, not runes, but these titles are all AS
 
 ---
 
-**Exercise 3** (Calculation): The function below has the signature `func Reduce[T, U any](s []T, init U, f func(U, T) U) U`.
+**Exercise 3** (Calculation): A function with the signature `func Reduce[T, U any](s []T, init U, f func(U, T) U) U` folds a slice into a single value.
 Trace the execution of `Reduce([]int{1, 2, 3, 4}, 0, func(acc, v int) int { return acc + v })`.
 What is the concrete type bound to `T`?
 What is the concrete type bound to `U`?
@@ -4555,7 +4643,9 @@ No change to the call in `main` is needed, because `T` is inferred as `string` (
 
 ---
 
-**Exercise 5** (Write a program):
+**Exercise 5** (Write a program): Implement a generic `Set[T comparable]` type backed by a `map[T]struct{}`.
+It should support three methods: `Add(v T)` (add an element), `Contains(v T) bool` (membership test), and `Values() []T` (return all elements as a slice in any order).
+In `main`, create a `Set[string]`, add the four song titles "Escape", "$100 Bills", "J'ai pas vingt ans !", and "J'en ai marre !", add "J'ai pas vingt ans !" a second time, and print the length of the set and whether it contains "Escape" and "Legend".
 
 ```go
 package main
@@ -4617,8 +4707,6 @@ An empty struct (`struct{}`) occupies zero bytes, so only the keys consume memor
 The second `Add("J'ai pas vingt ans !")` call is a no-op because the map key already exists --- map assignment is idempotent.
 `Values()` returns four strings because the duplicate was silently dropped, but their order will vary between runs since Go map iteration is randomized.
 The `Set[T comparable]` constraint is required because the map key type `T` must be comparable.
-
----
 
 ---
 
@@ -4754,7 +4842,7 @@ This matches `processTrack`'s actual per-call cost of 2 µs --- the benchmark is
 Identify the bug and show the fix.
 
 ```go
-package music_test
+package music
 
 import "testing"
 
