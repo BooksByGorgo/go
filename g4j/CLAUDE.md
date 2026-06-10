@@ -86,6 +86,32 @@ This book covers all the topics that a good Go programmer uses in daily life in 
 - for large fan-outs (writing 10+ chapters), use the `/workflow` command rather than parallel Agent calls to get better failure handling and concurrency control
 - when an agent writes a file that already exists, verify the original was not overwritten before running the build
 
+## Verifying the Book
+
+### mechanical checks (script these; do not delegate to agents)
+
+- every `::: {.tip}` fence must be preceded by a blank line --- a non-blank line above it (even `\index{}`) makes the callout render as literal `::: {.tip}` text in the PDF
+- every callout body starts with `**Tip:**`, `**Trap:**`, or `**Wut:**`; fence opens equal fence closes per file
+- code-block lines must be at most 96 chars, and at most 80 inside callouts --- longer lines clip at the page edge and verbatim produces NO overfull warning, so the LaTeX log will not catch this
+- no unicode em/en dashes outside code blocks; no `\index{}` inside code blocks
+- every ch*.md/app*.md is in CHAPTERS; cross-reference audit via `grep -rn "Chapter [0-9]"`
+- every chapter has Try It, Key Points, and Exercises; g4j-answers.md has a heading per chapter and restates every exercise question (including code snippets) before its answer
+
+### PDF checks (the make build discards the LaTeX log)
+
+- to get a log, pandoc the book to .tex in a temp dir and run latexmk there; ignore the `../images` not-found errors (path artifact) and look for Overfull hbox of 20pt+, "undefined", and "missing character"
+- pdftotext the built PDF and grep for leftover markup: `:::`, `{.tip}`, `\index{`, `[@`, `??` --- then visually read any suspect page
+- visually read every page containing a table (column overlap does not show up in any log or text scan)
+
+### content checks (read-only finder agents, one per chapter)
+
+- extract and actually run every Go example (`go run`/`go vet` in /tmp); claimed outputs in comments and prose must match observed output
+- verify every "since Go 1.X" claim, install path, CLI flag, and third-party API name (pgx, golangci-lint, dlv) against the current toolchain --- several were stale or wrong on first audit
+- check PLAYLIST.md in both directions: every reference in the text is listed under the right chapter, and every listed entry still exists in the text
+- have agents return structured findings with severity (error/warning/suggestion) and verify each claim yourself before editing --- agents produce occasional false positives (e.g. flagging the intentional `***[rule-name]***` convention as an artifact)
+- when an exercise is reworded, grep g4j-answers.md for the old wording and change both files in the same edit pass
+- fix-up agents get exactly one file each and must not run git commands; review the full diff before committing
+
 ## Content
 
 DO NOT MODIFY THE AUTHOR INTRO section before chapter 0. it is written in lowercase to match the author's informal writing

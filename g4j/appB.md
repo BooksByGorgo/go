@@ -92,7 +92,8 @@ Install it:
 
 ```sh
 # macOS / Linux via the official installer (preferred)
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.12.2
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+    | sh -s -- -b $(go env GOPATH)/bin v2.12.2
 
 # or via go install (slower, but always available)
 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest

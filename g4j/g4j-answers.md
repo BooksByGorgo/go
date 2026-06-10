@@ -16,7 +16,8 @@ header-includes:
       "NotoColorEmoji:mode=harf;",
     })}
     \setmainfont{TeX Gyre Pagella}[RawFeature={fallback=main_fallback}]
-    \setmonofont{JetBrains Mono}[Scale=MatchLowercase, RawFeature={-calt,-liga,-dlig,fallback=mono_fallback}]
+    \setmonofont{JetBrains Mono}[Scale=MatchLowercase,
+      RawFeature={-calt,-liga,-dlig,fallback=mono_fallback}]
     ```
 ---
 
@@ -1183,7 +1184,7 @@ type Counter struct {
     Value int
 }
 
-func NewCounter(start int) *Counter {  // constructor: returns *Counter so callers can use pointer receivers
+func NewCounter(start int) *Counter { // constructor: returns *Counter for pointer receivers
     return &Counter{Value: start}
 }
 
@@ -1429,7 +1430,10 @@ import (
 )
 
 func main() {
-    titles := []string{"Sandstorm", "Bad Apple!!", "Gouryella", "Better Off Alone", "Flaming June", "Sandstorm"}
+    titles := []string{
+        "Sandstorm", "Bad Apple!!", "Gouryella",
+        "Better Off Alone", "Flaming June", "Sandstorm",
+    }
 
     byLetter := make(map[string][]string)
     for _, t := range titles {
@@ -1942,24 +1946,29 @@ var ErrInvalidTimecode = errors.New("invalid timecode")
 func parseTimecode(s string) (int, int, error) {
     parts := strings.Split(s, ":")
     if len(parts) != 2 {
-        return 0, 0, fmt.Errorf("parseTimecode: expected MM:SS, got %q: %w", s, ErrInvalidTimecode)
+        return 0, 0, fmt.Errorf("parseTimecode: expected MM:SS, got %q: %w",
+            s, ErrInvalidTimecode)
     }
 
     minutes, err := strconv.Atoi(parts[0])
     if err != nil {
-        return 0, 0, fmt.Errorf("parseTimecode: invalid minutes %q: %w", parts[0], ErrInvalidTimecode)
+        return 0, 0, fmt.Errorf("parseTimecode: invalid minutes %q: %w",
+            parts[0], ErrInvalidTimecode)
     }
 
     seconds, err := strconv.Atoi(parts[1])
     if err != nil {
-        return 0, 0, fmt.Errorf("parseTimecode: invalid seconds %q: %w", parts[1], ErrInvalidTimecode)
+        return 0, 0, fmt.Errorf("parseTimecode: invalid seconds %q: %w",
+            parts[1], ErrInvalidTimecode)
     }
 
     if minutes < 0 {
-        return 0, 0, fmt.Errorf("parseTimecode: minutes %d is negative: %w", minutes, ErrInvalidTimecode)
+        return 0, 0, fmt.Errorf("parseTimecode: minutes %d is negative: %w",
+            minutes, ErrInvalidTimecode)
     }
     if seconds < 0 || seconds > 59 {
-        return 0, 0, fmt.Errorf("parseTimecode: seconds %d out of range [0,59]: %w", seconds, ErrInvalidTimecode)
+        return 0, 0, fmt.Errorf("parseTimecode: seconds %d out of range [0,59]: %w",
+            seconds, ErrInvalidTimecode)
     }
 
     return minutes, seconds, nil
@@ -1972,7 +1981,8 @@ func main() {
         m, s, err := parseTimecode(tc)
         if err != nil {
             fmt.Printf("%-10s => error: %s\n", tc, err)
-            fmt.Printf("           is ErrInvalidTimecode: %v\n", errors.Is(err, ErrInvalidTimecode))
+            fmt.Printf("           is ErrInvalidTimecode: %v\n",
+                errors.Is(err, ErrInvalidTimecode))
         } else {
             fmt.Printf("%-10s => %dm %ds\n", tc, m, s)
         }
@@ -3138,7 +3148,8 @@ Running `go build ./...` produces:
 
 ```
 package github.com/angoscia/demo
-	main.go:5:5: use of internal package github.com/angoscia/demo/lyrics/internal/detail not allowed
+	main.go:5:5: use of internal package
+	    github.com/angoscia/demo/lyrics/internal/detail not allowed
 ```
 
 To fix it without changing the import semantics, either move `detail` to `internal/detail` directly under the module root (so its parent is the module root, which `main.go` can reach), or move `main.go` into a directory under `lyrics/` (so it is rooted under `lyrics`).
@@ -3295,7 +3306,8 @@ The `player` module is a *different* module (`github.com/djcobra/player`); none 
 
 ```
 package github.com/djcobra/player
-	main.go:5:5: use of internal package github.com/djcobra/betteroffalone/internal/config not allowed
+	main.go:5:5: use of internal package
+	    github.com/djcobra/betteroffalone/internal/config not allowed
 ```
 
 The bug is that `player` is trying to reach into another module's `internal` tree, which the toolchain refuses by design --- `internal` packages are private to the module (and subtree) that contains them.
@@ -4588,7 +4600,10 @@ func Dedupe[T any](s []T) []T {
 }
 
 func main() {
-    p := Playlist{"Escape", "J'ai pas vingt ans !", "Escape", "J'en ai marre !", "J'ai pas vingt ans !"}
+    p := Playlist{
+        "Escape", "J'ai pas vingt ans !", "Escape",
+        "J'en ai marre !", "J'ai pas vingt ans !",
+    }
     fmt.Println(Dedupe(p))
 }
 ```
