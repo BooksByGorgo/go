@@ -56,6 +56,7 @@ This book covers all the topics that a good Go programmer uses in daily life in 
 - TOC is generated automatically via `toc: true` and `toc-depth: 2` in the YAML frontmatter
 - index uses LaTeX `makeidx` package with `\index{}` markers throughout the text
 - place `\index{term}` at the primary introduction/definition of a term, not inside code blocks
+- when a term is discussed in detail in multiple places, add a marker at each detailed discussion so the entry lists multiple pages --- passing mentions do not get markers
 - use `\index{parent!child}` for sub-entries (e.g., `\index{pointer!arithmetic}`)
 - in `\index{}`, escape double quotes by doubling them (e.g., `\index{extern ""C""}`)
 - `\printindex` goes only in appC.md (the last file built into the book) --- do not add it to other chapters or appendices
