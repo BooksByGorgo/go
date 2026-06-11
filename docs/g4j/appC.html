@@ -1,17 +1,17 @@
 ---
 layout: default
-title: "Appendix F: Go Code Review Rules"
+title: "Appendix C: Go Code Review Rules"
 parent: "Gorgo Go for Java Programmers"
-nav_order: 105
+nav_order: 102
 ---
 
 {% raw %}
 <h1 id="go-code-review-rules">Go Code Review Rules</h1>
-<p>  The rules in this appendix are drawn from the official <strong>Go Code Review Comments</strong> wiki maintained by the Go team <span class="citation" data-cites="CodeReviewComments">[@CodeReviewComments]</span>. That document describes the kinds of issues that arise during code review of Go programs — the things that automated tools like <code>gofmt</code> and <code>go vet</code> do not catch. Each rule is numbered <strong>CR-N</strong> with a <strong>short-descriptive-name</strong> so it can be cited precisely from the main text.</p>
+<p>  The rules in this appendix are drawn from the official <strong>Go Code Review Comments</strong> wiki maintained by the Go team <span class="citation" data-cites="CodeReviewComments">[@CodeReviewComments]</span>. That document describes the kinds of issues that arise during code review of Go programs — the things that automated tools like <code>gofmt</code> and <code>go vet</code> do not catch. Each rule is numbered <strong>CR-N</strong> for ordering within this appendix and is given a <strong>short-descriptive-name</strong>. The main text cites a rule by its short name in bold italics, written as <strong><em>[short-rule-name]</em></strong> (the convention introduced in Chapter 0), so you can find the matching entry here by name.</p>
 <h2 id="formatting">Formatting</h2>
 <p> </p>
 <p><strong>CR-1. gofmt</strong> Run <code>gofmt</code> (or <code>go fmt</code>) on all code to automatically fix mechanical style issues before review.</p>
-<p><strong>CR-2. goimports</strong> Prefer <code>goimports</code> over <code>gofmt</code>; it is a superset that also organizes import blocks.</p>
+<p><strong>CR-2. goimports</strong> Prefer <code>goimports</code> over <code>gofmt</code>; it is a superset that also adds missing and removes unused imports.</p>
 <h2 id="comments">Comments</h2>
 <p></p>
 <p><strong>CR-3. sentence-for-comments</strong> Comments that document declarations must be complete sentences ending with a period.</p>
@@ -20,7 +20,7 @@ nav_order: 105
 <h2 id="context">Context</h2>
 <p></p>
 <p><strong>CR-6. ctx-for-context</strong> Functions that use <code>context.Context</code> should accept it as the first parameter, named <code>ctx</code>.</p>
-<p><strong>CR-7. no-cxt-for-struct</strong> Never store a <code>Context</code> in a struct; pass it as a method parameter instead (exception: signatures forced by third-party interfaces).</p>
+<p><strong>CR-7. no-ctx-for-struct</strong> Never store a <code>Context</code> in a struct; pass it as a method parameter instead (exception: signatures forced by third-party interfaces).</p>
 <p><strong>CR-8. pass-ctx-by-default</strong> Prefer passing <code>context.Context</code> even when you think you don’t need it; only use <code>context.Background()</code> with a clear reason.</p>
 <p><strong>CR-9. data-in-params-not-ctx</strong> Keep application data in function parameters, receivers, or globals — not in <code>Context</code> values — unless it genuinely belongs to the request lifecycle.</p>
 <p><strong>CR-10. ctx-safe-for-concurrent</strong> A <code>Context</code> is safe to pass to concurrent calls that share its deadline and cancellation signal.</p>
@@ -33,7 +33,7 @@ nav_order: 105
 <p> <strong>CR-13. crypto-rand-for-text</strong> For random text output use <code>crypto/rand.Text()</code> or encode <code>crypto/rand.Reader</code> bytes with <code>encoding/hex</code> or <code>encoding/base64</code>.</p>
 <h2 id="declaring-empty-slices">Declaring Empty Slices</h2>
 <p></p>
-<p><strong>CR-14. nil-slice-preferred</strong> Prefer <code>var t []string</code> (nil slice) over <code>t := []string{}</code> (non-nil empty slice); they are functionally equivalent for <code>len</code> and <code>cap</code> but a nil slice encodes to JSON <code>null</code> and is the idiomatic zero value.</p>
+<p><strong>CR-14. nil-slice-preferred</strong> Prefer <code>var t []string</code> (nil slice) over <code>t := []string{}</code> (non-nil empty slice); they are functionally equivalent for <code>len</code> and <code>cap</code>, and nil is the idiomatic zero value — but note a nil slice encodes to JSON <code>null</code> while a non-nil empty slice encodes to <code>[]</code>, so prefer the non-nil form when encoding JSON.</p>
 <p><strong>CR-15. no-nil-vs-empty-api</strong> Avoid API designs that distinguish between nil and empty slices; the distinction is subtle and causes bugs.</p>
 <h2 id="error-strings">Error Strings</h2>
 <p></p>
@@ -47,7 +47,7 @@ nav_order: 105
 <h2 id="goroutine-lifetimes">Goroutine Lifetimes</h2>
 <p> </p>
 <p><strong>CR-20. goroutine-must-exit</strong> When you spawn a goroutine, make it clear when or whether it exits; goroutines that cannot exit are leaks.</p>
-<p><strong>CR-21. leaked-goroutine-grows-memory</strong> Goroutines block garbage collection of the values they close over; a leaked goroutine causes unbounded memory growth.</p>
+<p><strong>CR-21. leaked-goroutine-grows-memory</strong> Goroutines block garbage collection of the values they close over; goroutines that leak repeatedly (e.g., one per request) cause unbounded memory growth.</p>
 <p><strong>CR-22. obvious-goroutine-lifetimes</strong> Keep concurrent code simple enough that goroutine lifetimes are obvious; document lifetime guarantees when simplicity is not achievable.</p>
 <h2 id="handle-errors">Handle Errors</h2>
 <p></p>
@@ -63,7 +63,7 @@ nav_order: 105
 <p><strong>CR-28. blank-import-main-only</strong> Packages imported only for side effects (<code>import _ "pkg"</code>) belong only in the <code>main</code> package of a program or in tests that require them.</p>
 <h2 id="import-dot">Import Dot</h2>
 <p></p>
-<p><strong>CR-29. no-dot-import</strong> Avoid <code>import .</code>; it makes code harder to read because it is unclear which identifiers come from the imported package. Use it only in tests that have circular dependencies and cannot be part of the tested package.</p>
+<p><strong>CR-29. no-dot-import</strong> Avoid <code>import .</code>; it makes code harder to read because it is unclear which identifiers come from the imported package. Use it only in tests that, due to circular dependencies, cannot be made part of the package being tested.</p>
 <h2 id="in-band-errors">In-Band Errors</h2>
 <p></p>
 <p><strong>CR-30. no-in-band-errors</strong> Do not use in-band error signals (returning <code>-1</code>, <code>""</code>, or <code>nil</code> to indicate failure) when those values are also valid results; use a second return value of type <code>error</code> or <code>bool</code> instead.</p>
@@ -105,7 +105,7 @@ nav_order: 105
 <h2 id="pass-values">Pass Values</h2>
 <p></p>
 <p><strong>CR-51. no-pointer-to-save-bytes</strong> Do not pass a pointer just to save a few bytes; if the function only dereferences <code>*x</code> throughout, the argument should not be a pointer.</p>
-<p><strong>CR-52. no-pointer-to-string-or-iface</strong> Never pass pointers to strings (<code>*string</code>) or interface values (<code>*io.Reader</code>); both are already reference-sized values.</p>
+<p><strong>CR-52. no-pointer-to-string-or-iface</strong> Do not pass pointers to strings (<code>*string</code>) or interface values (<code>*io.Reader</code>) just to save bytes; both are small fixed-size values that can be passed directly.</p>
 <p><strong>CR-53. pointer-for-large-structs</strong> Exception: large structs or structs expected to grow should be passed by pointer for efficiency.</p>
 <h2 id="receiver-names">Receiver Names</h2>
 <p></p>
