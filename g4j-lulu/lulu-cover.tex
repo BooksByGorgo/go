@@ -1,0 +1,259 @@
+% lulu-cover.tex --- Lulu Executive wraparound cover for "Gorgo Go for Java Programmers".
+%
+% Total trim (with bleed): 15.082in x 10.25in
+% Book trim: 7in x 10in
+% Bleed: 0.125in
+% Spine width: 0.832in (350 interior pages x 0.0023773in/page)
+%
+% Horizontal layout (left to right, in inches):
+%   left bleed : [0.000, 0.125]
+%   back trim  : [0.125, 7.125]
+%   spine      : [7.125, 7.957]
+%   front trim : [7.957, 14.957]
+%   right bleed: [14.957, 15.082]
+%
+% Vertical:
+%   bottom bleed: [0.000, 0.125]
+%   trim        : [0.125, 10.125]
+%   top bleed   : [10.125, 10.25]
+%
+% Safety margin: 0.5in inside the trim edge on each side.
+% Front cover center x = 11.457; spine center x = 7.541; back center x = 3.625.
+
+\documentclass[11pt]{article}
+
+\usepackage[paperwidth=15.082in,paperheight=10.25in,margin=0pt]{geometry}
+\usepackage{fontspec}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{booktabs}
+\usepackage{colortbl}
+\usetikzlibrary{calc,positioning}
+
+% Color palette
+\definecolor{bgcolor}{HTML}{081c11}    % dark green
+\definecolor{textcolor}{HTML}{f2ece1}  % cream
+\definecolor{accent}{HTML}{e0aa3e}     % gold
+\definecolor{muted}{HTML}{a9c2b1}      % muted sage
+\definecolor{rulecolor}{HTML}{5a9978}
+
+\setmainfont{TeX Gyre Pagella}
+\setmonofont{JetBrains Mono}[Scale=0.85,RawFeature={-calt,-liga,-dlig}]
+
+\graphicspath{{../images/}}
+
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+
+% Commit date is supplied by the Makefile via .commit-date.tex.
+\IfFileExists{.commit-date.tex}{\input{.commit-date.tex}}{\providecommand{\CommitDate}{unknown date}}
+
+\arrayrulecolor{rulecolor}
+
+% Shortcut for monospace table cells (always in \texttt, always cream-colored)
+\newcommand{\op}[1]{\texttt{#1}}
+
+\begin{document}
+\begin{tikzpicture}[
+  remember picture,
+  overlay,
+  x=1in,y=1in,
+  every node/.style={inner sep=0pt, outer sep=0pt},
+]
+
+% Anchor: lower-left corner of the page
+\coordinate (O) at (current page.south west);
+
+% ============================================================
+% FULL-BLEED BACKGROUND
+% ============================================================
+\fill[bgcolor] (O) rectangle ($(O)+(15.082,10.25)$);
+
+% ============================================================
+% FRONT COVER  (right side)
+% x in [7.957, 14.957], center x = 11.457
+% ============================================================
+
+% Gorgo image, centered, 4.5in wide
+\node[anchor=center] at ($(O)+(11.457,6.85)$)
+  {\includegraphics[width=4.5in]{g4j-gorgo-cover.png}};
+
+% Title (28pt single line measures 5.70in, inside the 6in safe width)
+\node[anchor=center, text=textcolor, align=center] at ($(O)+(11.457,3.55)$)
+  {\fontsize{28}{34}\selectfont\bfseries Gorgo Go for Java Programmers};
+
+% Rule under title
+\draw[accent, line width=1.2pt] ($(O)+(9.157,3.1)$) -- ($(O)+(13.757,3.1)$);
+
+% Subtitle: commit date
+\node[anchor=center, text=accent] at ($(O)+(11.457,2.75)$)
+  {\fontsize{18}{22}\selectfont\itshape \CommitDate};
+
+
+% ============================================================
+% SPINE  (middle)
+% x in [7.125, 7.957], center = 7.541
+% Title centered along spine, "Gorgo Books" at the base
+% ============================================================
+
+% Main spine title (centered vertically along the 10in spine)
+\node[anchor=center, rotate=-90, text=textcolor] at ($(O)+(7.541,5.125)$)
+  {\fontsize{13}{15}\selectfont\bfseries Gorgo Go for Java Programmers};
+
+% "Gorgo Books" at the base of the spine, horizontal so it reads
+% normally when the book is upright on a shelf
+\node[anchor=center, text=accent, align=center] at ($(O)+(7.541,1.25)$)
+  {\fontsize{10}{12}\selectfont\scshape Gorgo\\Books};
+
+% ============================================================
+% BACK COVER  (left side)
+% x in [0.125, 7.125], safe x in [0.625, 6.625], safe y in [0.625, 9.625]
+% Barcode exclusion: x in ~[0.5, 4.25], y in ~[0.5, 1.9]  --- leave empty.
+% ============================================================
+
+% Heading
+\node[anchor=center, text=accent] at ($(O)+(3.625,9.15)$)
+  {\fontsize{28}{34}\selectfont\bfseries Cheetsheet};
+\node[anchor=center, text=muted] at ($(O)+(3.625,8.70)$)
+  {\fontsize{11}{13}\selectfont\itshape a quick reference for Go};
+
+% Accent rule under heading
+\draw[accent, line width=0.8pt] ($(O)+(1.3,8.45)$) -- ($(O)+(5.95,8.45)$);
+
+% ---- Left column: fmt verbs, Go vs Java types, zero values ----
+% Stacked above the barcode exclusion zone.
+\node[anchor=north west, text=textcolor] at ($(O)+(0.70,8.20)$) {%
+  \begin{minipage}{2.80in}
+  \color{textcolor}
+  \fontsize{8.5}{10.5}\selectfont
+  \renewcommand{\arraystretch}{1.05}
+
+  {\color{accent}\fontsize{12}{14}\selectfont\bfseries fmt Verbs}\\[1pt]
+  {\color{muted}\fontsize{7.5}{9}\selectfont from Ch.~1 \& Ch.~14}\\[2pt]
+  \begin{tabular}{@{}l l@{}}
+  \toprule
+  \textbf{Verb} & \textbf{Formats as} \\
+  \midrule
+  \op{\%v}  & default format for any value      \\
+  \op{\%+v} & struct with field names           \\
+  \op{\%\#v} & Go-syntax representation         \\
+  \op{\%T}  & Go type of the value              \\
+  \op{\%d}  & integer in base 10                \\
+  \op{\%s}  & string (or \op{[]byte})           \\
+  \op{\%q}  & double-quoted, Go-escaped string  \\
+  \op{\%f}  & floating-point decimal            \\
+  \op{\%t}  & boolean                           \\
+  \bottomrule
+  \end{tabular}
+
+  \vspace{0.22in}
+
+  {\color{accent}\fontsize{12}{14}\selectfont\bfseries Go Types vs Java}\\[1pt]
+  {\color{muted}\fontsize{7.5}{9}\selectfont from Ch.~2}\\[2pt]
+  \begin{tabular}{@{}l l@{}}
+  \toprule
+  \textbf{Go} & \textbf{Java} \\
+  \midrule
+  \op{int}            & \op{int} (but platform width)   \\
+  \op{int8}           & \op{byte}                       \\
+  \op{int16}          & \op{short}                      \\
+  \op{int32}, \op{rune} & \op{int}                      \\
+  \op{int64}          & \op{long}                       \\
+  \op{uint}, \op{uint8} \ldots & none (unsigned)        \\
+  \op{float32}        & \op{float}                      \\
+  \op{float64}        & \op{double}                     \\
+  \op{bool}           & \op{boolean}                    \\
+  \op{string}         & \op{String}                     \\
+  \bottomrule
+  \end{tabular}
+
+  \vspace{0.22in}
+
+  {\color{accent}\fontsize{12}{14}\selectfont\bfseries Zero Values}\\[1pt]
+  {\color{muted}\fontsize{7.5}{9}\selectfont from Ch.~2 --- no \op{null} surprises}\\[2pt]
+  \begin{tabular}{@{}l l@{}}
+  \toprule
+  \textbf{Type} & \textbf{Zero value} \\
+  \midrule
+  numeric types                  & \op{0}      \\
+  \op{bool}                      & \op{false}  \\
+  \op{string}                    & \op{""}     \\
+  pointer, slice, map            & \op{nil}    \\
+  \op{chan}, \op{func}, interface & \op{nil}   \\
+  \bottomrule
+  \end{tabular}
+  \end{minipage}
+};
+
+% ---- Right column: go tool, slices & maps, channels ----
+\node[anchor=north west, text=textcolor] at ($(O)+(3.80,8.20)$) {%
+  \begin{minipage}{2.80in}
+  \color{textcolor}
+  \fontsize{8.5}{10.5}\selectfont
+  \renewcommand{\arraystretch}{1.05}
+
+  {\color{accent}\fontsize{12}{14}\selectfont\bfseries The go Tool}\\[1pt]
+  {\color{muted}\fontsize{7.5}{9}\selectfont from Ch.~1, Ch.~13 \& Ch.~19}\\[2pt]
+  \begin{tabular}{@{}l l@{}}
+  \toprule
+  \textbf{Command} & \textbf{What it does} \\
+  \midrule
+  \op{go run main.go} & compile and run, no binary \\
+  \op{go build}       & compile to an executable   \\
+  \op{go install}     & build into \op{\$GOBIN}    \\
+  \op{go test ./...}  & run the tests              \\
+  \op{go vet ./...}   & static checks              \\
+  \op{gofmt -w .}     & format in place            \\
+  \op{go mod init}    & start a module             \\
+  \op{go mod tidy}    & sync \op{go.mod} with code \\
+  \bottomrule
+  \end{tabular}
+
+  \vspace{0.22in}
+
+  {\color{accent}\fontsize{12}{14}\selectfont\bfseries Slices \& Maps}\\[1pt]
+  {\color{muted}\fontsize{7.5}{9}\selectfont from Ch.~7}\\[2pt]
+  \begin{tabular}{@{}l l@{}}
+  \toprule
+  \textbf{Code} & \textbf{Meaning} \\
+  \midrule
+  \op{make([]T, n)}      & slice of length \op{n}     \\
+  \op{append(s, v)}      & grow (reassign to \op{s})  \\
+  \op{len(s)}, \op{cap(s)} & length, capacity         \\
+  \op{s[i:j]}            & subslice view, not a copy  \\
+  \op{make(map[K]V)}     & empty map                  \\
+  \op{m[k] = v}          & insert or update           \\
+  \op{v, ok := m[k]}     & comma-ok lookup            \\
+  \op{delete(m, k)}      & remove a key               \\
+  \op{for k, v := range m} & iterate                  \\
+  \bottomrule
+  \end{tabular}
+
+  \vspace{0.22in}
+
+  {\color{accent}\fontsize{12}{14}\selectfont\bfseries Channels}\\[1pt]
+  {\color{muted}\fontsize{7.5}{9}\selectfont from Ch.~10}\\[2pt]
+  \begin{tabular}{@{}l l@{}}
+  \toprule
+  \textbf{Code} & \textbf{Meaning} \\
+  \midrule
+  \op{make(chan T)}    & unbuffered channel          \\
+  \op{make(chan T, n)} & buffered, capacity \op{n}   \\
+  \op{ch <- v}         & send                        \\
+  \op{v := <-ch}       & receive                     \\
+  \op{v, ok := <-ch}   & \op{ok} false when closed   \\
+  \op{close(ch)}       & no more sends               \\
+  \op{for v := range ch} & receive until closed      \\
+  \op{select}          & wait on several channels    \\
+  \bottomrule
+  \end{tabular}
+  \end{minipage}
+};
+
+% ---- URL at bottom left of back cover ----
+\node[anchor=south west, text=muted] at ($(O)+(0.75,0.75)$)
+  {\fontsize{10}{12}\selectfont\ttfamily https://gorgo.dev/go};
+
+\end{tikzpicture}
+\end{document}

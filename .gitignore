@@ -7,6 +7,13 @@ g4j/*.idx
 g4j/*.ilg
 g4j/*.ind
 
+# Lulu print build artifacts --- built by g4j-lulu/Makefile, never committed.
+g4j-lulu/*.pdf
+g4j-lulu/.lulu-author.md
+g4j-lulu/.commit-date.tex
+g4j-lulu/lulu-cover-raw.*
+images/g4j-gorgo-cover.png
+
 # Vim swap files
 *.swp
 .claude/settings.local.json
