@@ -2,6 +2,9 @@ title: Go Programming
 description: Free, evolving Go programming textbooks
 theme: just-the-docs
 
+plugins:
+  - jekyll-sitemap
+
 url: https://gorgo.dev
 baseurl: /go
 
