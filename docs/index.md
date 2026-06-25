@@ -26,7 +26,7 @@ Covers everything from types and control flow through interfaces, goroutines, an
 
 ## Proving Ground
 
-Ready to test your skillz? Try the <a href=https://goferit.homeofcode.com>Gopher Proving Grounds</a>.
+Ready to test your skillz? Try the [Gopher Proving Grounds](https://goferit.homeofcode.com).
 It's made up of a series problems and clues to solve in Go.
 Use it to find out if you really know Go.
 
