@@ -24,6 +24,12 @@ We believe there will always be a niche for free programming textbooks that evol
 Bridges Java to Go for working programmers.
 Covers everything from types and control flow through interfaces, goroutines, and idiomatic Go.
 
+## Proving Ground
+
+Ready to test your skillz? Try the <a href=https://goferit.homeofcode.com>Gopher Proving Grounds</a>.
+It's made up of a series problems and clues to solve in Go.
+Use it to find out if you really know Go.
+
 ## AI Usage
 
 We use AI like crazy!
@@ -31,6 +37,3 @@ Claude is our best bud.
 He's super great at keeping everything consistent and accurate.
 It's still a lot of work though, but we couldn't have done it without him.
 
----
-
-Licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
