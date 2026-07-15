@@ -657,50 +657,42 @@ Cases are evaluated top to bottom; once a match is found, the remaining cases ar
 
 ---
 
-**Exercise 4** (Where is the bug?): The following code tries to build three multiplier functions that multiply their input by 10, 20, and 30 respectively.
-What does it actually print when each function is called with `5`, and why?
+**Exercise 4** (Where is the bug?): The following code tries to give every score a 10-point curve, but the scores come out unchanged.
+What does it actually print, and why?
 
 ```go
 package main
 
 import "fmt"
 
-func makeMultipliers() []func(int) int {
-    fns := make([]func(int) int, 3)
-    factor := 1
-    for i := 0; i < 3; i++ {
-        factor = (i + 1) * 10
-        fns[i] = func(x int) int { return x * factor }
-    }
-    return fns
-}
-
 func main() {
-    fns := makeMultipliers()
-    for _, f := range fns {
-        fmt.Println(f(5))
+    scores := []int{40, 55, 70}
+    for _, s := range scores {
+        s += 10 // meant to add a 10-point curve to each score
     }
+    fmt.Println(scores)
 }
 ```
 
-All three calls print `150`, not `50`, `100`, `150`.
+It prints the original slice, unchanged:
 
-The bug is that `factor` is declared outside the loop.
-All three closures capture the same `factor` variable by reference.
-By the time the closures run, the loop has finished and `factor` is `30` (the last value assigned).
-Every closure multiplies by `30`, so `f(5)` returns `150` for all three.
+```
+[40 55 70]
+```
 
-The fix is to declare `factor` inside the loop so each iteration gets its own copy:
+The bug is that `range` copies each element into the loop variable `s`.
+`s` is a fresh `int` holding a copy of `scores[i]`, so `s += 10` updates the copy and throws it away at the end of each iteration --- the slice itself is never touched.
+
+The fix is to index into the slice using the loop index instead of the copied value:
 
 ```go
-for i := 0; i < 3; i++ {
-    factor := (i + 1) * 10
-    fns[i] = func(x int) int { return x * factor }
+for i := range scores {
+    scores[i] += 10
 }
 ```
 
-Now each closure captures a distinct `factor` variable, and the output is `50`, `100`, `150`.
-Note that Go's per-iteration loop variable semantics (Go 1.22 and later) fix the classic `i`-capture bug automatically, but they do not help here because the captured variable is `factor`, not the loop variable.
+Now the assignment writes back through `scores[i]`, and the output is `[50 65 80]`.
+This is the Go analogue of the Java gotcha where iterating with an enhanced `for` loop hands you a copy of each element rather than a mutable reference into the collection.
 
 ---
 
@@ -937,7 +929,54 @@ The language change makes each loop iteration create its own variable automatica
 
 ---
 
-**Exercise 5** (Write a program): Write a function `pipeline(fns ...func(int) int) func(int) int` that takes any number of `func(int) int` functions and returns a new function that applies them in order.
+**Exercise 5** (Where is the bug?): The following code tries to build three multiplier functions that multiply their input by 10, 20, and 30 respectively.
+What does it actually print when each function is called with `5`, and why?
+
+```go
+package main
+
+import "fmt"
+
+func makeMultipliers() []func(int) int {
+    fns := make([]func(int) int, 3)
+    factor := 1
+    for i := 0; i < 3; i++ {
+        factor = (i + 1) * 10
+        fns[i] = func(x int) int { return x * factor }
+    }
+    return fns
+}
+
+func main() {
+    fns := makeMultipliers()
+    for _, f := range fns {
+        fmt.Println(f(5))
+    }
+}
+```
+
+All three calls print `150`, not `50`, `100`, `150`.
+
+The bug is that `factor` is declared outside the loop.
+All three closures capture the same `factor` variable by reference.
+By the time the closures run, the loop has finished and `factor` is `30` (the last value assigned).
+Every closure multiplies by `30`, so `f(5)` returns `150` for all three.
+
+The fix is to declare `factor` inside the loop so each iteration gets its own copy:
+
+```go
+for i := 0; i < 3; i++ {
+    factor := (i + 1) * 10
+    fns[i] = func(x int) int { return x * factor }
+}
+```
+
+Now each closure captures a distinct `factor` variable, and the output is `50`, `100`, `150`.
+Note that Go's per-iteration loop variable semantics (Go 1.22 and later) fix the classic `i`-capture bug automatically, but they do not help here because the captured variable is `factor`, not the loop variable.
+
+---
+
+**Exercise 6** (Write a program): Write a function `pipeline(fns ...func(int) int) func(int) int` that takes any number of `func(int) int` functions and returns a new function that applies them in order.
 For example, given a double function and an add-ten function, `pipeline(double, addTen)(3)` should return `16`.
 Write the function, define at least two simple transforms, and demonstrate the pipeline with a few calls.
 
