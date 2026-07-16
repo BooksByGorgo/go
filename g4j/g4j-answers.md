@@ -4098,7 +4098,42 @@ Worse, `errors.New("done sending")` carries no gRPC status, so gRPC labels it `c
 
 ---
 
-**Exercise 5** (Write a program): Define a `.proto` with a `Library` service exposing `AddSongs(stream Song) returns (Summary)` where `Summary` has an `int32 count` and an `int32 total_bpm`.
+**Exercise 5** (Where is the bug?): This client authenticates successfully and every call works, yet a security review flags it:
+
+```go
+type tokenCreds struct {
+    token string
+}
+
+func (c tokenCreds) GetRequestMetadata(
+    ctx context.Context, uri ...string,
+) (map[string]string, error) {
+    return map[string]string{"authorization": "Bearer " + c.token}, nil
+}
+
+func (c tokenCreds) RequireTransportSecurity() bool { return false }
+
+conn, err := grpc.NewClient("jukebox.internal:50051",
+    grpc.WithTransportCredentials(insecure.NewCredentials()),
+    grpc.WithPerRPCCredentials(tokenCreds{token: os.Getenv("JUKEBOX_TOKEN")}),
+)
+```
+
+What is the problem, and what would change if `RequireTransportSecurity` returned `true`?
+
+**The token travels in cleartext.**
+The connection uses `insecure.NewCredentials()`, so every network hop between client and server can read --- and replay --- the bearer token.
+A bearer token is exactly as secret as a password: whoever holds it *is* you, as far as the server can tell.
+`RequireTransportSecurity` returning `false` is what permits this; it tells gRPC these credentials are fine to attach to a plaintext connection.
+
+If it returned `true`, `grpc.NewClient` would fail immediately with "the credentials require transport level security (use grpc.WithTransportCredentials() to set)".
+The dial fails at construction time, before any RPC is attempted, so the token never leaves the process --- a fail-fast instead of a silent leak.
+
+The fix is both halves: return `true` from `RequireTransportSecurity`, and dial with real TLS credentials (`credentials.NewClientTLSFromFile` or `credentials.NewTLS`).
+
+---
+
+**Exercise 6** (Write a program): Define a `.proto` with a `Library` service exposing `AddSongs(stream Song) returns (Summary)` where `Summary` has an `int32 count` and an `int32 total_bpm`.
 Implement the server so it accumulates the count and the sum of all `bpm` fields across the streamed songs, then returns the summary with `SendAndClose`.
 Write a client that streams three songs and prints the returned count and average BPM.
 Use `status.Errorf(codes.InvalidArgument, ...)` if any streamed song has an empty `id`.

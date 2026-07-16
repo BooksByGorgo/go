@@ -142,7 +142,9 @@ Do not repeat any reference already listed here.
 - Rosalía --- "Despechá" (used in jukebox catalog map: GetSong server example; abbreviated to "Rosalia" in code)
 - Rauw Alejandro --- "Todo De Ti" (used in Try It GetSong handler)
 - "no existe esa cancion" / "el servidor tardo demasiado" --- Spanish status-code messages in the errors example
-- "Bearer hunter2" --- placeholder auth token in the metadata example
+- "quien eres?" --- Spanish unauthenticated message in the client-authentication interceptor
+- "Bearer hunter2" --- placeholder auth token in the metadata example; "hunter2" reused as the password in the client-authentication example
+- Bad Bunny --- album "Un Verano Sin Ti" (bearer token "un-verano-sin-ti" in the client-authentication oauth example)
 
 ## Chapter 17: Database Access
 - San Mehat --- "Sounds of Slashdot" (used in bulk insert example, complete music store, exercise 3)
