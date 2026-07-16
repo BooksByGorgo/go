@@ -3917,7 +3917,34 @@ In production you would also check `resp.StatusCode` before trusting the body, b
 
 ---
 
-**Exercise 5** (Write a program): Build a small in-memory HTTP server that manages a list of songs.
+**Exercise 5** (Where is the bug?): This OAuth callback handler exchanges the code and logs the user in, and it works flawlessly in every test:
+
+```go
+func callback(w http.ResponseWriter, r *http.Request) {
+    tok, err := conf.Exchange(r.Context(), r.FormValue("code"))
+    if err != nil {
+        http.Error(w, "exchange failed", http.StatusForbidden)
+        return
+    }
+    startSession(w, tok)  // user is now logged in
+}
+```
+
+What is missing, and what attack does the omission enable?
+
+**The handler never validates the `state` parameter.**
+`/login` is supposed to generate an unguessable `state`, stash it in a cookie, and pass it to `AuthCodeURL`; the callback must compare `r.FormValue("state")` against that cookie before touching the code.
+
+Without the check, the handler accepts *any* code --- including one the attacker minted by starting their own login flow and stopping at the redirect.
+The attack is **login CSRF**: the attacker tricks the victim's browser into visiting the callback URL carrying the attacker's code, and the victim's browser session is silently logged into the attacker's account.
+Anything the victim then saves --- playlists, personal details, a stored payment method --- lands in an account the attacker can log into and read.
+
+The fix is the cookie round trip from the chapter's `login`/`callback` example: set an unguessable `state` cookie at `/login` (`rand.Text()` from `crypto/rand`), verify it first thing in the callback, and reject with `400` on mismatch.
+PKCE (`oauth2.GenerateVerifier` with `S256ChallengeOption`/`VerifierOption`) hardens the same flow against code interception and should be on as well.
+
+---
+
+**Exercise 6** (Write a program): Build a small in-memory HTTP server that manages a list of songs.
 Define a `Song` struct with fields `ID int`, `Title string`, and `Artist string`, all with appropriate `json` tags.
 Store songs in a package-level `map[int]Song`.
 Register two routes using a `http.NewServeMux()`:
