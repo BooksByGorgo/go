@@ -14,6 +14,7 @@ CHAPTERS := ../g4j/ch00.md ../g4j/ch01.md ../g4j/ch02.md ../g4j/ch03.md \
 # Lossless FlateEncode keeps raster colors matching the vector background fill.
 GS_LULU := gs -dNOPAUSE -dBATCH -sDEVICE=pdfwrite \
            -dCompatibilityLevel=1.3 \
+           -r600 \
            -dAutoFilterColorImages=false -dColorImageFilter=/FlateEncode \
            -dAutoFilterGrayImages=false -dGrayImageFilter=/FlateEncode \
            -dDownsampleColorImages=true -dColorImageResolution=600 \

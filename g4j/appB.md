@@ -81,6 +81,32 @@ It reports only definite bugs or misuses, not style violations or suspicious pat
 For broader coverage, use `golangci-lint` (see below).
 :::
 
+## go fix
+
+\index{go fix}
+Go 1.26 rebuilt `go fix` as a modernizer that applies behavior-preserving updates to old but valid code.
+It uses the same analysis framework as `go vet`, but its analyzers suggest newer idioms and can rewrite the source for you.
+
+Preview the complete patch before changing files:
+
+```sh
+go fix -diff ./...  # print suggested modernizations; change nothing
+```
+
+Apply the suggestions after reviewing that diff:
+
+```sh
+go fix ./...        # rewrite packages under the current module
+```
+
+The built-in modernizers cover changes such as replacing `interface{}` with `any`, manual min/max logic with `min` or `max`, old sorting loops with `slices` helpers, and manual `WaitGroup` launch bookkeeping with `WaitGroup.Go`.
+Run `go tool fix help` to list the analyzers available in your installed toolchain.
+
+::: {.tip}
+**Tip:** Treat `go fix -diff` like an automated refactoring review.
+Read the patch, run the tests, and commit the modernization separately from behavior changes so that any regression is easy to isolate.
+:::
+
 ## golangci-lint
 
 \index{golangci-lint}
@@ -93,10 +119,10 @@ Install it:
 
 ```sh
 # macOS / Linux via the official installer (preferred)
-curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh \
+curl -sSfL https://golangci-lint.run/install.sh \
     | sh -s -- -b $(go env GOPATH)/bin v2.12.2
 
-# or via go install (slower, but always available)
+# or build from source (not guaranteed by the golangci-lint project)
 go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
 ```
 
@@ -355,6 +381,7 @@ The table below maps each Go tool to its closest Java equivalent.
 | `gofmt` | Canonical code formatter | Google Java Format, Spotless |
 | `goimports` | Format + manage imports | IntelliJ optimize imports, `google-java-format` |
 | `go vet` | Built-in static analysis | SpotBugs, Error Prone |
+| `go fix` | Apply behavior-preserving modernizations | IDE inspections with quick fixes |
 | `golangci-lint` | Linter aggregator | Checkstyle + SpotBugs + PMD combined |
 | `go doc` | Terminal doc viewer | IDE quick docs (`javadoc` has no terminal mode) |
 | `go doc -http` | Local documentation server (Go 1.25+) | `javadoc` HTML output, pkg.go.dev |

@@ -426,6 +426,36 @@ This mirrors Exercise 6: to mutate the caller's value through a pointer paramete
 
 ---
 
+**Exercise 8** (What does this print?): This example requires Go 1.26 or later.
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+    n := 5
+    p := new(n + 2)
+    n = 10
+    fmt.Println(*p)
+    fmt.Printf("%T\n", p)
+}
+```
+
+Output:
+
+```
+7
+*int
+```
+
+In Go 1.26+, `new` may take an expression as well as a type.
+`new(n + 2)` evaluates `n + 2` immediately, allocates a new `int` initialized to `7`, and returns its address.
+Changing `n` afterward does not change the separate value that `p` points to.
+The type of `p` is therefore `*int`.
+
+---
+
 # Chapter 3: Strings, Bytes, and Runes --- Answers
 
 **Exercise 1** (Think about it): Go strings are described as "immutable sequences of bytes."
@@ -628,7 +658,7 @@ Deferred calls execute in LIFO (last-in, first-out) order, so the last one regis
 
 ---
 
-**Exercise 3** (What does this print?): Trace the output of the following expression-less switch, one line at a time.
+**Exercise 3** (What does this print?): Trace the output of the following expression-less switch, one line at a time:
 
 ```go
 package main
@@ -3301,7 +3331,8 @@ Go does not initialize package-level variables top to bottom; it initializes the
 A variable is initialized only after every variable it references has been initialized, and ties are broken by declaration order.
 
 - `a` depends on `b` and `c`, so it cannot go first.
-- `b` depends on `f()`; `f()` has no variable dependencies, so `b` can be initialized, which calls `f()` and prints `f called`. `b` becomes `3`.
+- `b` depends on `f()`; `f()` has no variable dependencies, so `b` can be initialized, which calls `f()` and prints `f called`.
+  `b` becomes `3`.
 - `c` depends on nothing, so it becomes `2`.
 - `a` now has both operands ready: `a = b + c = 3 + 2 = 5`.
 
@@ -3853,21 +3884,25 @@ mux.HandleFunc("GET /tracks/{id}/",  getTrack)
 mux.HandleFunc("POST /tracks/",      createTrack)
 ```
 
-a. `GET /tracks/` --- **`listTracks`**
+a. `GET /tracks/`
+b. `GET /tracks/42/`
+c. `DELETE /tracks/7/`
+
+**a. `GET /tracks/` --- `listTracks`**
 
 The method is `GET` and the path is exactly `/tracks/`.
 The pattern `GET /tracks/` ends in a slash, so it matches the subtree rooted at `/tracks/`, including the exact path `/tracks/`.
 The pattern `GET /tracks/{id}/` requires at least one non-empty segment for `{id}` between the slashes (for example `/tracks/42/`), so it does not match `/tracks/` on its own.
 `listTracks` is called.
 
-b. `GET /tracks/42/` --- **`getTrack`**
+**b. `GET /tracks/42/` --- `getTrack`**
 
 The method is `GET` and the path is `/tracks/42/`.
 The pattern `GET /tracks/{id}/` matches, with `{id}` capturing `42`.
 A more specific pattern wins over the less specific `GET /tracks/`, so `getTrack` is chosen.
 Inside the handler, `r.PathValue("id")` returns `"42"`.
 
-c. `DELETE /tracks/7/` --- **`405 Method Not Allowed`**
+**c. `DELETE /tracks/7/` --- `405 Method Not Allowed`**
 
 The path `/tracks/7/` matches the pattern `GET /tracks/{id}/`, but that pattern only accepts `GET`, and the request method is `DELETE`.
 Because some registered pattern matches the path while none matches the method, the Go 1.22 `ServeMux` returns `405 Method Not Allowed` rather than `404`.
@@ -4379,13 +4414,17 @@ return tx.Commit()
 
 (Error handling on `BeginTx` is elided to keep the trace short.)
 
-**Case A: `ExecContext` succeeds and `Commit` succeeds.**
+Case A: `ExecContext` succeeds and `Commit` succeeds.
+Case B: `ExecContext` succeeds but `Commit` returns an error.
+Case C: `ExecContext` returns an error.
+
+**Case A result: committed.**
 
 The deferred `tx.Rollback()` fires after `tx.Commit()` returns.
 `Rollback` on a committed transaction is a no-op --- it returns `sql.ErrTxDone`, which is silently discarded because the return value of a deferred call is not used here.
 The row is **inserted and committed** permanently.
 
-**Case B: `ExecContext` succeeds but `Commit` returns an error.**
+**Case B result: not committed.**
 
 `tx.Commit()` fails, so the function returns an error.
 The deferred `tx.Rollback()` then fires.
@@ -4393,7 +4432,7 @@ However, when a commit fails at the database level, the transaction is typically
 `Rollback` here is a safety net that confirms the abort.
 The row is **not inserted** --- the transaction was not committed.
 
-**Case C: `ExecContext` returns an error.**
+**Case C result: not committed.**
 
 The `if err != nil { return err }` branch fires, returning the error.
 The deferred `tx.Rollback()` fires before the function returns to the caller.
@@ -5172,3 +5211,61 @@ PASS
   If the helper checked multiple things, `t.Fatalf` could be appropriate for a critical precondition.
 - The six cases satisfy the problem requirements: empty string, single word (normal), multi-word, all-caps, and mixed case.
   The "already title" case is a bonus regression check.
+
+---
+
+**Exercise 6** (Write a test): The function below closes a channel after a delay.
+Write a deterministic test using `testing/synctest` that proves the channel is still open before the delay and closed after it.
+The test must not wait for the delay in real time.
+
+```go
+func signalAfter(d time.Duration) <-chan struct{} {
+    done := make(chan struct{})
+    go func() {
+        time.Sleep(d)
+        close(done)
+    }()
+    return done
+}
+```
+
+One solution:
+
+```go
+package music
+
+import (
+    "testing"
+    "testing/synctest"
+    "time"
+)
+
+func TestSignalAfter(t *testing.T) {
+    synctest.Test(t, func(t *testing.T) {
+        const delay = time.Hour
+        done := signalAfter(delay)
+
+        synctest.Wait()
+        select {
+        case <-done:
+            t.Fatal("signal closed before the delay")
+        default:
+            // Still open, as expected.
+        }
+
+        time.Sleep(delay)
+        synctest.Wait()
+        select {
+        case <-done:
+            // Closed after the delay, as expected.
+        default:
+            t.Fatal("signal still open after the delay")
+        }
+    })
+}
+```
+
+The first `synctest.Wait()` waits until the background goroutine is blocked in `time.Sleep` without advancing fake time.
+The non-blocking `select` therefore proves that `done` has not closed early.
+`time.Sleep(delay)` advances the bubble's fake clock by one hour almost instantly in real time.
+The second `synctest.Wait()` lets the background goroutine run through `close(done)`, and the final `select` proves that the signal arrived.

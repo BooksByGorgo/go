@@ -11,7 +11,7 @@
 - Named return values
 - Multiple return values
 - Blank identifier (`_`)
-- `new` vs `make` --- `new(T)` returns a zeroed `*T`; `make` initializes slices, maps, channels
+- `new` vs `make` --- `new(T)` returns a zeroed `*T`; `new(expr)` (Go 1.26) points to an initialized expression value; `make` initializes slices, maps, channels
 - Integer literal prefixes: `0b` binary, `0o` octal, `0x` hex, `_` digit separator (`1_000_000`)
 - Built-in `clear` (Go 1.21) --- zeroes a slice or deletes all map entries
 - Built-in `min` / `max` (Go 1.21) --- type-safe, variadic
@@ -210,6 +210,7 @@
 - `go vet` --- catches common bugs
 - `golangci-lint` --- linter aggregator used in CI
 - `go build`, `go run`, `go test ./...`
+- `go fix` (revamped in Go 1.26) --- behavior-preserving source modernizations
 - `go doc` / `godoc`
 - `gopls` --- official Go language server powering IDE support
 - Delve (`dlv`) --- standard Go debugger; `dlv debug`, `dlv test`, goroutine inspection
@@ -222,7 +223,10 @@
 - Table-driven tests --- slice of structs; `t.Run` subtests
 - `t.Helper()` --- attributes failure output to the call site, not the helper function
 - `t.Cleanup(func())` --- register teardown that runs at test end; composes better than `defer`
+- `t.Context()` (Go 1.24) --- a context canceled just before test cleanup begins
+- `t.ArtifactDir()` (Go 1.26) --- per-test diagnostic output, preserved with `-artifacts`
 - `t.Parallel()` --- mark a test to run concurrently with other parallel tests
+- `testing/synctest` (Go 1.25) --- deterministic concurrent tests with fake time and quiescence detection
 - `TestMain(m *testing.M)` --- package-level setup/teardown; Go's `@BeforeAll` equivalent
 - Benchmarks: `func BenchmarkFoo(b *testing.B)`; `for b.Loop()` (Go 1.24, preferred), `b.N`, `b.ResetTimer`
 - Fuzzing: `func FuzzFoo(f *testing.F)`; `f.Add` seed corpus; coverage-guided; runs until failure
@@ -240,6 +244,7 @@
 - `~T` tilde syntax --- `~int` means "any type whose underlying type is int"; needed for user-defined types in constraints
 - `comparable` constraint vs `any` --- `comparable` admits only `==`-able types; map keys require it
 - Constraints (`comparable`, custom constraint interfaces)
+- Self-referential constraints (Go 1.26) --- e.g. `type Adder[A Adder[A]] interface`
 - `slices` and `maps` packages (Go 1.21+)
 - `cmp.Ordered` constraint for ordered types
 - Generic type aliases (Go 1.24) --- `type Alias[T any] = SomeGenericType[T]`

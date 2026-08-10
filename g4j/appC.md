@@ -121,7 +121,8 @@ The main text cites a rule by its short name in bold italics, written as ***[sho
 
 \index{import dot}
 
-**CR-29. no-dot-import** Avoid `import .`; it makes code harder to read because it is unclear which identifiers come from the imported package. Use it only in tests that, due to circular dependencies, cannot be made part of the package being tested.
+**CR-29. no-dot-import** Avoid `import .`; it makes code harder to read because it is unclear which identifiers come from the imported package.
+Use it only in tests that, due to circular dependencies, cannot be made part of the package being tested.
 
 ## In-Band Errors
 
