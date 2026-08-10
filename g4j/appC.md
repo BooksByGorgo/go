@@ -80,7 +80,7 @@ The main text cites a rule by its short name in bold italics, written as ***[sho
 
 ## Examples
 
-**CR-19. include-examples** When adding a new package, include a runnable `Example*` test function that demonstrates the intended usage.
+**CR-19. include-examples** When adding a new package, include examples of the intended usage: a runnable `Example*` test function, or a simple test demonstrating a complete call sequence.
 
 ## Goroutine Lifetimes
 
@@ -264,6 +264,11 @@ The main text cites a rule by its short name in bold italics, written as ***[sho
 **CR-70. descriptive-global-names** Global variables and variables representing unusual or domain-specific concepts require descriptive names.
 
 ---
+
+# References {.unnumbered}
+
+::: {#refs}
+:::
 
 ```{=latex}
 \printindex

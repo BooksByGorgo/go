@@ -98,7 +98,7 @@ The runtime decides how much parallelism you get based on `GOMAXPROCS`.
 
 Goroutines give you concurrency cheaply.
 How much parallelism you get is controlled by `runtime.GOMAXPROCS`, which defaults to the number of CPU cores.
-Since Go 1.25 it also respects the container's cgroup CPU limit, so a process pinned to two cores in a container no longer spins up a goroutine scheduler sized for the whole host.
+Since Go 1.25 it also respects the container's cgroup CPU quota, so a process capped at two CPUs of quota (think `docker run --cpus=2` or a Kubernetes CPU limit) no longer spins up a goroutine scheduler sized for the whole host.
 You almost never set it manually --- the default is right.
 
 The practical lesson for Java programmers: the goal of channels and goroutines is clean problem decomposition, not raw throughput.
@@ -196,22 +196,23 @@ The exception is the `error` interface: always return `error`, not a concrete er
 \index{zero value}
 
 In Java, objects do not exist until you call a constructor.
-Using an uninitialized field (null) causes a `NullPointerException`.
+The JVM does give instance fields default values (`0`, `false`, `null`), but a reference field left at `null` blows up with a `NullPointerException` the moment you call a method through it.
 Java programmers habitually write defensive constructors and factory methods to ensure objects are always in a valid state.
 
 In Go, every type has a **zero value** --- the value you get when you declare a variable without initializing it.
 Numeric types zero to `0`, booleans to `false`, pointers to `nil`, strings to `""`, and struct fields to their respective zero values.
+That much sounds like Java's field defaults, but Go applies zero values to every variable --- locals included --- not just fields.
 
 The proverb asks you to design your types so the zero value is *already useful*, not broken.
 
 ```go
-var b bytes.Buffer        // zero value: empty buffer, ready to use
+var b bytes.Buffer         // zero value: empty buffer, ready to use
 b.WriteString("Sandstorm") // no constructor needed
 
-var mu sync.Mutex         // zero value: unlocked mutex, ready to use
+var mu sync.Mutex          // zero value: unlocked mutex, ready to use
 mu.Lock()
 
-var wg sync.WaitGroup     // zero value: counter at zero, ready to use
+var wg sync.WaitGroup      // zero value: counter at zero, ready to use
 wg.Add(1)
 ```
 
@@ -235,9 +236,11 @@ If your type relies on a pointer field being non-nil, either initialize it lazil
 \index{interface!empty}
 \index{any}
 
+(The proverb is originally stated as "`interface{}` says nothing"; this heading just spells the type out in words.)
+
 In Go, `interface{}` (written `any` since Go 1.18) is an interface with no methods.
 Every type satisfies it.
-A function that accepts `any` can receive literally anything --- an `int`, a `string`, a goroutine channel, a function value, a `nil`.
+A function that accepts `any` can receive literally anything --- an `int`, a `string`, a channel, a function value, a `nil`.
 
 This flexibility is a warning sign, not a feature.
 If you accept `any`, you have told the compiler nothing about what you intend to do with the value.
@@ -369,16 +372,14 @@ The copied code is stable, auditable, and has no surprise transitive dependencie
 
 ```go
 // Instead of importing a string utilities package for one function,
-// copy the five-line helper you actually need:
+// copy the few lines you actually need:
 
-// containsAny reports whether s contains any Unicode code point in chars.
-func containsAny(s, chars string) bool {
-    for _, c := range chars {
-        if strings.ContainsRune(s, c) {
-            return true
-        }
+// truncate shortens s to at most n runes, marking the cut with "...".
+func truncate(s string, n int) string {
+    if r := []rune(s); len(r) > n {
+        return string(r[:n]) + "..."
     }
-    return false
+    return s
 }
 ```
 

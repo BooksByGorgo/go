@@ -140,7 +140,7 @@
 - `net/http/pprof` --- import for side-effect to expose profiling endpoints on a live HTTP server
 - `net` --- `net.Dial`, `net.Listen`, TCP/UDP below the HTTP layer
 - `time` --- `Duration`, `Time`, `Now`, `Since`, `After`, `Ticker`, `Timer`
-- `sort` --- `Slice`, `SliceStable`, `Search`, `Sort` interface; and `sort.Interface` (`Len`, `Less`, `Swap`)
+- `sort` --- `sort.Interface` (`Len`, `Less`, `Swap`); `sort.Slice` (legacy, superseded by `slices.Sort`)
 - `slices` (Go 1.21) --- `Sort`, `SortFunc`, `Contains`, `Index`, `Compact`, `Collect`
 - `maps` (Go 1.21) --- `Clone`, `Keys`, `Values`
 - `cmp` (Go 1.21) --- `cmp.Compare`, `cmp.Ordered` constraint; used with `slices.SortFunc`
@@ -173,7 +173,6 @@
 
 ## Idioms and Patterns
 - **Table-driven tests** --- slice of structs with `t.Run`
-- **Functional options** --- `func(cfg *Config)` variadic options pattern
 - **Comma-ok idiom** --- maps, type assertions, channel receives
 - **Defer for cleanup** --- file closes, mutex unlocks, span ends
 - `runtime.SetFinalizer` --- rarely correct; prefer `defer` for resource cleanup

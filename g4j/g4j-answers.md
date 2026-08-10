@@ -195,15 +195,16 @@ Notes:
 - The check is `len(os.Args) < 3` because index 0 is the binary name, 1 is the title, and 2 is the count.
 - The play count is kept as a string here; Chapter 3 covers `strconv.Atoi` for converting it to an integer.
 - `fmt.Fprintln(os.Stderr, ...)` sends the usage message to standard error, which is the convention for diagnostic output.
-- `os.Exit(1)` terminates the program immediately with a non-zero exit code, signalling failure to the shell.
+- `os.Exit(1)` terminates the program immediately with a non-zero exit code, signaling failure to the shell.
 
 ---
 
 # Chapter 2: Types and Variables --- Answers
 
-**Exercise 1** (Think about it): In Java, using an uninitialized local variable is a compile error.
-In Go, every variable has a zero value.
-What are the practical benefits of Go's approach, and when might zero values mask a bug instead of preventing one?
+**Exercise 1** (Think about it): Go's zero values mean a declared-but-unassigned variable is always valid.
+Java requires local variables to be assigned before use.
+What are the practical benefits of Go's approach?
+Can you think of a case where Go's zero values might mask a bug instead of preventing one?
 
 The primary benefit is safety and predictability: there are no uninitialized reads and no undefined behavior from reading a garbage value off the stack.
 You can declare a `sync.Mutex` or a `bytes.Buffer` and use it immediately without calling a constructor, because the zero value is deliberately designed to be a valid, ready-to-use state.
@@ -252,7 +253,8 @@ tier type: main.StreamingTier, value: 2
 
 ---
 
-**Exercise 3** (Calculation): Given the declarations, which assignments compile and which produce errors?
+**Exercise 3** (Calculation): Given the following declarations, which assignments compile and which produce errors?
+Identify each line.
 
 ```go
 type Bpm float64
@@ -309,7 +311,9 @@ That compiles and prints `30 10` --- Go evaluates all right-hand expressions bef
 
 ---
 
-**Exercise 5** (Write a program): Declare a `const` block using `iota + 1` for five chart positions (`Debut`, `Rising`, `Peak`, `Declining`, `Legacy`, numbered 1--5), print each name and value, then declare a variable of that type set to `Peak` and print its Go type with `%T`.
+**Exercise 5** (Write a program): Define a `type ChartPosition int`, then declare a `const` block of `ChartPosition` constants using `iota` that represents five chart positions for your favorite genre: `Debut`, `Rising`, `Peak`, `Declining`, and `Legacy`, numbered 1 through 5 (use `iota + 1`).
+Print each constant's name and value using `fmt.Printf` with `%d`.
+Then declare a variable of that type, assign it the `Peak` value, and print its Go type using `%T`.
 
 ```go
 package main
@@ -381,7 +385,7 @@ This is how Go functions modify a caller's variable: take a pointer parameter an
 
 ---
 
-**Exercise 7** (Where is the bug?):
+**Exercise 7** (Where is the bug?): The following code tries to append a suffix to a string through a pointer.
 
 ```go
 package main
@@ -399,11 +403,13 @@ func main() {
 }
 ```
 
+(This code does not compile --- what is the type error?)
+
 This does not compile.
 Inside `addExcitement`, `s` has type `*string` (a pointer), so `s += "!"` tries to add a `string` to a pointer:
 
 ```
-./main.go:6:2: invalid operation: s += "!" (mismatched types *string and untyped string)
+./main.go:6:5: invalid operation: s += "!" (mismatched types *string and untyped string)
 ```
 
 You meant to modify the string the pointer points at, not the pointer itself.
@@ -432,8 +438,9 @@ A Java `String` is backed by UTF-16, and when you iterate its `char` values (a `
 Go's `for range` decodes the string as **UTF-8** and yields one `rune` (a full Unicode code point) per iteration, with the loop index being the byte offset of that rune's first byte.
 So Java walks UTF-16 code units while Go walks decoded UTF-8 code points.
 
-The two loops give the same sequence only when the text is restricted to characters that are both a single UTF-16 code unit in Java and a single byte in UTF-8 in Go --- i.e. pure ASCII.
-For any non-ASCII character the counts and per-iteration values diverge: `é` is one Java `char` but two bytes (one rune) in Go, and a non-BMP emoji is two Java `char` values (a surrogate pair) but one Go `rune`.
+The two loops give the same sequence of index/value pairs only when the text is restricted to characters that are both a single UTF-16 code unit in Java and a single byte in UTF-8 in Go --- i.e. pure ASCII.
+For BMP characters beyond ASCII the counts and the yielded values still match --- `é` (U+00E9) is one Java `char` and one Go `rune`, both with value 233 --- but Go's loop index is a byte offset, so every character that follows a multibyte rune sits at a higher index in Go than in Java.
+Counts and per-iteration values truly diverge only outside the BMP: a non-BMP emoji is two Java `char` values (a surrogate pair) but one Go `rune`.
 
 ---
 
@@ -464,6 +471,8 @@ Indexing a string with `s[4]` returns a **byte**, not a character, so you get `1
 
 **Exercise 3** (Calculation): `len("Alizée")` returns how many bytes?
 And `utf8.RuneCountInString("Alizée")` returns how many runes?
+(Hint: `Alizée` is spelled `A`, `l`, `i`, `z`, `é`, `e` --- the accented `é` (U+00E9) comes before the final plain `e`.
+The five plain ASCII letters are one byte each, and `é` is two bytes in UTF-8.)
 
 `len("Alizée")` returns `7`.
 The letters `A`, `l`, `i`, `z`, `e` are each one byte (5 bytes), and `é` (U+00E9) encodes to two bytes in UTF-8 (`0xC3 0xA9`), for 7 bytes total.
@@ -495,6 +504,11 @@ func main() {
 }
 ```
 
+`é` is encoded as bytes 0xC3 (195) and 0xA9 (169).
+`H` is 72 and `e` is 101.
+Trace through the loop byte by byte.
+What does the function actually print, and what is fundamentally wrong with this approach for non-ASCII strings?
+
 The bug: the function treats every byte as an independent ASCII letter.
 For the ASCII letters this works as intended.
 Tracing `"Héroe"` byte by byte: `H` is 72, in `A`--`Z`, so it becomes 104 (`h`).
@@ -516,6 +530,7 @@ The correct approach is to work on runes (`for range` or `[]rune`), or simply us
 **Exercise 5** (Write a program): Write a function `reverseString(s string) string` that returns the string with its runes in reverse order.
 For example, `reverseString("café")` should return `"éfac"`.
 Test it with at least one string that contains a multibyte character to confirm it handles Unicode correctly.
+(Hint: convert to `[]rune` first.)
 
 ```go
 package main
@@ -741,7 +756,7 @@ Note that a single `Read` is not guaranteed to fill the buffer; using `io.ReadFu
 
 ---
 
-**Exercise 6** (Calculation): Consider this loop.
+**Exercise 6** (Calculation): Consider this loop:
 
 ```go
 count := 0
@@ -749,6 +764,8 @@ for i := 2; i < 100; i *= 2 {
     count++
 }
 ```
+
+How many times does the loop body execute, and what is the value of `i` when the loop condition is evaluated for the last time (and fails)?
 
 The loop body executes **6** times, and the value of `i` when the loop condition is evaluated for the last time (and fails) is **128**.
 
@@ -761,7 +778,7 @@ After the body runs with `i == 64`, the post statement doubles `i` to 128; the c
 
 **Exercise 1** (Think about it):
 Go returns errors as values rather than throwing exceptions.
-A Java checked exception forces the caller to handle it --- the compiler will not let you ignore it.
+A Java `checked exception` forces the caller to handle it --- the compiler will not let you ignore it.
 Go's multi-return error is also explicit, but you can discard it with `_` or simply not assign the second return value.
 Does Go's approach give you the same safety guarantee as Java's checked exceptions?
 What is gained and what is lost by each approach?
@@ -865,7 +882,7 @@ Output:
 125
 ```
 
-`running(100)` creates a closure that captures `total`, initialised to `100`.
+`running(100)` creates a closure that captures `total`, initialized to `100`.
 The same `total` variable is shared across all calls through `acc` because the closure captures it --- it is the same memory location every time.
 
 - `acc(10)`: `total = 100 + 10 = 110`; returns and prints `110`.
@@ -878,7 +895,7 @@ Each call modifies and returns the accumulated value.
 ---
 
 **Exercise 4** (Where is the bug?):
-The following code tries to build a slice of greeting functions, one for each name in a list, using a Go 1.21 module (the `go` directive in `go.mod` is `go 1.21`).
+The following code tries to build a slice of greeting functions, one for each name in a list, using a Go 1.21 module (i.e. the `go` directive in `go.mod` is `go 1.21`).
 
 ```go
 package main
@@ -1132,6 +1149,11 @@ type FeaturedTrack struct {
 func (ft *FeaturedTrack) String() string { /* ... */ }
 ```
 
+a. How many methods are in the method set of `Track` (the value type)?
+b. How many methods are in the method set of `*Track`?
+c. How many methods are in the method set of `FeaturedTrack` (the value type), counting promoted methods?
+d. How many methods are in the method set of `*FeaturedTrack`, counting promoted methods?
+
 **Answer:**
 
 - a. `Track` (the value type): **1** --- only `IsLong`, the sole value-receiver method.
@@ -1315,13 +1337,13 @@ For maps, Go's comparable-at-the-language-level requirement is simpler and faste
 You cannot supply custom equality, and some types simply cannot be keys at all.
 A Java key type you cannot use directly as a Go map key is anything backed by a slice: for example, a Java `List<String>` (or a `byte[]`) used as a `HashMap` key has no Go equivalent, because slices are not comparable in Go.
 You must convert to a comparable form first --- turn a `[]byte` into a `string`, or build a struct or string key out of the pieces.
-The trade-off is less flexibility (no custom hashing) in exchange for no boxing, no per-key method dispatch, and a guarantee that the compiler rejects un-hashable keys at compile time instead of letting you discover the problem at runtime.
+The trade-off is less flexibility (no custom hashing) in exchange for no boxing, no per-key method dispatch, and a guarantee that the compiler rejects un-hashable keys at compile time instead of letting you discover the problem at runtime (unless you choose an interface key type such as `map[any]V` --- interfaces arrive in Chapter 8 --- which pushes that check back to a runtime panic).
 
 For slices, storing values directly rather than as heap references gives much better memory layout, but it only helps for value types (`int`, `float64`, structs).
 
 A Java `ArrayList<Integer>` stores a pointer (reference) to each boxed `Integer` object, and each `Integer` object lives somewhere on the heap.
 Iterating over the list means following a pointer for every element, and those `Integer` objects may be scattered around memory --- poor cache locality.
-Each `Integer` also carries object-header overhead (typically 16 bytes) even though the actual integer value is just 4 bytes.
+Each `Integer` also carries object-header overhead (a 12-byte header with HotSpot's default compressed class pointers, padding the whole object to 16 bytes) even though the actual integer value is just 4 bytes.
 
 A Go `[]int` stores the integer values **directly** and **contiguously** in the backing array.
 Iterating is a sequential scan through a flat region of memory: the CPU prefetcher handles this extremely well.
@@ -1331,7 +1353,7 @@ You feel the difference most in:
 
 - **Tight loops** that process large slices: the sequential memory-access pattern is cache-friendly, and modern CPUs can vectorize flat integer arrays.
 - **Memory usage**: a Go `[]int` of a million elements is roughly 8 MB (64-bit ints).
-  A Java `ArrayList<Integer>` of a million elements is the list's pointer array (8 MB of references) plus a million `Integer` objects on the heap (at least 16 MB more), for a minimum of 24 MB --- and GC pressure from all those small objects.
+  A Java `ArrayList<Integer>` of a million elements is the list's reference array (about 4 MB with HotSpot's default compressed references, 8 MB without) plus a million 16-byte `Integer` objects on the heap (16 MB more), for roughly 20--24 MB --- and GC pressure from all those small objects.
 - **GC pauses**: the Go garbage collector has no pointers to trace inside a `[]int`, so it scans the array in constant time.
   A Java `ArrayList<Integer>` forces the GC to follow a million references.
 
@@ -1375,7 +1397,7 @@ The loop iterates the `hits` slice in order.
 `"Out Of The Blue"` is in the catalog, so the comma-ok idiom sets `ok = true` and its play count is printed.
 `"Watermelon Sugar"` is not in the catalog, so `ok = false` and the `else` branch runs.
 `"Saltwater"` is in the catalog and is printed last.
-Map lookup order is randomized, but slice `range` iteration is always in index order, so the output here is deterministic.
+Map iteration order is randomized, but slice `range` iteration is always in index order, so the output here is deterministic.
 
 ---
 
@@ -1577,7 +1599,7 @@ No degree symbol, no unit, just the number.
 
 ---
 
-**Exercise 3** (Calculation): An interface value in Go stores two fields: a pointer to type information and a pointer to (or copy of) the data.
+**Exercise 3** (Calculation): An interface value in Go stores two fields: a pointer to type information and a pointer to the data.
 Given a variable declared as `var r io.Reader = &bytes.Buffer{}`, how many distinct type/value components does `r` hold?
 If `r` is then assigned `nil`, describe the type and value components of the resulting interface value.
 
@@ -1882,7 +1904,10 @@ Note that `Artist` has no validation rule, so `"DJ Analyzer"` (a valid, non-empt
 
 ---
 
-**Exercise 4** (Where is the bug?):
+**Exercise 4** (Where is the bug?): This program compiles, runs, and prints `Children` --- and `readAll` is still wrong.
+It violates the `io.Reader` contract in a way that silently drops data with some readers.
+Where is the bug?
+Follow-up: the loop compares with `err == io.EOF`, which the `io` docs explicitly allow for `io.EOF` returned by `Read` --- so why does this chapter still push you toward `errors.Is`?
 
 ```go
 package main
@@ -1898,13 +1923,13 @@ func readAll(r io.Reader) ([]byte, error) {
     var result []byte
     for {
         n, err := r.Read(buf)
-        result = append(result, buf[:n]...)
         if err == io.EOF {
             break
         }
         if err != nil {
             return nil, fmt.Errorf("readAll: %w", err)
         }
+        result = append(result, buf[:n]...)
     }
     return result, nil
 }
@@ -1920,47 +1945,35 @@ func main() {
 }
 ```
 
-**The bug:** The program compiles and runs as written (it prints `Children`), but it has one idiomatic-correctness bug.
+**The bug: the `n > 0` bytes returned alongside the error are thrown away.**
+The `io.Reader` contract says: "Callers should always process the n > 0 bytes returned before considering the error err."
+A single `Read` call is allowed to return final data *and* `io.EOF` together.
+This loop checks `err` first, so when that happens it `break`s (or returns) before ever appending `buf[:n]`, and the final chunk is silently dropped.
 
-**The bug --- comparing `err == io.EOF` directly instead of using `errors.Is`:** The sentinel check `if err == io.EOF` happens to work for the bare `io.EOF` returned by `strings.Reader`, but it silently misses `io.EOF` if any reader in the future wraps it (e.g., `fmt.Errorf("read: %w", io.EOF)`).
-The chapter recommends never comparing errors with `==` when they might be wrapped.
-To be fair, the `io` package documents that `Read` implementations return the bare, unwrapped `io.EOF`, so on a direct `Read` call `==` is exactly what the standard library itself does --- `errors.Is` here is a robustness and consistency improvement rather than a correctness fix.
-The idiomatic fix is to use `errors.Is`, which walks the entire chain:
+`strings.Reader` happens to be polite: it never returns data and `io.EOF` in the same call, so this program prints `Children` and the bug stays hidden.
+Wrap the same reader in `iotest.DataErrReader(strings.NewReader("Children"))`, which delivers the final chunk together with `io.EOF`, and the program prints only `Chil` --- the last four bytes vanish (verified on go 1.26.5).
 
-```go
-if errors.Is(err, io.EOF) {
-    break
-}
-```
-
-That fix also requires adding `"errors"` to the import list (the current program does not import it).
-With `errors.Is` in place the read loop is consistent with the rest of the chapter and robust to wrapped EOF.
-
-**Corrected `readAll`:**
+**The fix:** process the bytes *before* considering the error, exactly as the contract says:
 
 ```go
-func readAll(r io.Reader) ([]byte, error) {
-    buf := make([]byte, 4)
-    var result []byte
-    for {
-        n, err := r.Read(buf)
-        result = append(result, buf[:n]...)
-        if errors.Is(err, io.EOF) {
-            break
-        }
-        if err != nil {
-            return nil, fmt.Errorf("readAll: %w", err)
-        }
+for {
+    n, err := r.Read(buf)
+    result = append(result, buf[:n]...)
+    if err == io.EOF {
+        break
     }
-    return result, nil
+    if err != nil {
+        return nil, fmt.Errorf("readAll: %w", err)
+    }
 }
 ```
 
-With the fix applied, the program prints:
+With the append hoisted above the error checks, both the plain and the `DataErrReader`-wrapped versions print `Children`.
 
-```
-Children
-```
+**Follow-up:** the `io` docs promise that `Read` returns the bare sentinel: "Read must return EOF itself, not an error wrapping EOF, because callers will test for EOF using ==."
+So `err == io.EOF` is safe at the `Read` call site, and the standard library itself compares this way.
+`errors.Is` earns its keep the moment an error may have passed through a wrapping layer --- like this very function's `fmt.Errorf("readAll: %w", err)` --- because `==` against a wrapped error is silently `false`.
+The chapter pushes `errors.Is` as the default habit because it costs nothing here and keeps working for every other sentinel, none of which carry `io.EOF`'s unwrapped-by-contract guarantee.
 
 ---
 
@@ -2232,6 +2245,8 @@ If `Wait` observes the counter still at `0`, it returns immediately, `main` clos
 
 Running the program under `-race` reports a data race between `wg.Add` / the channel send and `close(results)`, and the program often panics or prints nothing.
 
+You do not even need to run the program to find this one: plain `go vet` flags it statically, reporting `WaitGroup.Add called from inside new goroutine` (verified on go 1.26.5) --- the cheapest possible way to catch the misplaced `Add`.
+
 The rule is: **call `wg.Add(n)` before starting the goroutines**, on the goroutine that owns the `WaitGroup`, never inside the goroutine being waited on.
 
 Fixed version:
@@ -2254,7 +2269,7 @@ Under older Go you would also need to pass `t` as a parameter to avoid all gorou
 ---
 
 **Exercise 5** (Write a program): Write a program that launches three goroutines.
-Each goroutine sleeps for a different duration (10ms, 20ms, 30ms) and then sends one of the given strings on its own channel.
+Each goroutine sleeps for a different duration (use `time.Sleep` with values like `10ms`, `20ms`, `30ms`) and then sends the string `"Jaroslav Beck & Crispin: Legend"`, `"Jaroslav Beck: $100 Bills"`, or `"Jaroslav Beck: Turn Me On"` on its own channel.
 In `main`, use a `select` loop to receive from all three channels and print each message as it arrives.
 Also add a `time.After(100 * time.Millisecond)` case that prints `"timeout"` and exits the loop if no message arrives within 100 ms of the last received one.
 Print the messages in the order they actually arrive.
@@ -2364,12 +2379,16 @@ The practical advantages of Go's approach:
 
 - **Granularity:** you can have as many independent mutexes as you need at zero structural cost.
 - **Clarity:** the pairing between a mutex and the data it protects is visible in the struct definition (often with a `// protects tracks` comment).
-- **No accidental sharing:** in Java, every synchronized method on the same object uses the same monitor, even if they protect unrelated state. In Go, each mutex is independent by default.
+- **No accidental sharing:** in Java, every synchronized method on the same object uses the same monitor, even if they protect unrelated state.
+  In Go, each mutex is independent by default.
 
 The practical disadvantages:
 
-- **Verbosity:** you must declare, name, and document each mutex. Java's implicit monitor requires no declaration.
-- **Copy hazard:** Go structs are value types. Copying a struct that contains a `sync.Mutex` after first use is a bug; the struct must always be passed and stored by pointer. Java objects are always references, so this hazard does not exist (and `go vet` catches the Go version, as Exercise 4 shows).
+- **Verbosity:** you must declare, name, and document each mutex.
+  Java's implicit monitor requires no declaration.
+- **Copy hazard:** Go structs are value types.
+  Copying a struct that contains a `sync.Mutex` after first use is a bug; the struct must always be passed and stored by pointer.
+  Java objects are always references, so this hazard does not exist (and `go vet` catches the Go version, as Exercise 4 shows).
 
 ---
 
@@ -2472,7 +2491,8 @@ Under Go 1.22+, each iteration of the `for` loop gets its **own** copy of the lo
 So the four goroutines capture distinct values 0, 1, 2, and 3, and the total is always 0 + 1 + 2 + 3 = 6, deterministically.
 Verified under go1.26.3: the program prints `6` on every run.
 
-**Would your answer have differed in Go 1.21 or earlier? Yes.**
+**Would your answer have differed in Go 1.21 or earlier?**
+**Yes.**
 Before Go 1.22, the loop variable `i` was a **single** variable shared across all iterations of the loop, including in a C-style three-clause `for` (the per-iteration change applies to both `for i := ...; ...; ... {}` loops and `for ... range` loops --- not just range).
 With the old shared-variable semantics, the goroutines capture the **variable**, not its value at launch time.
 By the time a goroutine runs, the loop may already have advanced `i`.
@@ -2672,10 +2692,13 @@ Verified under go1.26.3, including with `go run -race`: no data race is reported
 
 Key points of the implementation:
 
-- The `sync.Mutex` in `RateLimiter` protects both `used` and `resetAt` together as a single invariant. Neither field is read or written outside the lock.
-- `Allow` checks the current time inside the lock so that the window reset and the token deduction are one atomic decision. If the check and the deduction were in separate lock acquisitions, another goroutine could sneak in between them.
+- The `sync.Mutex` in `RateLimiter` protects both `used` and `resetAt` together as a single invariant.
+  Neither field is read or written outside the lock.
+- `Allow` checks the current time inside the lock so that the window reset and the token deduction are one atomic decision.
+  If the check and the deduction were in separate lock acquisitions, another goroutine could sneak in between them.
 - The `allowed` and `denied` counters in `main` use `atomic.Int64` rather than a mutex because they are independent single-variable updates --- a textbook atomic use case.
-- `wg.Add(1)` is called in the outer loop, **before** the goroutine is launched, following the `WaitGroup` rule from the chapter (and the bug in Exercise 6). You could equally use `wg.Go(func() { ... })` (Go 1.25+) and drop the explicit `Add`/`Done`.
+- `wg.Add(1)` is called in the outer loop, **before** the goroutine is launched, following the `WaitGroup` rule from the chapter (and the bug in Exercise 6).
+  You could equally use `wg.Go(func() { ... })` (Go 1.25+) and drop the explicit `Add`/`Done`.
 
 ---
 
@@ -2704,7 +2727,9 @@ func main() {
 }
 ```
 
-The author expects `[0 1 4 9 16]` but usually sees something like `[0 0 0 0 0]`, and `go run -race` reports a data race.
+The author expects this to print `[0 1 4 9 16]`, but it usually prints something like `[0 0 0 0 0]` or a partial result, and `go run -race` reports a data race on `results`.
+What is wrong, and how would you fix it?
+(Hint: where is `wg.Add(1)` called, and what does `go vet` say about it?)
 
 **The bug:** `wg.Add(1)` is called *inside* the goroutine instead of before launching it.
 
@@ -2714,8 +2739,10 @@ If `Wait` observes the counter at zero (which it can, because no goroutine has e
 
 This produces two distinct problems:
 
-- **Premature `Wait`:** the program usually prints a partial or all-zero slice such as `[0 0 0 0 0]` instead of `[0 1 4 9 16]`. The output is non-deterministic and changes run to run.
-- **Data race:** `main` reads `results` (via `fmt.Println`) at the same time the surviving goroutines write to `results[n]`. Verified under go1.26.3: `go run -race` reports `WARNING: DATA RACE`, and `go vet` flags it statically with the exact diagnostic `WaitGroup.Add called from inside new goroutine`.
+- **Premature `Wait`:** the program usually prints a partial or all-zero slice such as `[0 0 0 0 0]` instead of `[0 1 4 9 16]`.
+  The output is non-deterministic and changes run to run.
+- **Data race:** `main` reads `results` (via `fmt.Println`) at the same time the surviving goroutines write to `results[n]`.
+  Verified under go1.26.3: `go run -race` reports `WARNING: DATA RACE`, and `go vet` flags it statically with the exact diagnostic `WaitGroup.Add called from inside new goroutine`.
 
 **The fix:** call `wg.Add(1)` in the main goroutine *before* the `go` statement, so the counter is guaranteed non-zero before `Wait` can observe it:
 
@@ -3085,7 +3112,8 @@ The final line passes a plain `string` literal `"user"`, whose type is `string`,
 Because the key types differ, no match is found anywhere in the tree, so `ctx.Value("user")` returns `nil`, which prints as `<nil>`.
 This is exactly why idiomatic Go uses an unexported key type: a `string` key from another package can never collide with your typed key.
 
-Note: this program uses a named string-based key type purely to demonstrate the type-matching rule; `go vet` does not flag it because the key type is a defined (named) type rather than a built-in type.
+Note: this program uses a named string-based key type purely to demonstrate the type-matching rule.
+No standard tool complains about it: plain `go vet` has no context-key check at all, and `staticcheck`'s SA1029 (`should not use built-in type string as key for value`) fires only on built-in key types like a bare `string`, not on a defined type such as `ctxKey`.
 In production, prefer an unexported empty-struct key type as shown in the chapter.
 
 ---
@@ -3269,17 +3297,17 @@ init, a = 5
 main, a = 5
 ```
 
-Go does not initialise package-level variables top to bottom; it initialises them in *dependency order*.
-A variable is initialised only after every variable it references has been initialised, and ties are broken by declaration order.
+Go does not initialize package-level variables top to bottom; it initializes them in *dependency order*.
+A variable is initialized only after every variable it references has been initialized, and ties are broken by declaration order.
 
 - `a` depends on `b` and `c`, so it cannot go first.
-- `b` depends on `f()`; `f()` has no variable dependencies, so `b` can be initialised, which calls `f()` and prints `f called`. `b` becomes `3`.
+- `b` depends on `f()`; `f()` has no variable dependencies, so `b` can be initialized, which calls `f()` and prints `f called`. `b` becomes `3`.
 - `c` depends on nothing, so it becomes `2`.
 - `a` now has both operands ready: `a = b + c = 3 + 2 = 5`.
 
-After all package-level variables are initialised, Go runs `init()`, which prints `init, a = 5`.
+After all package-level variables are initialized, Go runs `init()`, which prints `init, a = 5`.
 Finally `main` runs and prints `main, a = 5`.
-The key point is that even though `a` is declared first in the source, it is initialised last because of its dependencies, and `f` is called exactly once during variable initialisation, before `init` and `main`.
+The key point is that even though `a` is declared first in the source, it is initialized last because of its dependencies, and `f` is called exactly once during variable initialization, before `init` and `main`.
 
 ---
 
@@ -3453,7 +3481,7 @@ Childhood Dreams by Robert Dreamhouse
 Paper Houses by Robert Dreamhouse
 ```
 
-`Label` is exported (capital `L`) so other packages *inside* the module can call it, but because it lives under `internal/`, no code outside `github.com/robertdreamhouse/children` can import it --- exactly the "exported within the module, private outside it" behaviour the exercise asked for.
+`Label` is exported (capital `L`) so other packages *inside* the module can call it, but because it lives under `internal/`, no code outside `github.com/robertdreamhouse/children` can import it --- exactly the "exported within the module, private outside it" behavior the exercise asked for.
 
 ---
 
@@ -3546,7 +3574,7 @@ The key ordering in `log/slog` text format is `level`, `msg`, then the attribute
 
 ---
 
-**Exercise 3** (Calculation): You open a 10 MiB file and read it in three ways:
+**Exercise 3** (Calculation): You open a 10 MB file and read it in three ways:
 (a) `os.ReadFile` into a `[]byte`,
 (b) `bufio.NewScanner` reading line by line,
 (c) `io.Copy(io.Discard, f)` using the default 32 KiB copy buffer.
@@ -3567,7 +3595,8 @@ This is the simplest approach but the most memory-hungry for large files.
 `Scanner` uses an internal buffer (default starting size 4 KiB, default maximum token size 64 KiB).
 It reads the file in chunks, scanning for newline boundaries.
 At any instant only the current chunk plus the current token are in memory.
-Peak heap allocation: about 64 KiB (the scanner's internal buffer) plus the length of the longest individual line.
+Peak heap allocation: about 4 KiB (the scanner's initial buffer) plus the length of the longest individual line.
+The buffer grows toward the 64 KiB default cap only when a single token outgrows it, which 100-byte lines never do.
 For 100-byte lines this is well under 1 MiB.
 
 (c) `io.Copy(io.Discard, f)`
@@ -3813,7 +3842,7 @@ The `"secret"` key in the JSON is silently discarded, so `b.Secret` keeps its ze
 
 ---
 
-**Exercise 3** (Calculation): Consider the following `ServeMux` registration and the three incoming requests.
+**Exercise 3** (Calculation): Consider the following `ServeMux` registration and the three incoming requests below.
 For each request, state which handler function is called.
 If no handler runs, give the HTTP error status the mux returns, and say whether the mux failed to match the path at all (`404 Not Found`) or matched the path pattern but not the request method (`405 Method Not Allowed`).
 
@@ -4034,21 +4063,27 @@ Key points illustrated by this solution:
 
 # Chapter 16: gRPC --- Answers
 
-**Exercise 1** (Think about it): For a public API consumed by third-party web and mobile clients you do not control, versus high-volume internal traffic between your own services, which would you reach for --- REST/JSON or gRPC --- and why?
+**Exercise 1** (Think about it): Chapter 15 built a JSON-over-HTTP service for the same song catalog.
+For a public API consumed by third-party web and mobile clients you do not control, and for high-volume internal traffic between your own microservices, which would you reach for --- REST/JSON or gRPC --- and why?
+Consider browser support, human debuggability with `curl`, payload size, schema evolution, and streaming.
 
 **Public, third-party API: REST/JSON.**
 
 - *Browser support:* Browsers speak HTTP/1.1 and JSON natively. gRPC needs HTTP/2 trailers that browsers do not expose to JavaScript, so it requires gRPC-Web plus a translating proxy --- friction you are pushing onto every consumer.
-- *Debuggability:* Anyone can hit a JSON endpoint with `curl`, a browser, or Postman and read the response. A binary protobuf payload is opaque without the `.proto` and a decoder.
-- *Adoption:* Third parties do not want to compile your `.proto` or pull a generated client just to call you. A documented JSON contract is the lowest barrier to entry.
+- *Debuggability:* Anyone can hit a JSON endpoint with `curl`, a browser, or Postman and read the response.
+  A binary protobuf payload is opaque without the `.proto` and a decoder.
+- *Adoption:* Third parties do not want to compile your `.proto` or pull a generated client just to call you.
+  A documented JSON contract is the lowest barrier to entry.
 
 **Internal, high-volume service-to-service traffic: gRPC.**
 
 - *Payload size and speed:* Binary protobuf is smaller and faster to (de)serialize than text JSON, which matters at high request rates.
-- *Schema evolution:* The `.proto` is a compile-time contract for every language; a renamed field is caught at generation time, not at 3 a.m. in production. Tag numbers let you add fields without breaking old peers.
+- *Schema evolution:* The `.proto` is a compile-time contract for every language; a renamed field is caught at generation time, not at 3 a.m. in production.
+  Tag numbers let you add fields without breaking old peers.
 - *Streaming and deadlines:* gRPC has first-class streaming and propagates `context` deadlines across the network for free --- both awkward to bolt onto plain REST.
 
-Many systems do both: gRPC between internal services, with a REST/JSON edge (often via `grpc-gateway`) for the public face. The right answer is "REST at the boundary, gRPC in the core," not one universally.
+Many systems do both: gRPC between internal services, with a REST/JSON edge (often via `grpc-gateway`) for the public face.
+The right answer is "REST at the boundary, gRPC in the core," not one universally.
 
 ---
 
@@ -4075,17 +4110,27 @@ A new server built from the "after" proto encodes `id` under tag 2 and `title` u
 An old client, built from the "before" proto, decodes tag 1 as `id` and tag 2 as `title`.
 So the old client reads the server's `title` into its `id` field and the server's `id` into its `title` field: the two values are silently swapped.
 
-Crucially, there is no error. Both fields are `string`, so the bytes decode cleanly --- the data is just wrong.
+Crucially, there is no error.
+Both fields are `string`, so the bytes decode cleanly --- the data is just wrong.
 (Had the swapped fields been different types, the client would instead see decode errors or garbage values.)
-The lesson: tag numbers *are* the contract. You may rename a field freely, but you must never reuse or renumber a tag.
+The lesson: tag numbers *are* the contract.
+You may rename a field freely, but you must never reuse or renumber a tag.
 
 ---
 
-**Exercise 3** (Calculation): A unary handler does 80 ms of work; the client calls it with a 50 ms timeout, and the handler never checks `ctx.Done()`.
+**Exercise 3** (Calculation): A unary RPC handler does 80 ms of work.
+A client calls it with `context.WithTimeout(ctx, 50*time.Millisecond)`.
+The server-side handler does not check `ctx.Done()` and runs to completion.
+(a) What status code does the *client* observe?
+(b) Does the server's handler still finish its 80 ms of work?
+(c) What single change makes the server stop early when the deadline passes?
 
-(a) The client observes **`codes.DeadlineExceeded`**. At 50 ms the client's context fires and the RPC is cancelled locally, regardless of what the server is still doing.
+(a) The client observes **`codes.DeadlineExceeded`**.
+At 50 ms the client's context fires and the RPC is cancelled locally, regardless of what the server is still doing.
 
-(b) **Yes** --- the handler runs all 80 ms. Cancellation in Go is cooperative (Chapter 12): a context that is "done" does nothing on its own; code must check it. Since this handler ignores `ctx`, it finishes, and its response is then thrown away because the client already gave up and the stream is closed.
+(b) **Yes** --- the handler runs all 80 ms.
+Cancellation in Go is cooperative (Chapter 12): a context that is "done" does nothing on its own; code must check it.
+Since this handler ignores `ctx`, it finishes, and its response is then thrown away because the client already gave up and the stream is closed.
 
 (c) Make the handler **honor the context** --- check `ctx.Err()` (or `select` on `ctx.Done()`) at a cancellation point and return early, e.g.:
 
@@ -4113,6 +4158,9 @@ func (s *jukeboxServer) ListSongs(
 }
 ```
 
+There are two distinct problems in this handler.
+Identify both and say what the client sees for each.
+
 **Bug 1 --- the `Send` error is ignored.**
 If the client disconnects or its deadline fires partway through, `stream.Send` starts returning an error, but the loop keeps calling `Send` into a dead stream and never notices.
 It should be `if err := stream.Send(song); err != nil { return err }`.
@@ -4121,7 +4169,8 @@ It should be `if err := stream.Send(song); err != nil { return err }`.
 **Bug 2 --- it returns a non-`nil` error to end the stream.**
 A server-streaming handler ends the stream cleanly by returning `nil`; returning any error terminates the RPC with a failure status.
 Worse, `errors.New("done sending")` carries no gRPC status, so gRPC labels it `codes.Unknown`.
-*Client effect:* after receiving every song, the client's `Recv` returns that `Unknown`-coded error instead of the expected `io.EOF`, so a perfectly good response looks like a failure. The fix is to `return nil`.
+*Client effect:* after receiving every song, the client's `Recv` returns that `Unknown`-coded error instead of the expected `io.EOF`, so a perfectly good response looks like a failure.
+The fix is to `return nil`.
 
 ---
 
@@ -4328,6 +4377,8 @@ if err != nil {
 return tx.Commit()
 ```
 
+(Error handling on `BeginTx` is elided to keep the trace short.)
+
 **Case A: `ExecContext` succeeds and `Commit` succeeds.**
 
 The deferred `tx.Rollback()` fires after `tx.Commit()` returns.
@@ -4419,7 +4470,13 @@ Calling `rows.Close()` on already-closed rows is a no-op, so it is always safe.
 
 ---
 
-**Exercise 5** (Write a program): Using `database/sql` and the `github.com/mattn/go-sqlite3` driver, open an in-memory SQLite database, create a `playlists` table, insert at least three rows inside a single transaction using the deferred rollback pattern, query and print all rows with `QueryContext` and `Scan`, and use `sql.Null[string]` for a nullable `description` column.
+**Exercise 5** (Write a program): Using `database/sql` and the `github.com/mattn/go-sqlite3` driver, write a program that:
+
+- Opens an in-memory SQLite database.
+- Creates a `playlists` table with columns `id` (integer primary key autoincrement), `name` (text, not null), and `owner` (text, not null).
+- Inserts at least three rows inside a single transaction using the deferred rollback pattern.
+- Queries and prints all rows using `QueryContext` and `Scan`.
+- Uses `sql.Null[string]` for at least one nullable column (add a `description` column that is nullable).
 
 ```go
 package main
@@ -4562,7 +4619,8 @@ Note that the SQLite driver requires `CGO_ENABLED=1` (the default on most system
 Generic type information is only available at compile time.
 Go generics use **monomorphization** (or a shared pointer-shaped representation): the compiler may generate distinct code for each instantiation.
 Describe one concrete advantage and one concrete disadvantage of each approach.
-How does type erasure affect what you can do with a Java generic type at runtime (e.g., `instanceof List<String>`)? Does Go have the same limitation?
+How does type erasure affect what you can do with a Java generic type at runtime (e.g., `instanceof List<String>`)?
+Does Go have the same limitation?
 
 **Type erasure (Java):**
 
@@ -4587,7 +4645,7 @@ For large programs with many instantiation combinations, compile times can grow.
 **Runtime reflection:**
 
 In Java, because of erasure, `List<String>.class` does not exist; you can only get `List.class`.
-`instanceof List<String>` is a compile-time warning and a runtime check against `List`, not `List<String>`.
+`instanceof List<String>` does not compile at all ("Object cannot be safely cast to List<String>" on OpenJDK 21); only `instanceof List` or `instanceof List<?>` is allowed, and either one checks against the erased `List`.
 Accessing the actual type argument at runtime requires passing a `Class<T>` token explicitly.
 
 In Go, you can use `reflect.TypeOf` to inspect the concrete type of a value, and since Go does not erase type information the way Java does, the concrete type is always available.
@@ -5002,7 +5060,7 @@ func assertNormalized(t *testing.T, input, want string) {
 With `t.Helper()` present, the reported failure location moves up to the line inside `TestBadApple` that called the helper:
 
 ```
-music_test.go:13: normalize("bad apple!!"): got "bad apple!!", want "Bad Apple!!"
+music_test.go:14: normalize("bad apple!!"): got "bad apple!!", want "Bad Apple!!"
 ```
 
 That line number points directly to `assertNormalized(t, "bad apple!!", "Bad Apple!!")` in `TestBadApple`, which is exactly where the problematic call lives.
@@ -5012,7 +5070,7 @@ But whether to use `Fatal` or `Error` is a judgment call; the `t.Helper()` omiss
 
 ---
 
-**Exercise 5** (Write a program): Write a table-driven test for `TitleCase`.
+**Exercise 5** (Write a program): Write a table-driven test for the following function.
 Your test must include at least five cases covering normal input, empty string, all-caps input, and a multi-word title.
 Use `t.Run` for each case and `t.Helper` in any helper you write.
 

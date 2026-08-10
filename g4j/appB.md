@@ -12,8 +12,9 @@ Go formatting is not a style guide suggestion --- it is enforced.
 `gofmt` is the official formatter, and idiomatic Go code is always `gofmt`-clean.
 There is no equivalent debate in the Go community about brace placement or indentation because `gofmt` makes every decision for you.
 
-The Java world has tools like Checkstyle and Google Java Format, but they are optional and configurable.
-`gofmt` has almost no configuration on purpose: one canonical style for all Go code everywhere.
+The Java world has tools like Checkstyle, but they are optional and configurable.
+The exception is Google Java Format, which copied `gofmt`'s no-knobs philosophy --- its only style option is the `--aosp` variant.
+`gofmt` goes just as hard: one canonical style for all Go code everywhere, no configuration on purpose.
 
 Run the formatter in place:
 
@@ -52,9 +53,9 @@ Don't rely on reviewers to catch it.
 
 \index{go vet}
 `go vet` is a static analysis tool that catches mistakes the compiler deliberately ignores.
-The compiler only rejects code that is syntactically or type-invalid; `go vet` catches things that compile fine but are almost certainly bugs.
+The compiler only rejects code with syntax or type errors; `go vet` catches things that compile fine but are almost certainly bugs.
 
-Java programmers will recognize this role from SpotBugs or ErrorProne, but `go vet` is built in and requires no configuration.
+Java programmers will recognize this role from SpotBugs or Error Prone, but `go vet` is built in and requires no configuration.
 
 ```sh
 go vet ./...        # vet all packages in the module
@@ -86,7 +87,7 @@ For broader coverage, use `golangci-lint` (see below).
 \index{linter!aggregator}
 `golangci-lint` is the standard linter aggregator for Go.
 It runs dozens of individual linters in parallel, merges their output, and is fast enough to use in CI.
-The closest Java equivalent is a combination of Checkstyle, SpotBugs, PMD, and ErrorProne --- all configured in one place.
+The closest Java equivalent is a combination of Checkstyle, SpotBugs, PMD, and Error Prone --- all configured in one place.
 
 Install it:
 
@@ -177,7 +178,7 @@ go doc -src fmt.Println         # show the source of the function
 Since Go 1.25, `go doc` can also serve documentation as HTML in the same format as pkg.go.dev --- no extra install needed:
 
 ```sh
-go doc -http=:6060              # serve docs at http://localhost:6060
+go doc -http        # serve docs on a random localhost port and print the address
 ```
 
 (The deprecated `golang.org/x/tools/cmd/godoc` command was the way to do this before Go 1.25; you may still see it referenced.)
@@ -190,7 +191,7 @@ Treat a missing doc comment on an exported symbol the same way you would treat a
 
 ::: {.tip}
 **Wut:** Unlike Javadoc, Go doc comments are plain text --- no HTML, no `@param`, no `@return` tags.
-Since Go 1.19, the `go doc` format supports a lightweight markup (lists, code fences, links) but it is still far simpler than Javadoc.
+Since Go 1.19, the `go doc` format supports a lightweight markup (lists, indented code blocks, links) but it is still far simpler than Javadoc.
 :::
 
 ## gopls
@@ -199,7 +200,7 @@ Since Go 1.19, the `go doc` format supports a lightweight markup (lists, code fe
 \index{language server}
 \index{LSP}
 `gopls` (pronounced "go please") is the official Go language server.
-It implements the Language Server Protocol (LSP), the same protocol that powers Java support in VS Code via the Eclipse JDT Language Server and in IntelliJ via its built-in engine.
+It implements the Language Server Protocol (LSP), the same protocol that powers Java support in VS Code via the Eclipse JDT Language Server (IntelliJ uses its own non-LSP engine).
 Any editor that speaks LSP --- VS Code, Neovim, Emacs, Helix, and others --- can use `gopls` for Go support.
 
 `gopls` provides:
@@ -210,7 +211,7 @@ Any editor that speaks LSP --- VS Code, Neovim, Emacs, Helix, and others --- can
 - Rename refactoring
 - Auto-import via `goimports`
 - Real-time `go vet` and some `staticcheck` diagnostics
-- Inlay hints for parameter names and return types
+- Inlay hints for parameter names and variable types
 
 You rarely invoke `gopls` directly; your editor or its Go plugin manages it.
 Install or update it:
@@ -353,10 +354,10 @@ The table below maps each Go tool to its closest Java equivalent.
 |---|---|---|
 | `gofmt` | Canonical code formatter | Google Java Format, Spotless |
 | `goimports` | Format + manage imports | IntelliJ optimize imports, `google-java-format` |
-| `go vet` | Built-in static analysis | SpotBugs, ErrorProne |
+| `go vet` | Built-in static analysis | SpotBugs, Error Prone |
 | `golangci-lint` | Linter aggregator | Checkstyle + SpotBugs + PMD combined |
-| `go doc` | Terminal doc viewer | `javadoc` CLI output |
+| `go doc` | Terminal doc viewer | IDE quick docs (`javadoc` has no terminal mode) |
 | `go doc -http` | Local documentation server (Go 1.25+) | `javadoc` HTML output, pkg.go.dev |
 | `gopls` | LSP language server | Eclipse JDT LS, IntelliJ built-in engine |
 | `dlv` (Delve) | Debugger with goroutine support | `jdb`, IntelliJ / Eclipse debugger |
-| `go build -gcflags=-m` | Escape analysis output | JVM `-XX:+PrintEscapeAnalysis` (JIT only) |
+| `go build -gcflags=-m` | Escape analysis output | JVM `-XX:+PrintEscapeAnalysis` (debug JVM builds only) |

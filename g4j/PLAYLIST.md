@@ -1,7 +1,7 @@
 # Playlist
 
 Tracks all song, artist, and lyric references used in the book, organized by chapter.
-Do not repeat any reference already listed here.
+Reusing a reference across chapters is allowed, but every reuse must carry a "repeats from chNN" note.
 
 ## Chapter 1: Hello, Go
 - Darude --- "Sandstorm" (used in fmt.Println and fmt.Printf examples)
@@ -10,6 +10,8 @@ Do not repeat any reference already listed here.
 - Ozzy Osbourne --- artist name (used in exercise 2 what-does-this-print)
 - Miley Cyrus --- "Flowers" (artist name used in fmt.Scanf example)
 - Hozier --- "Too Sweet" (used in Try It program)
+- "Buenas noches, Go!" --- Spanish greeting in the opening hello-world program
+- "hola, mundo!" / "hola, oyente!" --- Spanish greetings (used in the greet os.Args example and Try It program)
 
 ## Chapter 2: Types and Variables
 - StreamingTier iota block (Free/Standard/Premium/Lossless) --- fictional names, no specific artist
@@ -18,9 +20,10 @@ Do not repeat any reference already listed here.
 - Gouryella & Ferry Corsten --- "Gouryella" (used in named and positional struct literal examples; abbreviated to "Gouryella" in code)
 - System F --- "Out Of The Blue" (used in anonymous struct example)
 - Matt Darey & Lost Tribe --- "Gamemaster" (used in struct value-type copy and pointer-to-struct examples)
-- Anyma & Chris Avantgarde --- "Eternity" (used in struct value-type copy example)
+- Anyma & Chris Avantgarde --- "Eternity" (used in Try It program)
 - DJ Analyzer, Cary August, Gimbal & Sinan --- "Insomnia" (artist name used as map key in scores map / clear() example; abbreviated to "DJ Analyzer" in code)
 - System F --- "Out Of The Blue" (used in exercise 7 code snippet)
+- "Hola" --- Spanish greeting in the blank-identifier example
 
 ## Chapter 3: Strings, Bytes, and Runes
 - Richaadeb & Cristina Vee --- "Bad Apple!!" (used in strings.Contains/HasPrefix/HasSuffix/Count/Index examples)
@@ -28,20 +31,20 @@ Do not repeat any reference already listed here.
 - DJ Cobra --- "Better Off Alone (feat. Jacinta)" (used in strings.Trim example)
 - BT --- album "ESCM" (used in raw string literal JSON example)
 - Alizée --- artist name with non-ASCII é (used in byte/rune calculation exercise)
-- Bad Bunny --- "Ojitos Lindos" (used in strings split/parse example)
+- Bad Bunny --- "Ojitos Lindos" (used in Try It program)
 
 ## Chapter 4: Control Flow
 - Darude --- "Sandstorm" (used in if-init-statement example)
-- Bad Bunny --- "Monaco", "Where She Goes", "Tití Me Preguntó" (plays map in range/map-order example; "Monaco" repeats in ch05/ch16/ch19)
+- Bad Bunny --- "Monaco", "Where She Goes", "Tití Me Preguntó" (Try It plays map; "Monaco" repeats in ch05/ch16/ch19)
 - *(Spanish vocabulary used elsewhere: manzana, naranja, uva, lunes, sábado, domingo, fiebre, cancion)*
 
 ## Chapter 5: Functions
 - Ozzy Osbourne --- "Crazy Train" (used in pointer mutation examples)
 - DJ Cobra --- "Better Off Alone" (used in the first-class function / transformer example)
-- "hola, mundo!" --- Spanish greeting used in the middleware pattern example
+- "hola, mundo!" --- Spanish greeting used in the middleware pattern example (repeats from ch01)
 - Bad Bunny --- "Monaco" (used in Try It tag/shout string example; repeat from ch04/ch16)
 
-## Chapter 6: Methods and Embedding
+## Chapter 6: Objects using Methods and Embedding
 - BT --- "Flaming June" (used in receiver and methods examples)
 - Angoscia --- "Emerald Triangle 2012" (used in Playlist embedding examples)
 - Matt Darey & Lost Tribe --- "Gamemaster" (used in embedding and constructor examples)
@@ -61,7 +64,6 @@ Do not repeat any reference already listed here.
 - Angoscia --- "Emerald Triangle 2012" (used in catalog map comma-ok example)
 - DJ Cobra --- "Better Off Alone" (used in catalog map comma-ok example and exercise 5)
 - Robert Dream House & Miles Stone --- "Children" (used in catalog map comma-ok example; abbreviated to "Robert Dream House" in code)
-- Darude --- "Sandstorm" (used in exercise 5 grouped-by-letter map input)
 - Dua Lipa --- "Houdini" (used in Try It plays map; repeats in ch10/ch11/ch12)
 - Sabrina Carpenter --- "Espresso" (used in Try It plays map; repeats in ch08/ch10/ch11)
 - Billie Eilish --- "Birds of a Feather" (used in Try It plays map; repeats in ch08/ch11)
@@ -96,22 +98,24 @@ Do not repeat any reference already listed here.
 - Dua Lipa --- "Houdini" / Sabrina Carpenter --- "Espresso" (Try It tracks slice; repeats from ch07)
 
 ## Chapter 11: Synchronization
-- Jaroslav Beck --- "Escape" (used in WaitGroup fan-out, sync.Once catalog map, atomic play counter, exercise 4 SafeMap key)
-- Jaroslav Beck --- "$100 Bills" (used in WaitGroup fan-out, atomic play counter)
+- Jaroslav Beck --- "Escape" (used in WaitGroup fan-out, sync.Once catalog map, sync.Cond queue, atomic play counter, exercise 4 SafeMap key)
+- Jaroslav Beck --- "$100 Bills" (used in WaitGroup fan-out, sync.Cond queue, atomic play counter)
 - Jaroslav Beck & Crispin --- "Legend" (used in WaitGroup fan-out, sync.Cond queue, atomic play counter)
 - Alizée --- "J'ai pas vingt ans !" (used in sync.Once catalog map, atomic play counter)
-- Alizée --- "J'en ai marre !" (used in sync.Cond queue, atomic play counter)
-- Sabrina Carpenter --- "Espresso" / Billie Eilish --- "Birds of a Feather" / Dua Lipa --- "Houdini" (Try It sync.Cond queue slice; repeats from ch07/ch08/ch10)
+- Alizée --- "J'en ai marre !" (used in sync.Once catalog map, atomic play counter)
+- Sabrina Carpenter --- "Espresso" / Billie Eilish --- "Birds of a Feather" / Dua Lipa --- "Houdini" (Try It queue slice; repeats from ch07/ch08/ch10)
 
 ## Chapter 12: Context and Concurrency Patterns
 - Gouryella & Ferry Corsten --- "Gouryella" (used in fetchLyrics timeout example and errgroup fan-out; abbreviated to "Gouryella" in code)
 - BT --- "Flaming June" (used in errgroup fan-out and exercise 2)
 - Chicane --- "Saltwater" (used in errgroup fan-out and exercise 2)
 - Matt Darey & Lost Tribe --- "Gamemaster" (used in goroutine leak example)
-- Harry Styles --- "As It Was" (used as a job/request label in the worker pool and rate limiter examples)
-- Olivia Rodrigo --- "Vampire" (used as a job/request label in the worker pool and rate limiter examples)
-- Taylor Swift --- "Anti-Hero" (used as a job/request label in the worker pool and rate limiter examples)
+- Harry Styles --- "As It Was" (used as a request label in the rate limiter example and Try It tracks slice)
+- Olivia Rodrigo --- "Vampire" (used as a request label in the rate limiter example and Try It tracks slice)
+- Taylor Swift --- "Anti-Hero" (used as a request label in the rate limiter example and Try It tracks slice)
 - Dua Lipa --- "Houdini" (used as a request label in the rate limiter example)
+- Laufey --- "From The Start", "Bewitched" (answer key only: exercise 5 sample solution)
+- Hozier --- "Too Sweet", "Work Song" (answer key only: exercise 5 sample solution; "Too Sweet" repeats from ch01)
 
 ## Chapter 13: Packages and Modules
 - Angoscia --- "Emerald Triangle 2012" (used in module path and import path examples, exercise 2, and the Try It tracks.txt)
@@ -127,15 +131,18 @@ Do not repeat any reference already listed here.
 - Richaadeb & Cristina Vee --- "Bad Apple!!" (used in encoding/base64 and crypto/sha256 examples)
 - "Flowers / Water / Sun and moon / Ain't it something" --- fictional lyric-style lines (used in strings.Lines and SplitSeq iterator examples)
 - Beyoncé, SZA, Doja Cat, Cardi B --- artist names (used in the SplitSeq CSV example)
+- Darude --- "Sandstorm" (sandstorm.flac path in the filepath.Join example; repeats from earlier chapters)
+- "buenos días" --- Spanish greeting in the base64 encode examples
 
 ## Chapter 15: JSON, HTTP, and the Web
-- Darude --- "Sandstorm" (used in json.Marshal/Unmarshal example: Song struct title, catalog map, exercise 5)
+- Darude --- "Sandstorm" (used in json.Marshal/Unmarshal example: Song struct title, catalog map, exercises 2, 4, and 6)
 - System F --- "Out Of The Blue" (used in struct tag omitempty example and POST body example)
 - BT --- "Flaming June" (used in struct tag omitempty example and encoding/xml example)
 - Chicane --- "Saltwater (feat. Moya Brennan)" (used in songHandler streaming Encoder example and catalog map)
 - "hola" --- Spanish greeting sent over the net.Dial TCP echo example
 - Karol G --- "Si Antes Te Hubiera Conocido" (used in Try It HTTP handler songs map)
 - Feid --- "Luna" (used in Try It HTTP handler songs map)
+- "no existe" --- Spanish 404 body in the Try It program
 
 ## Chapter 16: gRPC
 - Bad Bunny --- "Monaco" (used in jukebox catalog map: GetSong server example)
@@ -155,19 +162,27 @@ Do not repeat any reference already listed here.
 - Alizée --- album "Mes Courants Électriques..." (referenced as album value)
 
 ## Chapter 18: Generics
-- Jaroslav Beck --- "Escape" (used in Map function example, Stack example, MapFromSlice example, ArtistTitles iterator, Filter exercise, Dedupe exercise, Set exercise)
-- Jaroslav Beck --- "$100 Bills" (used in Map function example, ArtistTitles iterator, Set exercise)
-- Alizée --- "J'ai pas vingt ans !" (used in Stack example, Map function example, ArtistTitles iterator, Filter exercise, Dedupe exercise, Set exercise)
-- Alizée --- "J'en ai marre !" (used in Map function example, Filter exercise, Dedupe exercise, Set exercise)
-- Jaroslav Beck --- "Legend" (used in Set exercise as a negative Contains test)
+- Jaroslav Beck --- "Escape" (used in Map function example, Stack example, MapFromSlice example, ArtistTitles iterator, slices.All example, Try It plays map, Filter exercise, Dedupe exercise, Set exercise)
+- Jaroslav Beck --- "$100 Bills" (used in Map function example, ArtistTitles iterator, Try It plays map, Filter exercise, Set exercise)
+- Alizée --- "J'ai pas vingt ans !" (used in Stack example, Map function example, ArtistTitles iterator, slices.All example, Filter exercise, Dedupe exercise, Set exercise)
+- Alizée --- "J'en ai marre !" (used in Map function example, slices.All example, Filter exercise, Dedupe exercise, Set exercise)
+- Jaroslav Beck --- "Legend" (used in Try It plays map and Set exercise as a negative Contains test)
+- Alizée / Jaroslav Beck --- artist names (interned strings in the unique.Make example)
 
 ## Chapter 19: Testing
 - Richaadeb & Cristina Vee --- "Bad Apple!!" (used in test function name TestBadApple, table case name, and exercise 4 assertNormalized call)
-- DJ Cobra --- "Better Off Alone" (used in TestBetterOffAlone table-driven test, FuzzBetterOffAlone fuzz test, and exercise 1 discussion)
-- Disturbed --- "The Sound of Silence" (used in TestSoundOfSilence exercise 2 what-does-this-print question)
-- Ozzy Osbourne --- "Crazy Train" (used in BenchmarkCrazyTrain exercise 3 calculation question)
+- DJ Cobra --- "Better Off Alone" (used in TestBetterOffAlone table-driven test, FuzzBetterOffAlone fuzz test, and exercise 4 assertNormalized call)
+- Disturbed --- "The Sound of Silence" (used in the t.Helper checkEqual example, BenchmarkSoundOfSilence, and TestSoundOfSilence exercise 2 what-does-this-print question)
+- Ozzy Osbourne --- "Crazy Train" (used in the TestCrazyTrain t.Helper example and BenchmarkCrazyTrain exercise 3 calculation question)
 - Bad Bunny --- "Monaco" / Manuel Turizo --- "La Bachata" (titles slices in test examples; "Monaco" repeats from ch04/ch05/ch16)
+- Doja Cat --- "Paint The Town Red" (Try It test table padded case)
+- Harry Styles --- "Golden" (answer key only: exercise 5 test table)
+- Lizzo --- "Good As Hell", "About Damn Time" (answer key only: exercise 5 test table)
+- Doja Cat --- "Woman" (answer key only: exercise 5 test table)
 
 ## Appendix A: Go Proverbs
-- Darude --- "Sandstorm" (used in strings.Builder example; repeat from earlier chapters)
+- Darude --- "Sandstorm" (used in bytes.Buffer zero-value example; repeat from earlier chapters)
+
+## Appendix B: Tooling
+- "hola" --- Spanish greeting in the escape-analysis sample output (repeats from ch15)
 

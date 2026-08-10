@@ -6,6 +6,7 @@ This book covers all the topics that a good Go programmer uses in daily life in 
 ## Chapters
 
 - DO NOT MODIFY THE AUTHOR INTRO section
+- ch00 is special and does not follow the normal chapter format: it explains the booklet's conventions, has no Key Points section, and carries no index markers --- do not "fix" it to match the other chapters
 - each numbered element in `Content` represents a chapter
 - do not spend a lot of time on concepts that are the same between Java and Go --- just mention the concept is the same and move on
 - each chapter starts with an introducton to the topics covered. motivation for the topics highlighting things that are hard to do without knowledge of the topics, and a brief overview of the section
@@ -22,7 +23,7 @@ This book covers all the topics that a good Go programmer uses in daily life in 
 
 - for strings, use 2020s references, lyrics from PLAYLIST.md songs, and Spanish occasionally. Keep it short.
 - cover up to Go 1.26
-- avoid repeating lyrics in examples even across chapters
+- reusing a reference across chapters is allowed, but every reuse must be noted in PLAYLIST.md (e.g. "repeats from ch07/ch08")
 - Validate examples to make sure syntax and result is correct
 - Create short example programs to illustrate the concepts covered
 
@@ -53,7 +54,7 @@ This book covers all the topics that a good Go programmer uses in daily life in 
 
 ## Table of Contents and Index
 
-- TOC is generated automatically via `toc: true` and `toc-depth: 2` in the YAML frontmatter
+- TOC is generated automatically via `toc: true` and `toc-depth: 1` in the YAML frontmatter
 - index uses LaTeX `makeidx` package with `\index{}` markers throughout the text
 - place `\index{term}` at the primary introduction/definition of a term, not inside code blocks
 - when a term is discussed in detail in multiple places, add a marker at each detailed discussion so the entry lists multiple pages --- passing mentions do not get markers
@@ -64,7 +65,7 @@ This book covers all the topics that a good Go programmer uses in daily life in 
 ## Playlist References
 
 - PLAYLIST.md tracks all songs and references used in the text, organized by chapter
-- do not repeat references already listed in PLAYLIST.md
+- when reusing a reference already listed in PLAYLIST.md, add a "repeats from chNN" note to the reusing chapter's entry instead of duplicating the original
 - when adding or changing a reference in the text, update PLAYLIST.md to match
 - avoid references to guns (including ammunition) and violence
 
@@ -96,7 +97,7 @@ This book covers all the topics that a good Go programmer uses in daily life in 
 - code-block lines must be at most 96 chars, and at most 80 inside callouts --- longer lines clip at the page edge and verbatim produces NO overfull warning, so the LaTeX log will not catch this
 - no unicode em/en dashes outside code blocks; no `\index{}` inside code blocks
 - every ch*.md/app*.md is in CHAPTERS; cross-reference audit via `grep -rn "Chapter [0-9]"`
-- every chapter has Try It, Key Points, and Exercises; g4j-answers.md has a heading per chapter and restates every exercise question (including code snippets) before its answer
+- every chapter except ch00 has Try It, Key Points, and Exercises; g4j-answers.md has a heading per chapter and restates every exercise question (including code snippets) before its answer
 
 ### PDF checks (the make build discards the LaTeX log)
 

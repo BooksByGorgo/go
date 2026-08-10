@@ -17,3 +17,4 @@ images/g4j-gorgo-cover.png
 # Vim swap files
 *.swp
 .claude/settings.local.json
+g4j/luatex.*/
