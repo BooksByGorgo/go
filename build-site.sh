@@ -5,6 +5,7 @@ shopt -s nullglob
 DOCS=docs
 INCLUDES=$DOCS/_includes
 PANDOC_OPTS="-f markdown -t html5 --highlight-style=pygments --wrap=none --email-obfuscation=none"
+SECTION_LIST_WRITER="$(pwd)/section-list.lua"
 
 # Inline SVG used as a PDF icon. Kept as a single line so it drops cleanly
 # into generated HTML includes.
@@ -128,16 +129,24 @@ copy_pdf() {
     fi
 }
 
-# Emit an entry for the chapter list include: chapter title link + optional PDF icon.
+# Emit an entry for the chapter list include: chapter title link + optional PDF
+# icon, followed by links to the chapter's sections (level-2 headings).
 emit_chapter_entry() {
-    local dest_subdir="$1" base_noext="$2" title="$3" include_pdf="$4"
+    local dest_subdir="$1" base_noext="$2" title="$3" include_pdf="$4" src_dir="$5"
+    local sections
     printf '  <li>\n'
-    printf "    <a href=\"{{ '/%s/%s.html' | relative_url }}\">%s</a>\n" \
+    printf '    <div class="chapter-entry">\n'
+    printf "      <a href=\"{{ '/%s/%s.html' | relative_url }}\">%s</a>\n" \
         "$dest_subdir" "$base_noext" "$title"
     if [ "$include_pdf" = "yes" ]; then
-        printf "    <a class=\"chapter-pdf-link\" href=\"{{ '/%s/%s.pdf' | relative_url }}\" title=\"Download chapter PDF\" aria-label=\"Download %s PDF\">%s</a>\n" \
+        printf "      <a class=\"chapter-pdf-link\" href=\"{{ '/%s/%s.pdf' | relative_url }}\" title=\"Download chapter PDF\" aria-label=\"Download %s PDF\">%s</a>\n" \
             "$dest_subdir" "$base_noext" "$title" "$PDF_ICON_SVG"
     fi
+    printf '    </div>\n'
+    # Same reader options as convert_chapter so the heading ids match.
+    sections=$(cd "$src_dir" && pandoc "${base_noext}.md" -f markdown \
+        -t "$SECTION_LIST_WRITER" -M page-url="/$dest_subdir/$base_noext.html")
+    [ -n "$sections" ] && printf '%s\n' "$sections"
     printf '  </li>\n'
 }
 
@@ -189,7 +198,7 @@ build_book() {
             author_dest="$DOCS/$dest_subdir/author-intro.html"
             convert_chapter "$src_dir" "author-intro.md" "$author_dest" \
                 "$author_title" "$parent" "-1"
-            emit_chapter_entry "$dest_subdir" "author-intro" "$author_title" "no"
+            emit_chapter_entry "$dest_subdir" "author-intro" "$author_title" "no" "$src_dir"
         fi
 
         for md in "$src_dir"/ch[0-9][0-9].md; do
@@ -211,7 +220,7 @@ build_book() {
             copy_pdf "$pdf_src" "$pdf_dst"
             if [ -f "$pdf_dst" ]; then include_pdf=yes; else include_pdf=no; fi
 
-            emit_chapter_entry "$dest_subdir" "${base%.md}" "$title" "$include_pdf"
+            emit_chapter_entry "$dest_subdir" "${base%.md}" "$title" "$include_pdf" "$src_dir"
         done
 
         for md in "$src_dir"/app*.md; do
@@ -230,7 +239,7 @@ build_book() {
             copy_pdf "$pdf_src" "$pdf_dst"
             if [ -f "$pdf_dst" ]; then include_pdf=yes; else include_pdf=no; fi
 
-            emit_chapter_entry "$dest_subdir" "${base%.md}" "$title" "$include_pdf"
+            emit_chapter_entry "$dest_subdir" "${base%.md}" "$title" "$include_pdf" "$src_dir"
         done
 
         printf '</ul>\n'
