@@ -65,6 +65,78 @@ h3 .pdf-icon,
     opacity: 1;
 }
 
+// Resizable sidebar.  sidebar-resize.js adds a drag handle to the sidebar's
+// right edge and stores the chosen nav column width in --sidebar-width.  These
+// rules generalize the theme's layout (a nav column next to a 50rem main
+// column, centered on wide screens) to that width; without .sidebar-resized
+// the theme defaults apply.  Screen only, so printing keeps the theme layout.
+.sidebar-resizer {
+    display: none;
+}
+
+@media screen and (min-width: 50rem) {
+    .sidebar-resizer {
+        display: block;
+        position: absolute;
+        top: 0;
+        right: -1px;
+        z-index: 1;
+        width: 6px;
+        height: 100%;
+        cursor: col-resize;
+        touch-action: none;
+    }
+
+    .sidebar-resizer::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 2px;
+        width: 2px;
+        transition: background-color 0.15s;
+    }
+
+    .sidebar-resizer:hover::after,
+    .sidebar-resizer:focus-visible::after,
+    .sidebar-resizing .sidebar-resizer::after {
+        background-color: $link-color;
+    }
+
+    .sidebar-resizer:focus-visible {
+        outline: none;
+    }
+
+    // Keep the bounds in sync with sidebar-resize.js.
+    html.sidebar-resized {
+        --nav-width: clamp(12rem, var(--sidebar-width), max(12rem, min(40rem, 100vw - 30rem)));
+        --side-bar-width: max(var(--nav-width), (100% - 50rem + var(--nav-width)) / 2);
+    }
+
+    .sidebar-resized .side-bar {
+        width: var(--side-bar-width);
+        min-width: 0;
+    }
+
+    .sidebar-resized .side-bar + .main {
+        margin-left: var(--side-bar-width);
+    }
+
+    // min() keeps the column inside the sidebar's 1px right border when the
+    // sidebar is exactly the nav width.
+    .sidebar-resized .site-nav,
+    .sidebar-resized .site-header,
+    .sidebar-resized .site-footer {
+        width: min(var(--nav-width), 100%);
+    }
+
+    .sidebar-resizing,
+    .sidebar-resizing * {
+        cursor: col-resize !important;
+        user-select: none !important;
+    }
+}
+
 // Only show pandoc's section-number on the chapter h1; hide the "N.x" /
 // "N.x.y" numbers that --number-sections adds to subsection headings.
 h2 > .header-section-number,
@@ -81,6 +153,8 @@ pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
 pre > code.sourceCode > span:empty { height: 1.2em; }
 .sourceCode { overflow: visible; }
 code.sourceCode > span { color: inherit; text-decoration: inherit; }
+// Long lines scroll inside the code block instead of widening the page.
+@media screen { div.sourceCode { overflow: auto; } }
 
 code span.al { color: #ff0000; font-weight: bold; }
 code span.an { color: #60a0b0; font-weight: bold; font-style: italic; }

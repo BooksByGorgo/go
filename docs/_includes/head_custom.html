@@ -2,6 +2,22 @@
 <link rel="icon" type="image/png" href="{{ '/images/gorgo-favicon.png' | relative_url }}">
 <link rel="shortcut icon" href="{{ '/images/gorgo-favicon.png' | relative_url }}">
 
+<script>
+    /* Restore the reader's sidebar width before first paint (see
+       sidebar-resize.js).  Block comment only: the theme compresses the
+       page onto one line, so a // comment would swallow the script. */
+    (function () {
+        try {
+            var w = parseFloat(localStorage.getItem("sidebar-width"));
+            if (w > 0) {
+                document.documentElement.style.setProperty("--sidebar-width", w + "px");
+                document.documentElement.classList.add("sidebar-resized");
+            }
+        } catch (e) {}
+    })();
+</script>
+<script src="{{ '/assets/js/sidebar-resize.js' | relative_url }}" defer></script>
+
 <script type="text/javascript">
     (function(c,l,a,r,i,t,y){
         c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
